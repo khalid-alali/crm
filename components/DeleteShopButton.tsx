@@ -3,7 +3,17 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-export default function DeleteShopButton({ shopId, shopName }: { shopId: string; shopName: string }) {
+export default function DeleteShopButton({
+  shopId,
+  shopName,
+  className,
+  label = 'Delete',
+}: {
+  shopId: string
+  shopName: string
+  className?: string
+  label?: string
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -32,9 +42,9 @@ export default function DeleteShopButton({ shopId, shopName }: { shopId: string;
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-sm text-red-600 hover:underline"
+        className={className ?? 'text-sm text-red-600 hover:underline'}
       >
-        Delete
+        {label}
       </button>
       {open && (
         <div

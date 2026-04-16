@@ -3,7 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
 import { sendContractViaZoho } from '@/lib/contract-zoho-send'
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const session = await getAppSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -18,12 +19,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     /* non-JSON body or empty */
   }
 
-  const { data: contract } = await supabaseAdmin.from('contracts').select('id').eq('id', params.id).single()
+  const { data: contract } = await supabaseAdmin.from('contracts').select('id').eq('id', id).single()
 
   if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 })
 
   try {
-    await sendContractViaZoho(params.id, {
+    await sendContractViaZoho(id, {
       fromShopDetail,
       sentBy: session.user?.email ?? 'unknown',
       bdContactName: session.user?.name,

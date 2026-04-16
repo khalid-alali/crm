@@ -18,13 +18,14 @@ function safeCallbackUrl(raw: string | string[] | undefined): string {
   return v
 }
 
-export default function SignInPage({
+export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: { callbackUrl?: string | string[] }
+  searchParams: Promise<{ callbackUrl?: string | string[] }>
 }) {
+  const sp = await searchParams
   const quotes = getWelcomeQuotes()
   const quote = pickRandomQuote(quotes)
-  const callbackUrl = safeCallbackUrl(searchParams.callbackUrl)
+  const callbackUrl = safeCallbackUrl(sp.callbackUrl)
   return <SignInClient quote={quote} hero={heroImage} callbackUrl={callbackUrl} />
 }

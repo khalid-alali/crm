@@ -12,7 +12,8 @@ function formatLocationAddress(loc: {
   return [loc.address_line1, loc.city, loc.state, loc.postal_code].filter(Boolean).join(', ')
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const session = await getAppSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data: location, error: locError } = await supabaseAdmin
     .from('locations')
     .select('id, owner_id, address_line1, city, state, postal_code, owners(*)')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (locError || !location) {
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .from('contract_locations')
       .select('contract_id')
       .eq('contract_id', existingId)
-      .eq('location_id', params.id)
+      .eq('location_id', id)
       .maybeSingle()
 
     if (!link) {
@@ -143,7 +144,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const { error: clErr } = await supabaseAdmin.from('contract_locations').insert({
       contract_id: contractId,
-      location_id: params.id,
+      location_id: id,
     })
 
     if (clErr) {

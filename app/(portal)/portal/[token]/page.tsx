@@ -2,10 +2,11 @@ import { verifyPortalToken } from '@/lib/portal-token'
 import { supabaseAdmin } from '@/lib/supabase'
 import PortalForm from './PortalForm'
 
-export default async function PortalPage({ params }: { params: { token: string } }) {
+export default async function PortalPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params
   let locationId: string
   try {
-    const payload = verifyPortalToken(params.token)
+    const payload = verifyPortalToken(token)
     locationId = payload.locationId
   } catch {
     return (
@@ -40,7 +41,7 @@ export default async function PortalPage({ params }: { params: { token: string }
           <p className="text-sm text-onix-600 mt-1">Confirm your shop information</p>
         </div>
         <div className="bg-white rounded-lg border border-arctic-200 shadow-sm p-6">
-          <PortalForm location={location as any} token={params.token} />
+          <PortalForm location={location as any} token={token} />
         </div>
       </div>
     </div>

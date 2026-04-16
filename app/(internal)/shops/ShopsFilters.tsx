@@ -47,7 +47,10 @@ export default function ShopsFilters({
   )
 
   const totalLocations = useMemo(
-    () => statuses.reduce((sum, s) => sum + (statusCounts[s] ?? 0), 0),
+    () =>
+      statuses
+        .filter(s => s !== 'inactive')
+        .reduce((sum, s) => sum + (statusCounts[s] ?? 0), 0),
     [statuses, statusCounts],
   )
 

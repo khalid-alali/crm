@@ -7,11 +7,12 @@ import ProgramBadge from '@/components/ProgramBadge'
 import OwnerDetailEditor from './OwnerDetailEditor'
 import { getSignedContractDocUrl } from '@/lib/contract-documents'
 
-export default async function OwnerDetailPage({ params }: { params: { id: string } }) {
+export default async function OwnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { data: owner } = await supabaseAdmin
     .from('owners')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (!owner) notFound()
@@ -19,13 +20,13 @@ export default async function OwnerDetailPage({ params }: { params: { id: string
   const { data: locations } = await supabaseAdmin
     .from('locations')
     .select('id, name, chain_name, city, state, status, program_enrollments(program, status)')
-    .eq('owner_id', params.id)
+    .eq('owner_id', id)
     .order('name')
 
   const { data: contracts } = await supabaseAdmin
     .from('contracts')
     .select('id, counterparty_company, counterparty_name, legal_entity_name, status, signing_date, zoho_sign_request_id, doc_url, doc_storage_bucket, doc_storage_path')
-    .eq('owner_id', params.id)
+    .eq('owner_id', id)
     .order('created_at', { ascending: false })
 
   const contractsWithDocUrls = await Promise.all(

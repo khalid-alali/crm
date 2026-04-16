@@ -70,7 +70,11 @@ export async function sendContractViaZoho(
 
   await supabaseAdmin
     .from('contracts')
-    .update({ zoho_sign_request_id: requestId, status: 'sent' })
+    .update({
+      zoho_sign_request_id: requestId,
+      status: 'sent',
+      zoho_sent_at: new Date().toISOString(),
+    })
     .eq('id', contractId)
 
   const { data: contractLocations } = await supabaseAdmin

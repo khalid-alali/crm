@@ -10,7 +10,22 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { programStatuses, newOwner, lat: _lat, lng: _lng, geocoded_at: _geocodedAt, ...fields } = body
+  const {
+    programStatuses,
+    newOwner,
+    lat: _lat,
+    lng: _lng,
+    geocoded_at: _geocodedAt,
+    motherduck_shop_id: incomingAdminShopId,
+    ...fields
+  } = body
+
+  if (incomingAdminShopId !== undefined) {
+    return NextResponse.json(
+      { error: 'Use the admin-shop-id endpoint after creating the shop.' },
+      { status: 400 },
+    )
+  }
 
   const newOwnerName =
     newOwner && typeof newOwner === 'object' && typeof newOwner.name === 'string'

@@ -180,6 +180,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
       if (!res.ok) throw new Error((await res.json()).error)
       const data = await res.json()
       router.push(`/shops/${data.id ?? locationId}`)
+      router.refresh()
     } catch (e: any) {
       setError(e.message)
     } finally {

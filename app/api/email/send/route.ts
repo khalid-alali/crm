@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
   const activityBody =
     fromShopDetail && template === 'intro'
-      ? `${body}\n\n— Sent from shop detail (Send intro email)`
+      ? `${body}\n\n— Sent from shop detail (Email)`
       : body
 
   // Log to activity_log

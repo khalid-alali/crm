@@ -17,6 +17,7 @@ export default function OwnerSelect({ value, onChange }: Props) {
   const [owners, setOwners] = useState<Owner[]>([])
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
+  const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -34,7 +35,20 @@ export default function OwnerSelect({ value, onChange }: Props) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  useEffect(() => {
+    if (!value) {
+      setSelectedOwner(null)
+      return
+    }
+    // Ensure selected owner label is available even when not in current search results.
+    fetch(`/api/owners/${value}`)
+      .then(r => (r.ok ? r.json() : Promise.reject()))
+      .then((owner: Owner) => setSelectedOwner(owner))
+      .catch(() => setSelectedOwner(null))
+  }, [value])
+
   const selected = owners.find(o => o.id === value)
+  const selectedLabel = selected?.name ?? selectedOwner?.name ?? null
 
   return (
     <div ref={ref} className="relative">
@@ -43,7 +57,7 @@ export default function OwnerSelect({ value, onChange }: Props) {
         onClick={() => setOpen(v => !v)}
         className="w-full text-left border border-arctic-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
       >
-        {selected ? selected.name : <span className="text-onix-400">Select owner…</span>}
+        {selectedLabel ? selectedLabel : <span className="text-onix-400">Select owner…</span>}
       </button>
       {open && (
         <div className="absolute z-20 mt-1 w-full bg-white border border-arctic-200 rounded shadow-lg max-h-60 overflow-auto">

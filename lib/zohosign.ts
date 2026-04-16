@@ -79,7 +79,7 @@ function looksLikePdf(contentType: string | null): boolean {
   return contentType.toLowerCase().includes('application/pdf')
 }
 
-type TemplateAction = {
+export type ZohoSignTemplateAction = {
   action_id?: string
   action_type?: string
   recipient_name?: string
@@ -92,7 +92,7 @@ type TemplateAction = {
 async function getTemplateActions(
   accessToken: string,
   templateId: string
-): Promise<{ actions: TemplateAction[]; requestNameDefault?: string }> {
+): Promise<{ actions: ZohoSignTemplateAction[]; requestNameDefault?: string }> {
   const res = await fetch(`${signApiBase()}/templates/${encodeURIComponent(templateId)}`, {
     headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
   })
@@ -101,11 +101,11 @@ async function getTemplateActions(
 
   const data = JSON.parse(text) as {
     templates?: {
-      actions?: TemplateAction[]
+      actions?: ZohoSignTemplateAction[]
       template_name?: string
     }
   }
-  const actions = data.templates?.actions ?? []
+  const actions = (data.templates?.actions ?? []) as ZohoSignTemplateAction[]
   if (!actions.length) throw new Error('Zoho Sign template has no actions')
   return {
     actions,
@@ -114,7 +114,7 @@ async function getTemplateActions(
 }
 
 /** Which SIGN actions receive the shop owner (blank template email, else first SIGN). */
-function signerActionIdsForRecipient(actions: TemplateAction[]): Set<string> {
+function signerActionIdsForRecipient(actions: ZohoSignTemplateAction[]): Set<string> {
   const sign = actions.filter(a => a.action_type === 'SIGN' && a.action_id)
   const blank = sign.filter(a => !String(a.recipient_email ?? '').trim())
   const targets = blank.length > 0 ? blank : sign.slice(0, 1)
@@ -122,7 +122,7 @@ function signerActionIdsForRecipient(actions: TemplateAction[]): Set<string> {
 }
 
 function buildActionsPayload(
-  actions: TemplateAction[],
+  actions: ZohoSignTemplateAction[],
   recipientName: string,
   recipientEmail: string
 ): Record<string, unknown>[] {
@@ -202,6 +202,151 @@ export async function createAndSendDocument(params: {
   if (!requestId) throw new Error(`Zoho Sign: no request_id in response`)
 
   return { requestId }
+}
+
+/** @see https://www.zoho.com/sign/api/document-managment/remind-recipient.html */
+export async function remindSigningRequest(requestId: string): Promise<void> {
+  const token = await getZohoAccessToken()
+  const res = await fetch(`${signApiBase()}/requests/${encodeURIComponent(requestId)}/remind`, {
+    method: 'POST',
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`Zoho Sign remind failed: ${res.status} ${text}`)
+  }
+}
+
+/** @see https://www.zoho.com/sign/api/document-managment/recall-document.html */
+export async function recallSigningRequest(requestId: string): Promise<void> {
+  const token = await getZohoAccessToken()
+  const res = await fetch(`${signApiBase()}/requests/${encodeURIComponent(requestId)}/recall`, {
+    method: 'POST',
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`Zoho Sign recall failed: ${res.status} ${text}`)
+  }
+}
+
+export function signerRecipientActionIds(actions: ZohoSignTemplateAction[]): string[] {
+  return Array.from(signerActionIdsForRecipient(actions))
+}
+
+/** GET /requests/{request_id} — request name + actions (for action_id before update). */
+export async function getSigningRequestSummary(requestId: string): Promise<{
+  requestName: string
+  actions: ZohoSignTemplateAction[]
+}> {
+  const token = await getZohoAccessToken()
+  const res = await fetch(`${signApiBase()}/requests/${encodeURIComponent(requestId)}`, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`Zoho Sign get request failed: ${res.status} ${text}`)
+  }
+  const data = JSON.parse(text) as {
+    requests?: {
+      request_name?: string
+      actions?: ZohoSignTemplateAction[]
+    }
+  }
+  const req = data.requests
+  if (!req) throw new Error('Zoho Sign: empty request details')
+  const actions = req.actions ?? []
+  if (!actions.length) throw new Error('Zoho Sign: request has no actions')
+  const requestName = String(req.request_name ?? '').trim() || 'RepairWise Shop Agreement'
+  return { requestName, actions }
+}
+
+/**
+ * Update signer recipient on an existing request (after recall).
+ * @see https://www.zoho.com/sign/api/document-managment/update-document.html
+ */
+export async function updateSigningRequestSignerRecipients(params: {
+  requestId: string
+  requestName: string
+  signerActionIds: string[]
+  recipientName: string
+  recipientEmail: string
+}): Promise<void> {
+  if (!params.signerActionIds.length) {
+    throw new Error('Zoho Sign: no signer actions to update')
+  }
+  const token = await getZohoAccessToken()
+  const actions = params.signerActionIds.map(actionId => ({
+    action_id: actionId,
+    recipient_name: params.recipientName,
+    recipient_email: params.recipientEmail,
+    action_type: 'SIGN',
+  }))
+  const form = new URLSearchParams()
+  form.set(
+    'data',
+    JSON.stringify({
+      requests: {
+        request_name: params.requestName,
+        actions,
+      },
+    }),
+  )
+  const res = await fetch(`${signApiBase()}/requests/${encodeURIComponent(params.requestId)}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: form.toString(),
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`Zoho Sign update request failed: ${res.status} ${text}`)
+  }
+}
+
+/** Resubmit a recalled/updated request for signature (strict). */
+export async function submitSigningRequest(requestId: string): Promise<void> {
+  const token = await getZohoAccessToken()
+  const res = await fetch(`${signApiBase()}/requests/${encodeURIComponent(requestId)}/submit`, {
+    method: 'POST',
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`Zoho Sign submit failed: ${res.status} ${text}`)
+  }
+}
+
+/**
+ * Same as {@link submitSigningRequest}, but treats Zoho error **12008** (“already submitted”) as success.
+ * After a PUT update, many orgs’ envelopes are re-sent automatically; a follow-up POST /submit then
+ * returns 12008. Other orgs need an explicit submit — this covers both.
+ */
+export async function submitSigningRequestIfNotAlreadySubmitted(requestId: string): Promise<void> {
+  const token = await getZohoAccessToken()
+  const res = await fetch(`${signApiBase()}/requests/${encodeURIComponent(requestId)}/submit`, {
+    method: 'POST',
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  })
+  const text = await res.text()
+  if (res.ok) return
+
+  let parsed: { code?: number; message?: string } = {}
+  try {
+    parsed = JSON.parse(text) as { code?: number; message?: string }
+  } catch {
+    /* ignore */
+  }
+  const alreadySubmitted =
+    parsed.code === 12008 ||
+    /already submitted/i.test(String(parsed.message ?? '')) ||
+    /already submitted/i.test(text)
+
+  if (alreadySubmitted) return
+
+  throw new Error(`Zoho Sign submit failed: ${res.status} ${text}`)
 }
 
 export async function getDocumentFields(

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import StatusBadge from './StatusBadge'
 import ProgramBadge from './ProgramBadge'
@@ -155,7 +156,13 @@ export default function ShopTable({ shops }: Props) {
               onClick={() => router.push(`/shops/${shop.id}`)}
             >
               <td className="px-4 py-2.5">
-                <span className="font-medium text-onix-950">{shop.name}</span>
+                <Link
+                  href={`/shops/${shop.id}`}
+                  className="font-medium text-onix-950 hover:text-brand-700 hover:underline"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {shop.name}
+                </Link>
               </td>
               <td className="px-4 py-2.5 text-onix-600">{shop.owners?.name ?? '—'}</td>
               <td className="px-4 py-2.5 text-onix-600">
@@ -173,7 +180,7 @@ export default function ShopTable({ shops }: Props) {
               <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
                 {shop.motherduck_shop_id ? (
                   <a
-                    href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(shop.motherduck_shop_id)}`}
+                    href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(shop.motherduck_shop_id)}/edit`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-brand-600 hover:underline whitespace-nowrap"

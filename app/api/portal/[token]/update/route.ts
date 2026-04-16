@@ -3,10 +3,11 @@ import { verifyPortalToken } from '@/lib/portal-token'
 import { supabaseAdmin } from '@/lib/supabase'
 import { geocodeAddress } from '@/lib/geocode'
 
-export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params
   let locationId: string
   try {
-    const payload = verifyPortalToken(params.token)
+    const payload = verifyPortalToken(token)
     locationId = payload.locationId
   } catch {
     return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })

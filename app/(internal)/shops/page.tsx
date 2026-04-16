@@ -69,12 +69,17 @@ async function attachLastActivity(rows: PipelineLocationRow[]) {
 
 export const dynamic = 'force-dynamic'
 
-export default async function ShopsPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function ShopsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>
+}) {
+  const sp = await searchParams
   const hasListFilters = Boolean(
-    searchParams.status ||
-      searchParams.chain ||
-      searchParams.state ||
-      searchParams.assigned_to,
+    sp.status ||
+      sp.chain ||
+      sp.state ||
+      sp.assigned_to,
   )
 
   const metaQuery = supabaseAdmin.from('locations').select('status, chain_name')
@@ -88,10 +93,15 @@ export default async function ShopsPage({ searchParams }: { searchParams: Search
       .from('locations')
       .select(PIPELINE_LOCATION_SELECT)
       .order('updated_at', { ascending: false })
-    if (searchParams.status) listQuery = listQuery.eq('status', searchParams.status)
-    if (searchParams.chain) listQuery = listQuery.eq('chain_name', searchParams.chain)
-    if (searchParams.state) listQuery = listQuery.eq('state', searchParams.state)
-    if (searchParams.assigned_to) listQuery = listQuery.eq('assigned_to', searchParams.assigned_to)
+    if (sp.status) {
+      listQuery = listQuery.eq('status', sp.status)
+    } else {
+      // "All" view should hide churned (inactive) by default.
+      listQuery = listQuery.neq('status', 'inactive')
+    }
+    if (sp.chain) listQuery = listQuery.eq('chain_name', sp.chain)
+    if (sp.state) listQuery = listQuery.eq('state', sp.state)
+    if (sp.assigned_to) listQuery = listQuery.eq('assigned_to', sp.assigned_to)
 
     const [{ data: shopRows }, { data: metaRows }] = await Promise.all([listQuery, metaQuery])
     shops = await attachLastActivity(shopRows ?? [])
@@ -102,14 +112,13 @@ export default async function ShopsPage({ searchParams }: { searchParams: Search
     const { data: shopRows } = await supabaseAdmin
       .from('locations')
       .select(PIPELINE_LOCATION_SELECT)
+      // "All" view should hide churned (inactive) by default.
+      .neq('status', 'inactive')
       .order('updated_at', { ascending: false })
     shops = await attachLastActivity(shopRows ?? [])
-    const meta = pipelineMetaFromRows(
-      (shops as LocationMetaRow[]).map(r => ({
-        status: r.status,
-        chain_name: r.chain_name,
-      })),
-    )
+
+    const { data: metaRows } = await metaQuery
+    const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
     counts = meta.counts
     chains = meta.chains
   }
@@ -123,7 +132,7 @@ export default async function ShopsPage({ searchParams }: { searchParams: Search
           statusCounts={counts}
           chains={chains}
           assignees={[...BDR_ASSIGNEES]}
-          searchParams={searchParams}
+          searchParams={sp}
         />
       </ShopsPageClient>
     </div>

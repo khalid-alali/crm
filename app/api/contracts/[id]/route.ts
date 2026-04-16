@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const session = await getAppSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: contract } = await supabaseAdmin
     .from('contracts')
     .select('id, status')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 })
@@ -17,7 +18,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: 'Only draft contracts can be deleted.' }, { status: 400 })
   }
 
-  const { error } = await supabaseAdmin.from('contracts').delete().eq('id', params.id)
+  const { error } = await supabaseAdmin.from('contracts').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ ok: true })
