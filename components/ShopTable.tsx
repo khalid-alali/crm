@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import StatusBadge from './StatusBadge'
-import ChainBadge from './ChainBadge'
 import ProgramBadge from './ProgramBadge'
 import LastActivityCell from './LastActivityCell'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
@@ -11,6 +10,7 @@ import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 export interface ShopRow {
   id: string
   name: string
+  motherduck_shop_id: string | null
   chain_name: string | null
   city: string | null
   state: string | null
@@ -116,38 +116,38 @@ export default function ShopTable({ shops }: Props) {
     setSortDirection('asc')
   }
 
-  function sortIndicator(column: SortColumn) {
-    if (sortColumn !== column) return '↕'
-    return sortDirection === 'asc' ? '↑' : '↓'
-  }
-
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-arctic-200 text-sm">
-        <thead className="bg-arctic-50">
-          <tr>
-            {SORTABLE_HEADERS.map(header => (
-              <th
-                key={header.key}
-                scope="col"
-                className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide"
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleSort(header.key)}
-                  className="inline-flex items-center gap-1 hover:text-onix-900 transition-colors"
-                  aria-label={`Sort by ${header.label}`}
-                >
-                  <span>{header.label}</span>
-                  <span aria-hidden className="text-[10px] leading-none text-onix-400">
-                    {sortIndicator(header.key)}
-                  </span>
-                </button>
-              </th>
+    <table className="min-w-full divide-y divide-arctic-200 text-sm">
+      <thead className="bg-arctic-50">
+        <tr>
+          {SORTABLE_HEADERS.map(header => (
+            <th
+              key={header.key}
+              scope="col"
+              className="sticky z-10 cursor-pointer select-none border-b border-arctic-200 bg-arctic-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-onix-600 shadow-[0_1px_0_0_rgb(229_231_235)] transition-colors hover:text-onix-900"
+              style={{ top: 'var(--pipeline-toolbar-height, 12rem)' }}
+              onClick={() => toggleSort(header.key)}
+              aria-sort={
+                sortColumn === header.key
+                  ? sortDirection === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                  : 'none'
+              }
+            >
+              {header.label}
+            </th>
             ))}
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-arctic-100">
+          <th
+            scope="col"
+            className="sticky z-10 border-b border-arctic-200 bg-arctic-50 px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide shadow-[0_1px_0_0_rgb(229_231_235)]"
+            style={{ top: 'var(--pipeline-toolbar-height, 12rem)' }}
+          >
+            Admin
+          </th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-arctic-100">
           {sortedShops.map(shop => (
             <tr
               key={shop.id}
@@ -155,10 +155,7 @@ export default function ShopTable({ shops }: Props) {
               onClick={() => router.push(`/shops/${shop.id}`)}
             >
               <td className="px-4 py-2.5">
-                <div className="flex items-center gap-1">
-                  <span className="font-medium text-onix-950">{shop.name}</span>
-                  <ChainBadge chain={shop.chain_name} />
-                </div>
+                <span className="font-medium text-onix-950">{shop.name}</span>
               </td>
               <td className="px-4 py-2.5 text-onix-600">{shop.owners?.name ?? '—'}</td>
               <td className="px-4 py-2.5 text-onix-600">
@@ -173,15 +170,28 @@ export default function ShopTable({ shops }: Props) {
               <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
                 <LastActivityCell createdAt={shop.created_at} lastActivityAt={shop.last_activity_at} />
               </td>
+              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                {shop.motherduck_shop_id ? (
+                  <a
+                    href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(shop.motherduck_shop_id)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-600 hover:underline whitespace-nowrap"
+                  >
+                    Open
+                  </a>
+                ) : (
+                  <span className="text-onix-400">—</span>
+                )}
+              </td>
             </tr>
           ))}
           {sortedShops.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-onix-400">No shops found.</td>
+              <td colSpan={7} className="px-4 py-8 text-center text-onix-400">No shops found.</td>
             </tr>
           )}
-        </tbody>
-      </table>
-    </div>
+      </tbody>
+    </table>
   )
 }

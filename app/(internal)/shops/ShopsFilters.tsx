@@ -28,7 +28,6 @@ interface ShopsFiltersProps {
   statusLabels: Record<string, string>
   statusCounts: Record<string, number>
   chains: string[]
-  states: string[]
   assignees: string[]
   searchParams: SearchParams
 }
@@ -38,13 +37,11 @@ export default function ShopsFilters({
   statusLabels,
   statusCounts,
   chains,
-  states,
   assignees,
   searchParams,
 }: ShopsFiltersProps) {
   const router = useRouter()
 
-  const [stateVal, setStateVal] = useState(() => searchParams.state ?? '')
   const [assigneeVal, setAssigneeVal] = useState(() =>
     isBdrAssignee(searchParams.assigned_to) ? searchParams.assigned_to : '',
   )
@@ -55,9 +52,8 @@ export default function ShopsFilters({
   )
 
   useEffect(() => {
-    setStateVal(searchParams.state ?? '')
     setAssigneeVal(isBdrAssignee(searchParams.assigned_to) ? searchParams.assigned_to : '')
-  }, [searchParams.state, searchParams.assigned_to])
+  }, [searchParams.assigned_to])
 
   function applyFilter(params: Partial<SearchParams>) {
     const sp = new URLSearchParams()
@@ -82,90 +78,36 @@ export default function ShopsFilters({
   const allTabActive = 'bg-slate-800 text-white border-slate-800 ring-1 ring-slate-700'
 
   return (
-    <div className="mb-4 space-y-3">
-      <div className="bg-white border border-arctic-200 rounded-lg px-4 py-3">
-        <div className="flex flex-wrap gap-x-3 gap-y-2 items-center text-sm">
-          <div className="flex flex-wrap gap-2 items-center">
-            <button
-              type="button"
-              onClick={() => applyFilter({ status: undefined })}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium border transition-colors ${
-                !searchParams.status ? allTabActive : statusTabIdle
-              }`}
-            >
-              All{totalLocations > 0 ? ` (${totalLocations})` : ''}
-            </button>
-            {statuses.map(s => {
-              const active = searchParams.status === s
-              const activeCls = statusTabActive[s] ?? statusTabActive.lead
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => applyFilter({ status: s })}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium border transition-colors ${
-                    active ? activeCls : statusTabIdle
-                  }`}
-                >
-                  {statusLabels[s]} ({statusCounts[s] ?? 0})
-                </button>
-              )
-            })}
-          </div>
-
-          {chains.length > 0 && (
-            <>
-              <div className="hidden sm:block w-px h-6 bg-arctic-200 shrink-0 self-center" aria-hidden />
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-xs font-medium text-onix-400 uppercase tracking-wide pr-1">
-                  Chains
-                </span>
-                {chains.map(chain => {
-                  const active = searchParams.chain === chain
-                  return (
-                    <button
-                      key={chain}
-                      type="button"
-                      onClick={() =>
-                        applyFilter({ chain: active ? undefined : chain })
-                      }
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
-                        active
-                          ? 'bg-orange-100 text-orange-900 border-orange-400 ring-1 ring-orange-300'
-                          : 'bg-orange-50/80 text-orange-800 border-orange-200 hover:bg-orange-100 hover:border-orange-300'
-                      }`}
-                    >
-                      {chain}
-                    </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3 text-sm">
-      <div>
-        <select
-          value={stateVal}
-          onChange={e => {
-            const raw = e.target.value
-            setStateVal(raw)
-            applyFilter({ state: raw || undefined })
-          }}
-          className="border border-arctic-300 rounded px-3 py-1.5 text-sm"
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-1 text-sm">
+        <button
+          type="button"
+          onClick={() => applyFilter({ status: undefined })}
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors ${
+            !searchParams.status ? allTabActive : statusTabIdle
+          }`}
         >
-          <option value="">All states</option>
-          {states.map(s => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+          All {totalLocations}
+        </button>
+        {statuses.map(s => {
+          const active = searchParams.status === s
+          const activeCls = statusTabActive[s] ?? statusTabActive.lead
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => applyFilter({ status: s })}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors ${
+                  active ? activeCls : statusTabIdle
+                }`}
+              >
+                {statusLabels[s]} {statusCounts[s] ?? 0}
+              </button>
+            )
+          })}
       </div>
 
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
         <select
           value={assigneeVal}
           onChange={e => {
@@ -173,7 +115,7 @@ export default function ShopsFilters({
             setAssigneeVal(raw)
             applyFilter({ assigned_to: raw || undefined })
           }}
-          className="border border-arctic-300 rounded px-3 py-1.5 text-sm"
+          className="rounded-xl border border-arctic-300 bg-white px-3 py-2 text-sm text-onix-800"
         >
           <option value="">All assignees</option>
           {assignees.map(a => (
@@ -182,13 +124,37 @@ export default function ShopsFilters({
             </option>
           ))}
         </select>
-      </div>
 
-      {Object.values(searchParams).some(Boolean) && (
-        <Link href="/shops" className="px-3 py-1.5 text-xs text-onix-600 hover:text-onix-800 underline">
-          Clear filters
-        </Link>
-      )}
+        {chains.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {chains.map(chain => {
+              const active = searchParams.chain === chain
+              return (
+                <button
+                  key={chain}
+                  type="button"
+                  onClick={() => applyFilter({ chain: active ? undefined : chain })}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
+                    active
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-white text-onix-600 border-arctic-300 hover:bg-arctic-50'
+                  }`}
+                >
+                  {chain}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {Object.values(searchParams).some(Boolean) && (
+          <Link
+            href="/shops"
+            className="px-3 py-1.5 text-xs font-medium text-onix-600 hover:text-onix-800 underline"
+          >
+            Clear filters
+          </Link>
+        )}
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import StatusBadge from '@/components/StatusBadge'
 import ChainBadge from '@/components/ChainBadge'
 import ProgramBadge from '@/components/ProgramBadge'
 import OwnerDetailEditor from './OwnerDetailEditor'
+import { getSignedContractDocUrl } from '@/lib/contract-documents'
 
 export default async function OwnerDetailPage({ params }: { params: { id: string } }) {
   const { data: owner } = await supabaseAdmin
@@ -23,9 +24,16 @@ export default async function OwnerDetailPage({ params }: { params: { id: string
 
   const { data: contracts } = await supabaseAdmin
     .from('contracts')
-    .select('id, counterparty_company, counterparty_name, legal_entity_name, status, signing_date')
+    .select('id, counterparty_company, counterparty_name, legal_entity_name, status, signing_date, zoho_sign_request_id, doc_url, doc_storage_bucket, doc_storage_path')
     .eq('owner_id', params.id)
     .order('created_at', { ascending: false })
+
+  const contractsWithDocUrls = await Promise.all(
+    (contracts ?? []).map(async contract => ({
+      ...contract,
+      doc_url: await getSignedContractDocUrl(contract),
+    }))
+  )
 
   // Aggregate program enrollments
   const programCounts: Record<string, number> = {}
@@ -104,14 +112,24 @@ export default async function OwnerDetailPage({ params }: { params: { id: string
 
       {/* Contracts */}
       <section>
-        <h2 className="text-sm font-semibold text-onix-600 mb-3">Contracts ({contracts?.length ?? 0})</h2>
+        <h2 className="text-sm font-semibold text-onix-600 mb-3">Contracts ({contractsWithDocUrls.length})</h2>
         <div className="space-y-2">
-          {(contracts ?? []).map(contract => (
+          {contractsWithDocUrls.map(contract => (
             <div key={contract.id} className="border border-arctic-200 rounded-lg px-4 py-3 flex items-center justify-between text-sm">
               <div>
                 <span className="font-medium">{contract.counterparty_company || contract.counterparty_name || 'Contract'}</span>
                 {contract.legal_entity_name && (
                   <span className="ml-2 text-xs text-onix-400">Signed as: {contract.legal_entity_name}</span>
+                )}
+                {contract.doc_url && (
+                  <a
+                    href={contract.doc_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-3 text-xs text-brand-600 hover:underline"
+                  >
+                    View document
+                  </a>
                 )}
               </div>
               <div className="flex items-center gap-3">

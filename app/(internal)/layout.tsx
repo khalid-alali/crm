@@ -18,7 +18,7 @@ export default async function InternalLayout({ children }: { children: React.Rea
           <SidebarProfileButton email={session.user?.email} />
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="min-h-0 flex-1 overflow-auto">{children}</main>
     </div>
   )
 }

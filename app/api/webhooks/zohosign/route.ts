@@ -5,8 +5,187 @@ import { Resend } from 'resend'
 import { renderTemplate } from '@/lib/email-templates'
 import { notificationsFrom } from '@/lib/resend-notifications'
 import { laborRateFromSignedFields, warrantyRateFromSignedFields } from '@/lib/zoho-sign-contract-fields'
+import { syncContractPdfFromZoho } from '@/lib/contract-documents'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+
+type NormalizedZohoEvent = {
+  key:
+    | 'request_sent'
+    | 'request_viewed'
+    | 'request_signed'
+    | 'request_completed'
+    | 'request_declined'
+    | 'request_expired'
+    | 'request_recalled'
+    | 'request_reassigned'
+    | 'reminder_sent'
+    | 'unknown'
+  contractStatus?: 'sent' | 'viewed' | 'signed' | 'declined'
+  activitySubject?: string
+  activityBody?: string
+  shouldFinalizeSignedContract?: boolean
+}
+
+function parseZohoEventTimestamp(raw: unknown): string | null {
+  if (raw == null) return null
+
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const asMs = raw > 1e12 ? raw : raw * 1000
+    const dt = new Date(asMs)
+    return Number.isNaN(dt.getTime()) ? null : dt.toISOString()
+  }
+
+  if (typeof raw !== 'string') return null
+  const value = raw.trim()
+  if (!value) return null
+
+  if (/^\d+$/.test(value)) {
+    const num = Number.parseInt(value, 10)
+    if (!Number.isFinite(num)) return null
+    const asMs = num > 1e12 ? num : num * 1000
+    const dt = new Date(asMs)
+    return Number.isNaN(dt.getTime()) ? null : dt.toISOString()
+  }
+
+  const dt = new Date(value)
+  return Number.isNaN(dt.getTime()) ? null : dt.toISOString()
+}
+
+function extractCompletedAt(payload: Record<string, unknown>, eventRequest: Record<string, unknown>): string | null {
+  const action0 = (eventRequest.actions as Array<Record<string, unknown>> | undefined)?.[0] ?? {}
+  const candidates: unknown[] = [
+    (eventRequest as Record<string, unknown>).completed_time,
+    (eventRequest as Record<string, unknown>).completion_time,
+    (eventRequest as Record<string, unknown>).completed_on,
+    (eventRequest as Record<string, unknown>).request_completed_time,
+    action0.completed_time,
+    action0.action_time,
+    (payload as Record<string, unknown>).completed_time,
+    (payload as Record<string, unknown>).completed_on,
+    (payload.event as Record<string, unknown> | undefined)?.completed_time,
+  ]
+
+  for (const candidate of candidates) {
+    const parsed = parseZohoEventTimestamp(candidate)
+    if (parsed) return parsed
+  }
+
+  return null
+}
+
+function normalizeZohoEvent(payload: Record<string, unknown>, eventRequest: Record<string, unknown>): NormalizedZohoEvent {
+  const requestStatus = String(eventRequest.request_status ?? '').toLowerCase()
+  const actionStatus = String((eventRequest.actions as Array<Record<string, unknown>> | undefined)?.[0]?.action_status ?? '').toUpperCase()
+  const eventType = String(
+    payload.event_type ??
+      (payload.event as Record<string, unknown> | undefined)?.event_type ??
+      eventRequest.request_event_type ??
+      ''
+  ).toLowerCase()
+
+  const action0 = (eventRequest.actions as Array<Record<string, unknown>> | undefined)?.[0] ?? {}
+  const recipientName = String(action0.recipient_name ?? '').trim()
+  const recipientEmail = String(action0.recipient_email ?? '').trim()
+  const recipient = recipientName || recipientEmail || 'Recipient'
+  const declinedReason =
+    String(action0.decline_reason ?? eventRequest.decline_reason ?? '').trim() || 'No reason provided'
+  const recalledBy = String(eventRequest.owner_name ?? eventRequest.owner_email ?? 'sender').trim()
+  const reassignedFrom = String(
+    (eventRequest as Record<string, unknown>).from_recipient ??
+      (eventRequest as Record<string, unknown>).old_recipient_email ??
+      ''
+  ).trim()
+  const reassignedTo = String(
+    (eventRequest as Record<string, unknown>).to_recipient ??
+      (eventRequest as Record<string, unknown>).new_recipient_email ??
+      ''
+  ).trim()
+
+  if (eventType.includes('request_sent') || requestStatus === 'sent' || requestStatus === 'inprogress') {
+    return {
+      key: 'request_sent',
+      contractStatus: 'sent',
+      activitySubject: 'Contract sent via Zoho Sign',
+      activityBody: `Contract sent to ${recipient} for signing.`,
+    }
+  }
+  if (eventType.includes('request_viewed') || actionStatus === 'VIEWED') {
+    return {
+      key: 'request_viewed',
+      contractStatus: 'viewed',
+      activitySubject: 'Contract viewed',
+      activityBody: `${recipient} viewed the contract.`,
+    }
+  }
+  if (eventType.includes('request_signed') || requestStatus === 'signed') {
+    return {
+      key: 'request_signed',
+      contractStatus: 'signed',
+      activitySubject: 'Contract signed',
+      activityBody: `${recipient} signed the contract.`,
+      shouldFinalizeSignedContract: true,
+    }
+  }
+  if (eventType.includes('request_completed') || requestStatus === 'completed') {
+    return {
+      key: 'request_completed',
+      contractStatus: 'signed',
+      activitySubject: 'Contract fully executed',
+      activityBody: 'Contract fully executed - all parties signed.',
+      shouldFinalizeSignedContract: true,
+    }
+  }
+  if (eventType.includes('request_declined') || requestStatus === 'declined') {
+    return {
+      key: 'request_declined',
+      contractStatus: 'declined',
+      activitySubject: 'Contract declined',
+      activityBody: `${recipient} declined to sign - ${declinedReason}.`,
+    }
+  }
+  if (eventType.includes('request_expired') || requestStatus === 'expired') {
+    return {
+      key: 'request_expired',
+      contractStatus: 'declined',
+      activitySubject: 'Contract expired',
+      activityBody: 'Contract expired unsigned.',
+    }
+  }
+  if (eventType.includes('request_recalled') || requestStatus === 'recalled') {
+    return {
+      key: 'request_recalled',
+      contractStatus: 'declined',
+      activitySubject: 'Contract recalled',
+      activityBody: `Contract was recalled by ${recalledBy}.`,
+    }
+  }
+  if (eventType.includes('request_reassigned')) {
+    return {
+      key: 'request_reassigned',
+      activitySubject: 'Contract reassigned',
+      activityBody: `Signing reassigned from ${reassignedFrom || 'previous recipient'} to ${reassignedTo || 'new recipient'}.`,
+    }
+  }
+  if (eventType.includes('reminder_sent')) {
+    return {
+      key: 'reminder_sent',
+      activitySubject: 'Contract reminder sent',
+      activityBody: `Reminder sent to ${recipient}.`,
+    }
+  }
+  return { key: 'unknown' }
+}
+
+async function applyContractStatus(contractId: string, status: 'sent' | 'viewed' | 'signed' | 'declined') {
+  let fromStatuses: string[] = []
+  if (status === 'sent') fromStatuses = ['draft']
+  else if (status === 'viewed') fromStatuses = ['draft', 'sent', 'viewed']
+  else if (status === 'signed') fromStatuses = ['draft', 'sent', 'viewed']
+  else if (status === 'declined') fromStatuses = ['draft', 'sent', 'viewed']
+
+  await supabaseAdmin.from('contracts').update({ status }).eq('id', contractId).in('status', fromStatuses)
+}
 
 // Zoho Sign sends a token query param or header for verification
 export async function POST(req: NextRequest) {
@@ -16,26 +195,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
   }
 
-  const payload = await req.json()
-  const { requests: eventRequest } = payload
+  const payload = (await req.json()) as Record<string, unknown>
+  const eventRequest = payload.requests as Record<string, unknown> | undefined
 
   if (!eventRequest) return NextResponse.json({ ok: true })
 
-  const requestId: string = eventRequest.request_id
-  const requestStatus: string = eventRequest.request_status // 'completed' | 'recalled' | 'expired'
-  const actionStatus: string = eventRequest.actions?.[0]?.action_status ?? ''
+  const requestId = String(eventRequest.request_id ?? '').trim()
+  if (!requestId) return NextResponse.json({ ok: true })
 
-  // Map Zoho Sign status to our enum
-  let contractStatus: string | null = null
-  if (requestStatus === 'completed') contractStatus = 'signed'
-  else if (requestStatus === 'recalled') contractStatus = 'declined'
-  else if (actionStatus === 'VIEWED') contractStatus = 'viewed'
-
-  if (!contractStatus) return NextResponse.json({ ok: true })
+  const normalized = normalizeZohoEvent(payload, eventRequest)
+  if (normalized.key === 'unknown') {
+    console.info('[zohosign webhook] Unhandled event', {
+      requestId,
+      event_type: payload.event_type,
+      request_status: eventRequest.request_status,
+      action_status: (eventRequest.actions as Array<Record<string, unknown>> | undefined)?.[0]?.action_status,
+    })
+    return NextResponse.json({ ok: true })
+  }
 
   const { data: contract } = await supabaseAdmin
     .from('contracts')
-    .select('id, owner_id')
+    .select('id, owner_id, status, doc_storage_path')
     .eq('zoho_sign_request_id', requestId)
     .single()
 
@@ -44,12 +225,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
-  await supabaseAdmin
-    .from('contracts')
-    .update({ status: contractStatus })
-    .eq('id', contract.id)
+  if (normalized.contractStatus) {
+    await applyContractStatus(contract.id, normalized.contractStatus)
+  }
 
-  if (contractStatus === 'signed') {
+  const { data: contractLocations } = await supabaseAdmin
+    .from('contract_locations')
+    .select('location_id')
+    .eq('contract_id', contract.id)
+  const locationIds = contractLocations?.map(cl => cl.location_id) ?? []
+
+  if (normalized.activitySubject && normalized.activityBody && locationIds.length > 0) {
+    await supabaseAdmin.from('activity_log').insert(
+      locationIds.map(locationId => ({
+        location_id: locationId,
+        type: 'contract',
+        subject: normalized.activitySubject,
+        body: `${normalized.activityBody}\nRequest ID: ${requestId}`,
+        sent_by: 'system',
+      }))
+    )
+  }
+
+  const alreadySigned = contract.status === 'signed'
+  const shouldSyncPdf = Boolean(normalized.shouldFinalizeSignedContract) && !contract.doc_storage_path
+
+  if (shouldSyncPdf) {
+    try {
+      await syncContractPdfFromZoho({
+        contractId: contract.id,
+        requestId,
+      })
+
+      if (locationIds.length > 0) {
+        await supabaseAdmin.from('activity_log').insert(
+          locationIds.map(locationId => ({
+            location_id: locationId,
+            type: 'contract',
+            subject: 'Contract PDF archived',
+            body: `Signed contract PDF synced from Zoho Sign.\nRequest ID: ${requestId}`,
+            sent_by: 'system',
+          }))
+        )
+      }
+    } catch (e) {
+      console.error('Failed to sync Zoho contract PDF:', e)
+    }
+  }
+
+  if (normalized.shouldFinalizeSignedContract && !alreadySigned) {
+    const completedAt = extractCompletedAt(payload, eventRequest) ?? new Date().toISOString()
+
     // Fetch field values from Zoho Sign
     let fields: Record<string, string> = {}
     try {
@@ -73,17 +299,9 @@ export async function POST(req: NextRequest) {
         legal_entity_name: legalEntity,
         standard_labor_rate: standardRate,
         warranty_labor_rate: warrantyRate,
-        signing_date: new Date().toISOString(),
+        signing_date: completedAt,
       })
       .eq('id', contract.id)
-
-    // Update linked locations to 'contracted'
-    const { data: contractLocations } = await supabaseAdmin
-      .from('contract_locations')
-      .select('location_id')
-      .eq('contract_id', contract.id)
-
-    const locationIds = contractLocations?.map(cl => cl.location_id) ?? []
 
     if (locationIds.length > 0) {
       const automationLocal =
@@ -105,7 +323,7 @@ export async function POST(req: NextRequest) {
         await supabaseAdmin.from('activity_log').insert({
           location_id: locationId,
           type: 'contract',
-          subject: 'Contract signed via Zoho Sign',
+          subject: 'Contract finalized details synced',
           body: `Request ID: ${requestId}. Signed as: ${legalEntity ?? 'unknown'}`,
           sent_by: 'system',
         })

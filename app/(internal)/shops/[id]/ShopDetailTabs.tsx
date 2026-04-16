@@ -10,6 +10,7 @@ import SendContractModal, { type SendContractDraftPrefill } from '@/components/S
 import Link from 'next/link'
 import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
+import { formatLocationSource } from '@/lib/location-source'
 
 const PROGRAMS = [
   { key: 'multi_drive', label: 'Multi-Drive' },
@@ -18,6 +19,23 @@ const PROGRAMS = [
 ]
 const PROGRAM_STATUSES = ['not_enrolled', 'pending_activation', 'active', 'suspended', 'terminated']
 const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
+
+function formatCompletedOn(value: string | null | undefined): string | null {
+  if (!value) return null
+  const dt = new Date(value)
+  if (Number.isNaN(dt.getTime())) return null
+
+  return dt.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZoneName: 'short',
+  })
+}
 
 type SiblingLocation = {
   id: string
@@ -236,7 +254,7 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
         <div className="space-y-4 max-w-lg">
           <Field label="Shop Name" value={shop.name} />
           <Field label="Chain" value={shop.chain_name} />
-          <Field label="Source" value={shop.source} />
+          <Field label="Source" value={formatLocationSource(shop.source)} />
           <Field label="Notes" value={shop.notes} />
           <div className="border-t border-arctic-100 pt-4">
             <div className="flex items-center justify-between mb-3">
@@ -319,48 +337,55 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
           {contracts.length === 0 && (
             <p className="text-sm text-onix-600">No contracts linked to this shop yet.</p>
           )}
-          {contracts.map((contract: any) => (
-            <div key={contract.id} className="border border-arctic-200 rounded-lg p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-sm font-medium">{contract.counterparty_company || contract.counterparty_name || 'Contract'}</span>
-                  {contract.legal_entity_name && (
-                    <span className="ml-2 text-xs text-onix-400">Signed as: {contract.legal_entity_name}</span>
-                  )}
+          {contracts.map((contract: any) => {
+            const completedOn = formatCompletedOn(contract.signing_date)
+
+            return (
+              <div key={contract.id} className="border border-arctic-200 rounded-lg p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-medium">{contract.counterparty_company || contract.counterparty_name || 'Contract'}</span>
+                    {contract.legal_entity_name && (
+                      <span className="ml-2 text-xs text-onix-400">Signed as: {contract.legal_entity_name}</span>
+                    )}
+                  </div>
+                  <StatusBadge status={contract.status} />
                 </div>
-                <StatusBadge status={contract.status} />
+                {contract.standard_labor_rate && (
+                  <div className="text-xs text-onix-600">
+                    Standard rate: ${contract.standard_labor_rate}/hr · Warranty rate: ${contract.warranty_labor_rate}/hr
+                  </div>
+                )}
+                {completedOn && (
+                  <div className="text-xs text-onix-600">Completed on: {completedOn}</div>
+                )}
+                {contract.status === 'draft' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openSendContractModal(false, contract)}
+                      className="px-3 py-1 text-xs bg-brand-600 text-white rounded hover:bg-brand-700"
+                    >
+                      Send via Zoho Sign
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletingContractId === contract.id}
+                      onClick={() => deleteDraftContract(contract.id)}
+                      className="px-3 py-1 text-xs border border-red-200 text-red-700 rounded hover:bg-red-50 disabled:opacity-60"
+                    >
+                      {deletingContractId === contract.id ? 'Deleting…' : 'Delete draft'}
+                    </button>
+                  </div>
+                )}
+                {contract.doc_url && (
+                  <a href={contract.doc_url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-600 hover:underline">
+                    View document
+                  </a>
+                )}
               </div>
-              {contract.standard_labor_rate && (
-                <div className="text-xs text-onix-600">
-                  Standard rate: ${contract.standard_labor_rate}/hr · Warranty rate: ${contract.warranty_labor_rate}/hr
-                </div>
-              )}
-              {contract.status === 'draft' && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openSendContractModal(false, contract)}
-                    className="px-3 py-1 text-xs bg-brand-600 text-white rounded hover:bg-brand-700"
-                  >
-                    Send via Zoho Sign
-                  </button>
-                  <button
-                    type="button"
-                    disabled={deletingContractId === contract.id}
-                    onClick={() => deleteDraftContract(contract.id)}
-                    className="px-3 py-1 text-xs border border-red-200 text-red-700 rounded hover:bg-red-50 disabled:opacity-60"
-                  >
-                    {deletingContractId === contract.id ? 'Deleting…' : 'Delete draft'}
-                  </button>
-                </div>
-              )}
-              {contract.doc_url && (
-                <a href={contract.doc_url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-600 hover:underline">
-                  View document
-                </a>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

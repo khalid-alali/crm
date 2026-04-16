@@ -10,24 +10,20 @@ const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'ina
 type LocationMetaRow = {
   status: string
   chain_name: string | null
-  state: string | null
 }
 
 function pipelineMetaFromRows(rows: LocationMetaRow[]) {
   const counts: Record<string, number> = Object.fromEntries(STATUSES.map(s => [s, 0]))
   const chainSet = new Set<string>()
-  const stateSet = new Set<string>()
 
   for (const row of rows) {
     if (row.status in counts) counts[row.status]++
     if (row.chain_name) chainSet.add(row.chain_name)
-    if (row.state) stateSet.add(row.state)
   }
 
   return {
     counts,
     chains: Array.from(chainSet).sort(),
-    states: Array.from(stateSet).sort(),
   }
 }
 
@@ -81,12 +77,11 @@ export default async function ShopsPage({ searchParams }: { searchParams: Search
       searchParams.assigned_to,
   )
 
-  const metaQuery = supabaseAdmin.from('locations').select('status, chain_name, state')
+  const metaQuery = supabaseAdmin.from('locations').select('status, chain_name')
 
   let shops: unknown[] = []
   let counts: Record<string, number>
   let chains: string[]
-  let states: string[]
 
   if (hasListFilters) {
     let listQuery = supabaseAdmin
@@ -103,7 +98,6 @@ export default async function ShopsPage({ searchParams }: { searchParams: Search
     const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
     counts = meta.counts
     chains = meta.chains
-    states = meta.states
   } else {
     const { data: shopRows } = await supabaseAdmin
       .from('locations')
@@ -114,12 +108,10 @@ export default async function ShopsPage({ searchParams }: { searchParams: Search
       (shops as LocationMetaRow[]).map(r => ({
         status: r.status,
         chain_name: r.chain_name,
-        state: r.state,
       })),
     )
     counts = meta.counts
     chains = meta.chains
-    states = meta.states
   }
 
   return (
@@ -130,7 +122,6 @@ export default async function ShopsPage({ searchParams }: { searchParams: Search
           statusLabels={LOCATION_STATUS_LABELS}
           statusCounts={counts}
           chains={chains}
-          states={states as string[]}
           assignees={[...BDR_ASSIGNEES]}
           searchParams={searchParams}
         />

@@ -6,20 +6,77 @@ const signApiBase = () => {
 const accountsHost = () =>
   (process.env.ZOHO_ACCOUNTS_DOMAIN ?? 'accounts.zoho.com').replace(/^https?:\/\//, '').split('/')[0]
 
-async function getAccessToken(): Promise<string> {
-  const res = await fetch(`https://${accountsHost()}/oauth/v2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: process.env.ZOHO_CLIENT_ID!,
-      client_secret: process.env.ZOHO_CLIENT_SECRET!,
-      refresh_token: process.env.ZOHO_REFRESH_TOKEN!,
-    }),
-  })
-  const data = (await res.json()) as { access_token?: string }
-  if (!data.access_token) throw new Error(`Zoho token exchange failed: ${JSON.stringify(data)}`)
-  return data.access_token
+let cachedAccessToken: string | null = null
+let cachedAccessTokenExpiresAt = 0
+let inflightAccessTokenPromise: Promise<string> | null = null
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function tokenStillValid() {
+  return Boolean(cachedAccessToken) && Date.now() < cachedAccessTokenExpiresAt
+}
+
+export async function getZohoAccessToken(): Promise<string> {
+  if (tokenStillValid()) {
+    return cachedAccessToken as string
+  }
+
+  if (inflightAccessTokenPromise) {
+    return inflightAccessTokenPromise
+  }
+
+  inflightAccessTokenPromise = (async () => {
+    let lastError: unknown = null
+
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const res = await fetch(`https://${accountsHost()}/oauth/v2/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: process.env.ZOHO_CLIENT_ID!,
+          client_secret: process.env.ZOHO_CLIENT_SECRET!,
+          refresh_token: process.env.ZOHO_REFRESH_TOKEN!,
+        }),
+      })
+      const data = (await res.json()) as {
+        access_token?: string
+        expires_in?: number
+        error?: string
+        error_description?: string
+      }
+      if (data.access_token) {
+        const expiresInSec = Number.isFinite(data.expires_in as number)
+          ? Number(data.expires_in)
+          : 3600
+        cachedAccessToken = data.access_token
+        cachedAccessTokenExpiresAt = Date.now() + Math.max(30, expiresInSec - 60) * 1000
+        return data.access_token
+      }
+
+      lastError = new Error(`Zoho token exchange failed: ${JSON.stringify(data)}`)
+      const msg = `${data.error ?? ''} ${data.error_description ?? ''}`.toLowerCase()
+      const retryable = res.status === 429 || msg.includes('too many requests') || msg.includes('access denied')
+      if (!retryable || attempt === 5) break
+
+      await sleep(1000 * Math.pow(2, attempt - 1))
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Zoho token exchange failed')
+  })()
+
+  try {
+    return await inflightAccessTokenPromise
+  } finally {
+    inflightAccessTokenPromise = null
+  }
+}
+
+function looksLikePdf(contentType: string | null): boolean {
+  if (!contentType) return false
+  return contentType.toLowerCase().includes('application/pdf')
 }
 
 type TemplateAction = {
@@ -97,7 +154,7 @@ export async function createAndSendDocument(params: {
   requestName?: string
   fieldTextData: Record<string, string>
 }): Promise<{ requestId: string }> {
-  const token = await getAccessToken()
+  const token = await getZohoAccessToken()
   const { actions, requestNameDefault } = await getTemplateActions(token, params.templateId)
 
   const requestName =
@@ -151,7 +208,7 @@ export async function getDocumentFields(
   requestId: string,
   existingAccessToken?: string
 ): Promise<Record<string, string>> {
-  const token = existingAccessToken ?? (await getAccessToken())
+  const token = existingAccessToken ?? (await getZohoAccessToken())
   const res = await fetch(`${signApiBase()}/requests/${encodeURIComponent(requestId)}`, {
     headers: { Authorization: `Zoho-oauthtoken ${token}` },
   })
@@ -166,6 +223,58 @@ export async function getDocumentFields(
     }
   }
   return fields
+}
+
+/**
+ * Download the generated request PDF for archival/storage.
+ * Tries the primary request PDF endpoint first, then per-document endpoint if needed.
+ */
+export async function downloadRequestPdf(
+  requestId: string,
+  existingAccessToken?: string
+): Promise<Uint8Array> {
+  const token = existingAccessToken ?? (await getZohoAccessToken())
+
+  async function getPdfFrom(path: string): Promise<Uint8Array | null> {
+    const res = await fetch(`${signApiBase()}${path}`, {
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    })
+    if (!res.ok) return null
+
+    if (!looksLikePdf(res.headers.get('content-type'))) return null
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    if (bytes.length < 100) return null
+    return bytes
+  }
+
+  const merged = await getPdfFrom(
+    `/requests/${encodeURIComponent(requestId)}/pdf?with_coc=true&merge=true`
+  )
+  if (merged) return merged
+
+  const requestPdf = await getPdfFrom(`/requests/${encodeURIComponent(requestId)}/pdf`)
+  if (requestPdf) return requestPdf
+
+  const detailsRes = await fetch(`${signApiBase()}/requests/${encodeURIComponent(requestId)}`, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  })
+  if (!detailsRes.ok) {
+    throw new Error(`Zoho Sign request details failed: ${detailsRes.status}`)
+  }
+  const details = (await detailsRes.json()) as {
+    requests?: { documents?: Array<{ document_id?: string }> }
+  }
+  const documentId = details.requests?.documents?.[0]?.document_id
+  if (!documentId) {
+    throw new Error(`Zoho Sign request ${requestId} has no downloadable documents`)
+  }
+
+  const perDoc = await getPdfFrom(
+    `/requests/${encodeURIComponent(requestId)}/documents/${encodeURIComponent(documentId)}/pdf`
+  )
+  if (perDoc) return perDoc
+
+  throw new Error(`Failed to download Zoho Sign PDF for request ${requestId}`)
 }
 
 export function verifyWebhookToken(token: string): boolean {

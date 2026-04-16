@@ -8,7 +8,10 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "sync:motherduck:shops": "npx tsx scripts/sync-motherduck-shops.ts",
+    "sync:motherduck:shops:apply": "npx tsx scripts/sync-motherduck-shops.ts --apply",
     "reconcile:zoho": "npx tsx scripts/reconcile-zoho-signed-contracts.ts",
+    "backfill:zoho-request-ids": "npx tsx scripts/backfill-zoho-request-ids-from-csv.ts",
+    "backfill:zoho-pdfs": "npx tsx scripts/backfill-zoho-contract-pdfs.ts",
     "import:zoho": "npx tsx scripts/import.ts --zoho-only",
     "repair:zoho-location-names": "npx tsx scripts/repair-zoho-phone-location-names.ts",
     "link:orphan-contracts": "npx tsx scripts/link-orphan-contracts-to-locations.ts"
