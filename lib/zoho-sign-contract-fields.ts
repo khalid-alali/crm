@@ -22,8 +22,12 @@ function fieldLabels() {
   return {
     laborRate:
       process.env.ZOHO_SIGN_FIELD_LABOR_RATE?.trim() || 'Shop customer pay labor rate $',
+    laborRateLegacy:
+      process.env.ZOHO_SIGN_FIELD_LABOR_RATE_LEGACY?.trim() || 'Labor Rate',
     warrantyRate:
       process.env.ZOHO_SIGN_FIELD_WARRANTY_LABOR?.trim() || 'Shop warranty labor rate $',
+    warrantyRateLegacy:
+      process.env.ZOHO_SIGN_FIELD_WARRANTY_LABOR_LEGACY?.trim() || 'Warranty Rate',
     shopOwnerName:
       process.env.ZOHO_SIGN_FIELD_SHOP_OWNER_NAME?.trim() || 'Shop Owner Name',
     shopOwnerEmail:
@@ -38,9 +42,14 @@ function fieldLabels() {
 /** Build `field_text_data` for POST …/templates/{id}/createdocument */
 export function buildZohoSignContractFieldTextData(input: ZohoContractPrefillInput): Record<string, string> {
   const L = fieldLabels()
+  const labor = strRate(input.standardLaborRate)
+  const warranty = strRate(input.warrantyLaborRate)
   const out: Record<string, string> = {
-    [L.laborRate]: strRate(input.standardLaborRate),
-    [L.warrantyRate]: strRate(input.warrantyLaborRate),
+    // Send both current and legacy labels so either Zoho template version is satisfied.
+    [L.laborRate]: labor,
+    [L.laborRateLegacy]: labor,
+    [L.warrantyRate]: warranty,
+    [L.warrantyRateLegacy]: warranty,
     [L.shopOwnerName]: input.shopOwnerName.trim(),
     [L.shopOwnerEmail]: input.shopOwnerEmail.trim(),
     [L.bdName]: input.headOfBusinessDevelopmentName.trim(),
