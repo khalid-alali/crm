@@ -10,6 +10,11 @@ import StateSelect from '@/components/StateSelect'
 
 const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
 const SOURCES = ['cold_call', 'referral', 'inbound', 'event', 'import', 'other']
+const formatSourceLabel = (source: string) =>
+  source
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
 const PROGRAMS = [
   { key: 'multi_drive', label: 'Multi-Drive' },
   { key: 'ev_program', label: 'EV Program' },
@@ -416,7 +421,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
             <label className="block text-xs font-medium text-onix-600 mb-1">Source</label>
             <select {...f('source')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm">
               <option value="">—</option>
-              {SOURCES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+              {SOURCES.map(s => <option key={s} value={s}>{formatSourceLabel(s)}</option>)}
             </select>
           </div>
         </div>

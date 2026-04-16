@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "sync:motherduck:shops": "npx tsx scripts/sync-motherduck-shops.ts",
     "reconcile:zoho": "npx tsx scripts/reconcile-zoho-signed-contracts.ts",
     "import:zoho": "npx tsx scripts/import.ts --zoho-only",
     "repair:zoho-location-names": "npx tsx scripts/repair-zoho-phone-location-names.ts",

@@ -56,6 +56,8 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
   const [savingPrograms, setSavingPrograms] = useState(false)
+  const [deletingContractId, setDeletingContractId] = useState<string | null>(null)
+  const [contractActionError, setContractActionError] = useState('')
   const [showIntroModal, setShowIntroModal] = useState(false)
   const [showSendContractModal, setShowSendContractModal] = useState(false)
   const [sendContractModalDraft, setSendContractModalDraft] = useState<SendContractDraftPrefill | null>(null)
@@ -119,9 +121,33 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
   }
 
   function openSendContractModal(fromShopDetail: boolean, draft: any | null) {
+    setContractActionError('')
     setSendContractFromShopDetail(fromShopDetail)
     setSendContractModalDraft(draft ? contractToPrefill(draft) : null)
     setShowSendContractModal(true)
+  }
+
+  async function deleteDraftContract(contractId: string) {
+    const confirmed = window.confirm(
+      'Delete this draft contract? If it is linked to multiple locations, it will be removed from all of them.'
+    )
+    if (!confirmed) return
+
+    setContractActionError('')
+    setDeletingContractId(contractId)
+    try {
+      const res = await fetch(`/api/contracts/${contractId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const message = (body as { error?: string }).error ?? 'Failed to delete draft contract.'
+        throw new Error(message)
+      }
+      router.refresh()
+    } catch (e: unknown) {
+      setContractActionError(e instanceof Error ? e.message : 'Failed to delete draft contract.')
+    } finally {
+      setDeletingContractId(null)
+    }
   }
 
   const activityLog = [...(shop.activity_log ?? [])].sort(
@@ -287,6 +313,9 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
       {/* Contracts tab */}
       {tab === 'contracts' && (
         <div className="space-y-4">
+          {contractActionError && (
+            <p className="text-sm text-red-600">{contractActionError}</p>
+          )}
           {contracts.length === 0 && (
             <p className="text-sm text-onix-600">No contracts linked to this shop yet.</p>
           )}
@@ -307,13 +336,23 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
                 </div>
               )}
               {contract.status === 'draft' && (
-                <button
-                  type="button"
-                  onClick={() => openSendContractModal(false, contract)}
-                  className="px-3 py-1 text-xs bg-brand-600 text-white rounded hover:bg-brand-700"
-                >
-                  Send via Zoho Sign
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openSendContractModal(false, contract)}
+                    className="px-3 py-1 text-xs bg-brand-600 text-white rounded hover:bg-brand-700"
+                  >
+                    Send via Zoho Sign
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingContractId === contract.id}
+                    onClick={() => deleteDraftContract(contract.id)}
+                    className="px-3 py-1 text-xs border border-red-200 text-red-700 rounded hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deletingContractId === contract.id ? 'Deleting…' : 'Delete draft'}
+                  </button>
+                </div>
               )}
               {contract.doc_url && (
                 <a href={contract.doc_url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-600 hover:underline">
