@@ -1,0 +1,99 @@
+'use client'
+
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+
+export default function DeleteShopButton({ shopId, shopName }: { shopId: string; shopName: string }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
+
+  async function confirmDelete() {
+    setDeleting(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/locations/${shopId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error((j as { error?: string }).error || 'Delete failed')
+      }
+      router.push('/shops')
+      router.refresh()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-sm text-red-600 hover:underline"
+      >
+        Delete
+      </button>
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+          role="presentation"
+          onClick={() => {
+            if (!deleting) setOpen(false)
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-shop-title"
+            className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 id="delete-shop-title" className="text-sm font-semibold text-gray-900">
+                Delete shop
+              </h2>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none disabled:opacity-40"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <p className="text-sm text-gray-700">
+                Are you sure you want to delete <span className="font-medium">{shopName}</span>? This
+                permanently removes the shop, its program enrollments, activity log, and links to
+                contracts on this location. This cannot be undone.
+              </p>
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setOpen(false)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={confirmDelete}
+                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete shop'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

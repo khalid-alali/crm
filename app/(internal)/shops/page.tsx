@@ -1,0 +1,140 @@
+import { supabaseAdmin } from '@/lib/supabase'
+import { BDR_ASSIGNEES } from '@/lib/bdr-assignees'
+import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
+import ShopsFilters from './ShopsFilters'
+import ShopsPageClient from './ShopsPageClient'
+
+const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive'] as const
+
+/** One row per location for filter tabs / dropdowns (no joins). */
+type LocationMetaRow = {
+  status: string
+  chain_name: string | null
+  state: string | null
+}
+
+function pipelineMetaFromRows(rows: LocationMetaRow[]) {
+  const counts: Record<string, number> = Object.fromEntries(STATUSES.map(s => [s, 0]))
+  const chainSet = new Set<string>()
+  const stateSet = new Set<string>()
+
+  for (const row of rows) {
+    if (row.status in counts) counts[row.status]++
+    if (row.chain_name) chainSet.add(row.chain_name)
+    if (row.state) stateSet.add(row.state)
+  }
+
+  return {
+    counts,
+    chains: Array.from(chainSet).sort(),
+    states: Array.from(stateSet).sort(),
+  }
+}
+
+interface SearchParams {
+  status?: string
+  chain?: string
+  state?: string
+  assigned_to?: string
+  program?: string
+}
+
+const PIPELINE_LOCATION_SELECT = `
+  *,
+  owners(name),
+  program_enrollments(program, status)
+`
+
+type PipelineLocationRow = Record<string, unknown> & { id: string; created_at: string }
+
+async function attachLastActivity(rows: PipelineLocationRow[]) {
+  if (rows.length === 0) return rows
+
+  const { data, error } = await supabaseAdmin.rpc('pipeline_last_activity', {
+    p_location_ids: rows.map(r => r.id),
+  })
+
+  if (error) {
+    console.error('pipeline_last_activity RPC failed:', error.message)
+    return rows.map(r => ({ ...r, last_activity_at: null as string | null }))
+  }
+
+  const lastById = new Map<string, string>()
+  for (const row of data ?? []) {
+    const r = row as { location_id: string; last_at: string }
+    lastById.set(r.location_id, r.last_at)
+  }
+
+  return rows.map(r => ({
+    ...r,
+    last_activity_at: lastById.get(r.id) ?? null,
+  }))
+}
+
+export const dynamic = 'force-dynamic'
+
+export default async function ShopsPage({ searchParams }: { searchParams: SearchParams }) {
+  const hasListFilters = Boolean(
+    searchParams.status ||
+      searchParams.chain ||
+      searchParams.state ||
+      searchParams.assigned_to,
+  )
+
+  const metaQuery = supabaseAdmin.from('locations').select('status, chain_name, state')
+
+  let shops: unknown[] = []
+  let counts: Record<string, number>
+  let chains: string[]
+  let states: string[]
+
+  if (hasListFilters) {
+    let listQuery = supabaseAdmin
+      .from('locations')
+      .select(PIPELINE_LOCATION_SELECT)
+      .order('updated_at', { ascending: false })
+    if (searchParams.status) listQuery = listQuery.eq('status', searchParams.status)
+    if (searchParams.chain) listQuery = listQuery.eq('chain_name', searchParams.chain)
+    if (searchParams.state) listQuery = listQuery.eq('state', searchParams.state)
+    if (searchParams.assigned_to) listQuery = listQuery.eq('assigned_to', searchParams.assigned_to)
+
+    const [{ data: shopRows }, { data: metaRows }] = await Promise.all([listQuery, metaQuery])
+    shops = await attachLastActivity(shopRows ?? [])
+    const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
+    counts = meta.counts
+    chains = meta.chains
+    states = meta.states
+  } else {
+    const { data: shopRows } = await supabaseAdmin
+      .from('locations')
+      .select(PIPELINE_LOCATION_SELECT)
+      .order('updated_at', { ascending: false })
+    shops = await attachLastActivity(shopRows ?? [])
+    const meta = pipelineMetaFromRows(
+      (shops as LocationMetaRow[]).map(r => ({
+        status: r.status,
+        chain_name: r.chain_name,
+        state: r.state,
+      })),
+    )
+    counts = meta.counts
+    chains = meta.chains
+    states = meta.states
+  }
+
+  return (
+    <div className="p-6">
+      <ShopsPageClient title="Pipeline" shops={shops as any}>
+        <ShopsFilters
+          statuses={[...STATUSES]}
+          statusLabels={LOCATION_STATUS_LABELS}
+          statusCounts={counts}
+          chains={chains}
+          states={states as string[]}
+          assignees={[...BDR_ASSIGNEES]}
+          searchParams={searchParams}
+        />
+      </ShopsPageClient>
+    </div>
+  )
+}
