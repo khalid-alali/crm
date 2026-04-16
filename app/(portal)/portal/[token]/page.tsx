@@ -12,7 +12,7 @@ export default async function PortalPage({ params }: { params: { token: string }
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-lg font-semibold text-red-600">Link expired or invalid</h1>
-          <p className="text-sm text-gray-500 mt-2">Please request a new link from RepairWise.</p>
+          <p className="text-sm text-onix-600 mt-2">Please request a new link from RepairWise.</p>
         </div>
       </div>
     )
@@ -27,19 +27,19 @@ export default async function PortalPage({ params }: { params: { token: string }
   if (!location) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Shop not found.</p>
+        <p className="text-onix-600">Shop not found.</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="min-h-screen bg-arctic-50 py-12 px-4">
       <div className="max-w-lg mx-auto">
         <div className="mb-8 text-center">
           <h1 className="text-xl font-semibold">RepairWise Partner Portal</h1>
-          <p className="text-sm text-gray-500 mt-1">Confirm your shop information</p>
+          <p className="text-sm text-onix-600 mt-1">Confirm your shop information</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-lg border border-arctic-200 shadow-sm p-6">
           <PortalForm location={location as any} token={params.token} />
         </div>
       </div>

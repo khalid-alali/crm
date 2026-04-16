@@ -41,20 +41,20 @@ export default function OwnerSelect({ value, onChange }: Props) {
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="w-full text-left border border-gray-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full text-left border border-arctic-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
       >
-        {selected ? selected.name : <span className="text-gray-400">Select owner…</span>}
+        {selected ? selected.name : <span className="text-onix-400">Select owner…</span>}
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-auto">
-          <div className="p-2 border-b border-gray-100">
+        <div className="absolute z-20 mt-1 w-full bg-white border border-arctic-200 rounded shadow-lg max-h-60 overflow-auto">
+          <div className="p-2 border-b border-arctic-100">
             <input
               autoFocus
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search owners…"
-              className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-full border border-arctic-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
             />
           </div>
           {owners.map(o => (
@@ -62,10 +62,10 @@ export default function OwnerSelect({ value, onChange }: Props) {
               key={o.id}
               type="button"
               onClick={() => { onChange(o.id); setOpen(false) }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+              className="w-full text-left px-3 py-2 text-sm hover:bg-arctic-50"
             >
               <div>{o.name}</div>
-              {o.email && <div className="text-xs text-gray-400">{o.email}</div>}
+              {o.email && <div className="text-xs text-onix-400">{o.email}</div>}
             </button>
           ))}
         </div>

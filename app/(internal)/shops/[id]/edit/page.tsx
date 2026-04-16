@@ -14,7 +14,7 @@ export default async function EditShopPage({ params }: { params: { id: string } 
 
   return (
     <div className="p-6 max-w-2xl">
-      <div className="flex items-center gap-2 mb-1 text-sm text-gray-500">
+      <div className="flex items-center gap-2 mb-1 text-sm text-onix-600">
         <Link href="/shops" className="hover:underline">Shops</Link>
         <span>/</span>
         <Link href={`/shops/${shop.id}`} className="hover:underline">{shop.name}</Link>

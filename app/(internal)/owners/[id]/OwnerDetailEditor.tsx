@@ -51,22 +51,22 @@ export default function OwnerDetailEditor({ owner }: { owner: Owner }) {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-gray-600">Owner Details</h2>
+      <h2 className="text-sm font-semibold text-onix-600">Owner Details</h2>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {(['name', 'email', 'phone', 'title'] as const).map(field => (
         <div key={field}>
-          <label className="block text-xs font-medium text-gray-500 mb-1 capitalize">{field}</label>
-          <input {...f(field)} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+          <label className="block text-xs font-medium text-onix-600 mb-1 capitalize">{field}</label>
+          <input {...f(field)} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
         </div>
       ))}
       <div>
-        <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
-        <textarea {...f('notes')} rows={3} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+        <label className="block text-xs font-medium text-onix-600 mb-1">Notes</label>
+        <textarea {...f('notes')} rows={3} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
       </div>
       <button
         onClick={handleSave}
         disabled={saving}
-        className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        className="px-4 py-1.5 text-sm bg-brand-600 text-white rounded hover:bg-brand-700 disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Save'}
       </button>

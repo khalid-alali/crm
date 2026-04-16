@@ -60,7 +60,7 @@ export default async function ShopDetailPage({ params, searchParams }: {
 
   return (
     <div className="p-6 max-w-4xl">
-      <div className="flex items-center gap-2 mb-1 text-sm text-gray-500">
+      <div className="flex items-center gap-2 mb-1 text-sm text-onix-600">
         <Link href="/shops" className="hover:underline">Shops</Link>
         <span>/</span>
         <span>{shop.name}</span>
@@ -71,7 +71,7 @@ export default async function ShopDetailPage({ params, searchParams }: {
         <ChainBadge chain={shop.chain_name} />
         <StatusBadge status={shop.status} />
         <div className="ml-auto flex items-center gap-4 text-sm">
-          <Link href={`/shops/${shop.id}/edit`} className="text-gray-500 hover:underline">
+          <Link href={`/shops/${shop.id}/edit`} className="text-onix-600 hover:underline">
             Edit
           </Link>
           <DeleteShopButton shopId={shop.id} shopName={shop.name} />

@@ -62,7 +62,7 @@ export default function PortalForm({ location, token }: { location: any; token: 
       <div className="text-center py-8">
         <div className="text-green-600 text-4xl mb-3">✓</div>
         <h2 className="text-lg font-semibold">Information confirmed</h2>
-        <p className="text-sm text-gray-500 mt-1">Thank you, {location.name}. We've received your updated information.</p>
+        <p className="text-sm text-onix-600 mt-1">Thank you, {location.name}. We've received your updated information.</p>
       </div>
     )
   }
@@ -70,32 +70,32 @@ export default function PortalForm({ location, token }: { location: any; token: 
   return (
     <div className="space-y-5">
       <div>
-        <label className="block text-xs font-medium text-gray-500 mb-0.5">Shop Name</label>
+        <label className="block text-xs font-medium text-onix-600 mb-0.5">Shop Name</label>
         <p className="text-sm font-medium">{location.name}</p>
       </div>
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold">Address</h3>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 1</label>
-          <input {...f('address_line1')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+          <label className="block text-xs font-medium text-onix-600 mb-1">Address Line 1</label>
+          <input {...f('address_line1')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
-            <input {...f('city')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+            <label className="block text-xs font-medium text-onix-600 mb-1">City</label>
+            <input {...f('city')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">State</label>
             <StateSelect
               value={form.state}
               onChange={state => setForm(f => ({ ...f, state }))}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm bg-white"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm bg-white"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Zip</label>
-            <input {...f('postal_code')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+            <label className="block text-xs font-medium text-onix-600 mb-1">Zip</label>
+            <input {...f('postal_code')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
           </div>
         </div>
       </section>
@@ -103,16 +103,16 @@ export default function PortalForm({ location, token }: { location: any; token: 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold">Contact Info</h3>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Name</label>
-          <input {...f('primary_contact_name')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+          <label className="block text-xs font-medium text-onix-600 mb-1">Name</label>
+          <input {...f('primary_contact_name')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
-          <input {...f('primary_contact_email')} type="email" className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+          <label className="block text-xs font-medium text-onix-600 mb-1">Email</label>
+          <input {...f('primary_contact_email')} type="email" className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Phone</label>
-          <input {...f('primary_contact_phone')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+          <label className="block text-xs font-medium text-onix-600 mb-1">Phone</label>
+          <input {...f('primary_contact_phone')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
         </div>
       </section>
 
@@ -123,8 +123,8 @@ export default function PortalForm({ location, token }: { location: any; token: 
             const e = location.program_enrollments?.find((e: any) => e.program === p.key)
             return (
               <div key={p.key} className="flex justify-between text-sm">
-                <span className="text-gray-600">{p.label}</span>
-                <span className="text-gray-400">{STATUS_LABELS[e?.status ?? 'not_enrolled']}</span>
+                <span className="text-onix-600">{p.label}</span>
+                <span className="text-onix-400">{STATUS_LABELS[e?.status ?? 'not_enrolled']}</span>
               </div>
             )
           })}
@@ -136,7 +136,7 @@ export default function PortalForm({ location, token }: { location: any; token: 
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 disabled:opacity-50"
+        className="w-full py-2.5 bg-brand-600 text-white text-sm font-medium rounded hover:bg-brand-700 disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Confirm Info is Correct'}
       </button>

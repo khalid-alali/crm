@@ -53,13 +53,13 @@ export default function ShopsPageClient({ title, shops, children }: Props) {
               placeholder="Search name, city, owner, or chain…"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-arctic-300 rounded-lg px-3 py-2 text-sm text-onix-950 placeholder:text-onix-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
             />
           </div>
         </div>
         <Link
           href="/shops/new"
-          className="shrink-0 px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 text-center sm:text-left"
+          className="shrink-0 px-4 py-2 text-sm bg-brand-600 text-white rounded hover:bg-brand-700 text-center sm:text-left"
         >
           + Add Shop
         </Link>
@@ -67,7 +67,7 @@ export default function ShopsPageClient({ title, shops, children }: Props) {
 
       {children}
 
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-arctic-200 rounded-lg overflow-hidden">
         <ShopTable shops={filtered} />
       </div>
     </>

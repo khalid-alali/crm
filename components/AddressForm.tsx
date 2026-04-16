@@ -52,30 +52,30 @@ export default function AddressForm({ initial, locationId, onSaved }: Props) {
     <div className="space-y-3">
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Address Line 1</label>
-        <input {...field('address_line1')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+        <label className="block text-xs font-medium text-onix-600 mb-1">Address Line 1</label>
+        <input {...field('address_line1')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
-          <input {...field('city')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+          <label className="block text-xs font-medium text-onix-600 mb-1">City</label>
+          <input {...field('city')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
+          <label className="block text-xs font-medium text-onix-600 mb-1">State</label>
           <StateSelect
             value={form.state}
             onChange={state => setForm(f => ({ ...f, state }))}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Postal Code</label>
-          <input {...field('postal_code')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+          <label className="block text-xs font-medium text-onix-600 mb-1">Postal Code</label>
+          <input {...field('postal_code')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
         </div>
       </div>
       <button
         onClick={handleSave}
         disabled={saving}
-        className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        className="px-4 py-1.5 text-sm bg-brand-600 text-white rounded hover:bg-brand-700 disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Save Address'}
       </button>

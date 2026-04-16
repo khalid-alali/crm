@@ -58,13 +58,47 @@ export function resolveZohoCsvAddress(row: Record<string, string>): string | nul
 }
 
 const SIMPLE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const ZOHO_SHOP_EMAIL_KEYS = [
+  'Text-malf9y3n',
+  'Text-m2mdosf5',
+  'Text - 3',
+  'Text - 2',
+  'Text-malfbhiy',
+] as const
+
+function normalizeEmail(v: string | null): string | null {
+  if (!v) return null
+  const cleaned = v.trim().toLowerCase()
+  if (!SIMPLE_EMAIL.test(cleaned)) return null
+  return cleaned
+}
 
 /**
  * Zoho Midas-style template: shop / site inbox (often the location's primary_contact_email),
  * while "Email" is the individual signer — must match locations by this field, not signer email.
  */
 export function resolveZohoCsvShopContactEmail(row: Record<string, string>): string | null {
-  const v = clean(row['Text-malf9y3n'])
-  if (!v || !SIMPLE_EMAIL.test(v)) return null
-  return v.toLowerCase()
+  const signerEmail = normalizeEmail(clean(row['Email']))
+
+  // Preferred: known template keys where shop inbox is usually stored.
+  for (const key of ZOHO_SHOP_EMAIL_KEYS) {
+    const candidate = normalizeEmail(clean(row[key]))
+    if (!candidate) continue
+    if (signerEmail && candidate === signerEmail) continue
+    if (candidate.includes('repairwise')) continue
+    return candidate
+  }
+
+  // Fallback: scan all fields for a second non-signer email.
+  for (const [key, value] of Object.entries(row)) {
+    const k = key.toLowerCase()
+    if (!k.startsWith('text') && k !== 'company') continue
+    const candidate = normalizeEmail(clean(value))
+    if (!candidate) continue
+    if (signerEmail && candidate === signerEmail) continue
+    if (candidate.includes('repairwise')) continue
+    return candidate
+  }
+
+  return null
 }

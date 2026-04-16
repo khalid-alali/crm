@@ -51,15 +51,15 @@ export default function DeleteShopButton({ shopId, shopName }: { shopId: string;
             className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 id="delete-shop-title" className="text-sm font-semibold text-gray-900">
+            <div className="px-5 py-4 border-b border-arctic-200 flex items-center justify-between">
+              <h2 id="delete-shop-title" className="text-sm font-semibold text-onix-950">
                 Delete shop
               </h2>
               <button
                 type="button"
                 disabled={deleting}
                 onClick={() => setOpen(false)}
-                className="text-gray-400 hover:text-gray-600 text-lg leading-none disabled:opacity-40"
+                className="text-onix-400 hover:text-onix-600 text-lg leading-none disabled:opacity-40"
                 aria-label="Close"
               >
                 &times;
@@ -67,18 +67,18 @@ export default function DeleteShopButton({ shopId, shopName }: { shopId: string;
             </div>
             <div className="px-5 py-4 space-y-3">
               {error && <p className="text-sm text-red-600">{error}</p>}
-              <p className="text-sm text-gray-700">
+              <p className="text-sm text-onix-800">
                 Are you sure you want to delete <span className="font-medium">{shopName}</span>? This
                 permanently removes the shop, its program enrollments, activity log, and links to
                 contracts on this location. This cannot be undone.
               </p>
             </div>
-            <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-arctic-100 flex justify-end gap-2">
               <button
                 type="button"
                 disabled={deleting}
                 onClick={() => setOpen(false)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                className="px-3 py-1.5 text-sm border border-arctic-300 rounded hover:bg-arctic-50 disabled:opacity-50"
               >
                 Cancel
               </button>

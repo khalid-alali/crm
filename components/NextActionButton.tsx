@@ -52,7 +52,7 @@ export default function NextActionButton({
     <>
       <button
         onClick={handleClick}
-        className="px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded hover:bg-blue-100 whitespace-nowrap"
+        className="px-3 py-1 text-xs font-medium bg-brand-50 text-brand-700 rounded hover:bg-brand-100 whitespace-nowrap"
       >
         {config.label}
       </button>

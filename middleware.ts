@@ -1,6 +1,9 @@
 import withAuth from 'next-auth/middleware'
 
 export default withAuth({
+  pages: {
+    signIn: '/signin',
+  },
   callbacks: {
     authorized({ token }) {
       if (
@@ -15,5 +18,5 @@ export default withAuth({
 })
 
 export const config = {
-  matcher: ['/((?!portal|api/webhooks|_next|favicon).*)'],
+  matcher: ['/((?!portal|api/webhooks|api/auth|_next|favicon|signin).*)'],
 }

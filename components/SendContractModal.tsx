@@ -90,9 +90,9 @@ export default function SendContractModal({
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-arctic-200 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Send contract via Zoho Sign</h2>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">
+          <button type="button" onClick={onClose} className="text-onix-400 hover:text-onix-600 text-lg leading-none">
             &times;
           </button>
         </div>
@@ -105,29 +105,29 @@ export default function SendContractModal({
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
+            <label className="block text-xs font-medium text-onix-600 mb-1">
               Shop owner name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={ownerName}
               onChange={e => setOwnerName(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
+            <label className="block text-xs font-medium text-onix-600 mb-1">
               Shop owner email <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
               value={ownerEmail}
               onChange={e => setOwnerEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
+            <label className="block text-xs font-medium text-onix-600 mb-1">
               Shop customer pay labor rate ($) <span className="text-red-500">*</span>
             </label>
             <input
@@ -136,26 +136,26 @@ export default function SendContractModal({
               value={standardRate}
               onChange={e => setStandardRate(e.target.value)}
               placeholder="e.g. 125"
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Shop warranty labor rate ($)</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Shop warranty labor rate ($)</label>
             <input
               type="text"
               inputMode="decimal"
               value={warrantyRate}
               onChange={e => setWarrantyRate(e.target.value)}
               placeholder="Optional"
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
         </div>
-        <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
+        <div className="px-5 py-3 border-t border-arctic-200 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
+            className="px-4 py-1.5 text-sm text-onix-600 hover:bg-arctic-100 rounded"
           >
             Cancel
           </button>
@@ -163,7 +163,7 @@ export default function SendContractModal({
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit || sending}
-            className="px-4 py-1.5 text-sm bg-gray-800 text-white rounded hover:bg-gray-900 disabled:opacity-50"
+            className="px-4 py-1.5 text-sm bg-onix-800 text-white rounded hover:bg-onix-950 disabled:opacity-50"
           >
             {sending ? 'Sending…' : 'Send via Zoho Sign'}
           </button>

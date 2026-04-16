@@ -31,33 +31,32 @@ export default function ShopTable({ shops }: Props) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
+      <table className="min-w-full divide-y divide-arctic-200 text-sm">
+        <thead className="bg-arctic-50">
           <tr>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Shop</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Owner</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Location</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Programs</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Assigned</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Last activity</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide">Shop</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide">Owner</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide">Location</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide">Status</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide">Programs</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide">Last activity</th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-100">
+        <tbody className="bg-white divide-y divide-arctic-100">
           {shops.map(shop => (
             <tr
               key={shop.id}
-              className="hover:bg-gray-50 cursor-pointer"
+              className="hover:bg-arctic-50 cursor-pointer"
               onClick={() => router.push(`/shops/${shop.id}`)}
             >
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-1">
-                  <span className="font-medium text-gray-900">{shop.name}</span>
+                  <span className="font-medium text-onix-950">{shop.name}</span>
                   <ChainBadge chain={shop.chain_name} />
                 </div>
               </td>
-              <td className="px-4 py-2.5 text-gray-600">{shop.owners?.name ?? '—'}</td>
-              <td className="px-4 py-2.5 text-gray-600">
+              <td className="px-4 py-2.5 text-onix-600">{shop.owners?.name ?? '—'}</td>
+              <td className="px-4 py-2.5 text-onix-600">
                 {[shop.city, shop.state].filter(Boolean).join(', ') || '—'}
               </td>
               <td className="px-4 py-2.5">
@@ -66,7 +65,6 @@ export default function ShopTable({ shops }: Props) {
               <td className="px-4 py-2.5">
                 <ProgramBadge enrollments={shop.program_enrollments} />
               </td>
-              <td className="px-4 py-2.5 text-gray-500 text-xs">{shop.assigned_to ?? '—'}</td>
               <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
                 <LastActivityCell createdAt={shop.created_at} lastActivityAt={shop.last_activity_at} />
               </td>
@@ -74,7 +72,7 @@ export default function ShopTable({ shops }: Props) {
           ))}
           {shops.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-8 text-center text-gray-400">No shops found.</td>
+              <td colSpan={6} className="px-4 py-8 text-center text-onix-400">No shops found.</td>
             </tr>
           )}
         </tbody>

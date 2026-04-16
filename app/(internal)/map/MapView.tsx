@@ -9,10 +9,10 @@ import ChainBadge from '@/components/ChainBadge'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 
 const STATUS_COLORS: Record<string, string> = {
-  lead: '#888780',
-  contacted: '#378ADD',
-  in_review: '#7F77DD',
-  contracted: '#EF9F27',
+  lead: '#6D6E70',
+  contacted: '#687CF9',
+  in_review: '#8595F9',
+  contracted: '#69C77A',
   active: '#1D9E75',
   inactive: '#E24B4A',
 }
@@ -167,13 +167,13 @@ export default function MapView({ locations }: { locations: Location[] }) {
   return (
     <div className="flex-1 flex relative">
       {/* Sidebar */}
-      <div className="w-52 bg-white border-r border-gray-200 p-3 flex flex-col gap-3 z-10">
+      <div className="w-52 bg-white border-r border-arctic-200 p-3 flex flex-col gap-3 z-10">
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Filter by status</label>
+          <label className="block text-xs font-medium text-onix-600 mb-1">Filter by status</label>
           <select
             value={filterStatus}
             onChange={e => setFilterStatus(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+            className="w-full border border-arctic-300 rounded px-2 py-1 text-sm"
           >
             <option value="">All ({locations.length})</option>
             {STATUSES.map(s => {
@@ -185,7 +185,7 @@ export default function MapView({ locations }: { locations: Location[] }) {
               )
             })}
           </select>
-          <p className="text-xs text-gray-500 mt-1.5 leading-snug">
+          <p className="text-xs text-onix-600 mt-1.5 leading-snug">
             {filterStatus
               ? `${pinsShown} on map for this status (${scoped.length} in status)`
               : `${pinsShown} on map of ${locations.length} shops`}
@@ -197,7 +197,7 @@ export default function MapView({ locations }: { locations: Location[] }) {
           {STATUSES.map(s => (
             <div key={s} className="flex items-center gap-2 text-xs">
               <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_COLORS[s] }} />
-              <span className="text-gray-600">{LOCATION_STATUS_LABELS[s]}</span>
+              <span className="text-onix-600">{LOCATION_STATUS_LABELS[s]}</span>
             </div>
           ))}
         </div>
@@ -211,11 +211,11 @@ export default function MapView({ locations }: { locations: Location[] }) {
           <button
             onClick={handleGeocodeAll}
             disabled={geocoding}
-            className="w-full px-2 py-1.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-900 disabled:opacity-50"
+            className="w-full px-2 py-1.5 text-xs bg-onix-800 text-white rounded hover:bg-onix-950 disabled:opacity-50"
           >
             {geocoding ? 'Geocoding…' : 'Geocode missing addresses'}
           </button>
-          {geocodeResult && <p className="text-xs text-gray-500 mt-1">{geocodeResult}</p>}
+          {geocodeResult && <p className="text-xs text-onix-600 mt-1">{geocodeResult}</p>}
         </div>
       </div>
 
@@ -224,11 +224,11 @@ export default function MapView({ locations }: { locations: Location[] }) {
 
       {/* Popup */}
       {selected && (
-        <div className="absolute bottom-6 left-60 bg-white border border-gray-200 rounded-lg shadow-lg p-4 w-64 z-20">
+        <div className="absolute bottom-6 left-60 bg-white border border-arctic-200 rounded-lg shadow-lg p-4 w-64 z-20">
           <button
             type="button"
             onClick={() => setSelected(null)}
-            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+            className="absolute top-2 right-2 text-onix-400 hover:text-onix-600"
           >
             &times;
           </button>
@@ -236,10 +236,10 @@ export default function MapView({ locations }: { locations: Location[] }) {
             <span className="font-medium text-sm">{selected.name}</span>
             <ChainBadge chain={selected.chain_name} />
           </div>
-          <div className="text-xs text-gray-500 mb-2">{[selected.city, selected.state].filter(Boolean).join(', ')}</div>
+          <div className="text-xs text-onix-600 mb-2">{[selected.city, selected.state].filter(Boolean).join(', ')}</div>
           <StatusBadge status={selected.status} />
           <div className="mt-3">
-            <a href={`/shops/${selected.id}`} className="text-xs text-blue-600 hover:underline">
+            <a href={`/shops/${selected.id}`} className="text-xs text-brand-600 hover:underline">
               View shop →
             </a>
           </div>

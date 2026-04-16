@@ -10,7 +10,7 @@ const statusStyles: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
   pending_activation: 'bg-yellow-100 text-yellow-700',
   suspended: 'bg-red-100 text-red-600',
-  terminated: 'bg-gray-200 text-gray-500 line-through',
+  terminated: 'bg-arctic-200 text-onix-600 line-through',
   not_enrolled: 'hidden',
 }
 

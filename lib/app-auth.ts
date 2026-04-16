@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth'
 import type { Session } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
 
 /** Local-only escape hatch: set AUTH_BYPASS=true in .env.local while running `next dev`. Never enable in production. */
 export function isAuthBypassEnabled(): boolean {
@@ -18,7 +19,7 @@ function devBypassSession(): Session {
 
 /** Use instead of getServerSession() so dev bypass applies consistently (layout + API routes). */
 export async function getAppSession(): Promise<Session | null> {
-  const session = await getServerSession()
+  const session = await getServerSession(authOptions)
   if (session) return session
   if (isAuthBypassEnabled()) return devBypassSession()
   return null

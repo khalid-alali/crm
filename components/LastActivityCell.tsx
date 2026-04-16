@@ -24,8 +24,8 @@ export default function LastActivityCell({
 
   if (!mounted) {
     return (
-      <div className="flex items-center gap-2 text-xs text-gray-300 tabular-nums" aria-hidden>
-        <span className="h-2 w-2 shrink-0 rounded-full bg-gray-200" />
+      <div className="flex items-center gap-2 text-xs text-onix-300 tabular-nums" aria-hidden>
+        <span className="h-2 w-2 shrink-0 rounded-full bg-arctic-200" />
         <span>—</span>
       </div>
     )
@@ -34,7 +34,7 @@ export default function LastActivityCell({
   const { label, dot } = computeLastActivityDisplay(createdAt, lastActivityAt)
 
   return (
-    <div className="flex items-center gap-2 text-xs text-gray-700 tabular-nums">
+    <div className="flex items-center gap-2 text-xs text-onix-800 tabular-nums">
       <span
         className={`h-2 w-2 shrink-0 rounded-full ${dotClass[dot]}`}
         title={`Last activity: ${label}`}

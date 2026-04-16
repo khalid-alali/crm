@@ -23,7 +23,7 @@ export default function StateSelect({ value, onChange, className }: Props) {
   const { selectValue, extraOption } = resolveSelectValue(value)
   const baseClass =
     className ??
-    'w-full border border-gray-300 rounded px-3 py-1.5 text-sm bg-white'
+    'w-full border border-arctic-300 rounded px-3 py-1.5 text-sm bg-white'
 
   return (
     <select

@@ -192,14 +192,14 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Shop Info</h2>
+        <h2 className="text-sm font-semibold text-onix-800">Shop Info</h2>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Shop Name *</label>
+          <label className="block text-xs font-medium text-onix-600 mb-1">Shop Name *</label>
           <input
             {...f('name')}
             onBlur={handleNameBlur}
             required
-            className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+            className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
           />
           {detectedChain && (
             <p className="text-xs text-orange-600 mt-1">
@@ -209,11 +209,11 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
           )}
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Chain Name</label>
+          <label className="block text-xs font-medium text-onix-600 mb-1">Chain Name</label>
           <select
             value={form.chain_name}
             onChange={e => setForm(f => ({ ...f, chain_name: e.target.value }))}
-            className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm bg-white"
+            className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm bg-white"
           >
             <option value="">— None —</option>
             {KNOWN_CHAINS.map(c => (
@@ -223,10 +223,10 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
               <option value={form.chain_name}>{form.chain_name} (saved value)</option>
             )}
           </select>
-          <p className="text-xs text-gray-500 mt-1">Optional. Shop name blur can auto-pick a chain when it matches.</p>
+          <p className="text-xs text-onix-600 mt-1">Optional. Shop name blur can auto-pick a chain when it matches.</p>
         </div>
         <div className="space-y-3">
-          <span className="block text-xs font-medium text-gray-600">Owner</span>
+          <span className="block text-xs font-medium text-onix-600">Owner</span>
           {isNew ? (
             <>
               <div className="flex flex-col gap-2">
@@ -239,7 +239,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
                       setOwnerChoice('existing')
                       setPrimarySameAsOwner(false)
                     }}
-                    className="border-gray-300"
+                    className="border-arctic-300"
                   />
                   Pick existing owner
                 </label>
@@ -253,7 +253,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
                       setForm(f => ({ ...f, owner_id: null }))
                       setPrimarySameAsOwner(false)
                     }}
-                    className="border-gray-300"
+                    className="border-arctic-300"
                   />
                   Create new owner
                 </label>
@@ -264,41 +264,41 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
                   onChange={ownerId => setForm(f => ({ ...f, owner_id: ownerId }))}
                 />
               ) : (
-                <div className="space-y-3 border-l-2 border-gray-200 ml-1.5 pl-4">
+                <div className="space-y-3 border-l-2 border-arctic-200 ml-1.5 pl-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Owner name *</label>
+                    <label className="block text-xs font-medium text-onix-600 mb-1">Owner name *</label>
                     <input
                       value={newOwner.name}
                       onChange={e => setNewOwner(o => ({ ...o, name: e.target.value }))}
                       required={ownerChoice === 'new'}
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+                      className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                      <label className="block text-xs font-medium text-onix-600 mb-1">Email</label>
                       <input
                         type="email"
                         value={newOwner.email}
                         onChange={e => setNewOwner(o => ({ ...o, email: e.target.value }))}
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+                        className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                      <label className="block text-xs font-medium text-onix-600 mb-1">Phone</label>
                       <input
                         value={newOwner.phone}
                         onChange={e => setNewOwner(o => ({ ...o, phone: e.target.value }))}
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+                        className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+                    <label className="block text-xs font-medium text-onix-600 mb-1">Title</label>
                     <input
                       value={newOwner.title}
                       onChange={e => setNewOwner(o => ({ ...o, title: e.target.value }))}
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+                      className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
                       placeholder="e.g. Owner, GM"
                     />
                   </div>
@@ -315,38 +315,38 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Address</h2>
+        <h2 className="text-sm font-semibold text-onix-800">Address</h2>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Address Line 1</label>
-          <input {...f('address_line1')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+          <label className="block text-xs font-medium text-onix-600 mb-1">Address Line 1</label>
+          <input {...f('address_line1')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
-            <input {...f('city')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+            <label className="block text-xs font-medium text-onix-600 mb-1">City</label>
+            <input {...f('city')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">State</label>
             <StateSelect
               value={form.state}
               onChange={state => setForm(f => ({ ...f, state }))}
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Postal Code</label>
-            <input {...f('postal_code')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+            <label className="block text-xs font-medium text-onix-600 mb-1">Postal Code</label>
+            <input {...f('postal_code')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
           </div>
         </div>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Primary Contact</h2>
+        <h2 className="text-sm font-semibold text-onix-800">Primary Contact</h2>
         <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
           <input
             type="checkbox"
             checked={primarySameAsOwner}
             onChange={e => setPrimarySameAsOwner(e.target.checked)}
-            className="rounded border-gray-300"
+            className="rounded border-arctic-300"
           />
           Primary contact is same as owner info
         </label>
@@ -354,56 +354,56 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
           form.owner_id &&
           !(isNew && ownerChoice === 'new') &&
           !ownerDetails &&
-          !ownerFetchFailed && <p className="text-xs text-gray-500">Loading owner…</p>}
+          !ownerFetchFailed && <p className="text-xs text-onix-600">Loading owner…</p>}
         {primarySameAsOwner && ownerFetchFailed && (
           <p className="text-xs text-red-600">Could not load owner. Uncheck the box and enter primary contact manually.</p>
         )}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Name</label>
             <input
               {...f('primary_contact_name')}
               disabled={primarySameAsOwner}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-700"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm disabled:bg-arctic-50 disabled:text-onix-800"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Phone</label>
             <input
               {...f('primary_contact_phone')}
               disabled={primarySameAsOwner}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-700"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm disabled:bg-arctic-50 disabled:text-onix-800"
             />
           </div>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+          <label className="block text-xs font-medium text-onix-600 mb-1">Email</label>
           <input
             {...f('primary_contact_email')}
             type="email"
             disabled={primarySameAsOwner}
-            className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-700"
+            className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm disabled:bg-arctic-50 disabled:text-onix-800"
           />
         </div>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Shop progress</h2>
+        <h2 className="text-sm font-semibold text-onix-800">Shop progress</h2>
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-            <select {...f('status')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm">
+            <label className="block text-xs font-medium text-onix-600 mb-1">Status</label>
+            <select {...f('status')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm">
               {STATUSES.map(s => <option key={s} value={s}>{LOCATION_STATUS_LABELS[s]}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Assigned to</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Assigned to</label>
             <select
               value={form.assigned_to}
               onChange={e =>
                 setForm(f => ({ ...f, assigned_to: normalizeBdrAssignedTo(e.target.value) }))
               }
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm bg-white"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm bg-white"
             >
               {BDR_ASSIGNEES.map(a => (
                 <option key={a} value={a}>
@@ -413,8 +413,8 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Source</label>
-            <select {...f('source')} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm">
+            <label className="block text-xs font-medium text-onix-600 mb-1">Source</label>
+            <select {...f('source')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm">
               <option value="">—</option>
               {SOURCES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
             </select>
@@ -423,14 +423,14 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Programs</h2>
+        <h2 className="text-sm font-semibold text-onix-800">Programs</h2>
         {PROGRAMS.map(p => (
           <div key={p.key} className="flex items-center gap-3">
             <span className="text-sm w-28">{p.label}</span>
             <select
               value={programStatuses[p.key]}
               onChange={e => setProgramStatuses(ps => ({ ...ps, [p.key]: e.target.value }))}
-              className="border border-gray-300 rounded px-2 py-1 text-sm"
+              className="border border-arctic-300 rounded px-2 py-1 text-sm"
             >
               {PROGRAM_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
             </select>
@@ -439,15 +439,15 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
       </section>
 
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-        <textarea {...f('notes')} rows={3} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
+        <label className="block text-xs font-medium text-onix-600 mb-1">Notes</label>
+        <textarea {...f('notes')} rows={3} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
       </div>
 
       <div className="flex gap-3">
-        <button type="submit" disabled={saving} className="px-5 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50">
+        <button type="submit" disabled={saving} className="px-5 py-2 bg-brand-600 text-white text-sm rounded hover:bg-brand-700 disabled:opacity-50">
           {saving ? 'Saving…' : locationId ? 'Save Changes' : 'Add Shop'}
         </button>
-        <button type="button" onClick={() => router.back()} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">
+        <button type="button" onClick={() => router.back()} className="px-4 py-2 text-sm text-onix-600 hover:bg-arctic-100 rounded">
           Cancel
         </button>
       </div>

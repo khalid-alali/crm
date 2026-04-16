@@ -67,46 +67,46 @@ export default function EmailModal({
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
-        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-arctic-200 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Send Email</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+          <button onClick={onClose} className="text-onix-400 hover:text-onix-600 text-lg leading-none">&times;</button>
         </div>
         <div className="px-5 py-4 space-y-3">
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">To</label>
             <input
               type="email"
               value={to}
               onChange={e => setTo(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Subject</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Subject</label>
             <input
               type="text"
               value={subject}
               onChange={e => setSubject(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Body</label>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Body</label>
             <textarea
               value={body}
               onChange={e => setBody(e.target.value)}
               rows={8}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
         </div>
-        <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+        <div className="px-5 py-3 border-t border-arctic-200 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-1.5 text-sm text-onix-600 hover:bg-arctic-100 rounded">Cancel</button>
           <button
             onClick={handleSend}
             disabled={sending}
-            className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-1.5 text-sm bg-brand-600 text-white rounded hover:bg-brand-700 disabled:opacity-50"
           >
             {sending ? 'Sending...' : 'Send'}
           </button>
