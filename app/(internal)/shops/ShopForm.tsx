@@ -400,7 +400,9 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
             <label className="block text-xs font-medium text-gray-600 mb-1">Assigned to</label>
             <select
               value={form.assigned_to}
-              onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}
+              onChange={e =>
+                setForm(f => ({ ...f, assigned_to: normalizeBdrAssignedTo(e.target.value) }))
+              }
               className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm bg-white"
             >
               {BDR_ASSIGNEES.map(a => (
