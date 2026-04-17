@@ -6,6 +6,15 @@ function duckdbHomeDirectory(): string {
   return process.env.HOME?.trim() || process.env.TMPDIR?.trim() || '/tmp'
 }
 
+/** DuckDB resolves home during native `open()`, before any SQL — empty $HOME breaks MotherDuck on Vercel. */
+function ensureProcessHomeForDuckdbOpen(): string {
+  const home = duckdbHomeDirectory()
+  if (!process.env.HOME?.trim()) {
+    process.env.HOME = home
+  }
+  return home
+}
+
 /**
  * Run a parameterized statement against a MotherDuck `md:` DSN using DuckDB 1.5.x
  * (`@duckdb/node-api`). Use `$1`, `$2`, … placeholders; pass values in order.
@@ -15,13 +24,14 @@ export async function queryMotherduckRows(
   sql: string,
   params: DuckDBValue[] = [],
 ): Promise<Record<string, JS>[]> {
-  const instance = await DuckDBInstance.create(dsn)
+  const home = ensureProcessHomeForDuckdbOpen()
+  const instance = await DuckDBInstance.create(dsn, { home_directory: home })
   try {
     const connection = await instance.connect()
     try {
-      // Vercel / many serverless envs have no $HOME; DuckDB refuses to run without this.
-      const home = duckdbHomeDirectory().replace(/'/g, "''")
-      await connection.run(`SET home_directory = '${home}'`)
+      // Belt-and-suspenders: session SET after connect (some builds consult this path too).
+      const escaped = home.replace(/'/g, "''")
+      await connection.run(`SET home_directory = '${escaped}'`)
       const result = await connection.run(sql, params)
       return await result.getRowObjectsJS()
     } finally {

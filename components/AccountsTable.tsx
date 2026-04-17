@@ -13,8 +13,21 @@ export type AccountListRow = {
   location_count: number
 }
 
-type SortKey = 'business_name' | 'primary_owner_email' | 'location_count' | 'primary_owner_phone'
+type SortKey =
+  | 'business_name'
+  | 'primary_owner_name'
+  | 'primary_owner_email'
+  | 'location_count'
+  | 'primary_owner_phone'
 type SortDir = 'asc' | 'desc'
+
+const SORTABLE_HEADERS: { key: SortKey; label: string }[] = [
+  { key: 'business_name', label: 'Account' },
+  { key: 'primary_owner_name', label: 'Owner' },
+  { key: 'primary_owner_email', label: 'Email' },
+  { key: 'location_count', label: 'Locations' },
+  { key: 'primary_owner_phone', label: 'Phone' },
+]
 
 function compareText(a: string, b: string) {
   return a.localeCompare(b, undefined, { sensitivity: 'base' })
@@ -25,6 +38,20 @@ function phoneSortKey(phone: string | null): string {
   return phone.replace(/\D/g, '')
 }
 
+function accountMatchesQuery(row: AccountListRow, raw: string): boolean {
+  const tokens = raw
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (tokens.length === 0) return true
+
+  const fieldTexts = [row.business_name, row.primary_owner_name, row.primary_owner_email]
+    .map(f => (f ?? '').toLowerCase())
+
+  return tokens.every(token => fieldTexts.some(text => text.includes(token)))
+}
+
 function sortedRows(rows: AccountListRow[], key: SortKey, dir: SortDir): AccountListRow[] {
   const mul = dir === 'asc' ? 1 : -1
   return [...rows].sort((x, y) => {
@@ -32,6 +59,9 @@ function sortedRows(rows: AccountListRow[], key: SortKey, dir: SortDir): Account
     switch (key) {
       case 'business_name':
         c = compareText(x.business_name, y.business_name)
+        break
+      case 'primary_owner_name':
+        c = compareText(x.primary_owner_name ?? '', y.primary_owner_name ?? '')
         break
       case 'primary_owner_email':
         c = compareText(x.primary_owner_email ?? '', y.primary_owner_email ?? '')
@@ -48,16 +78,17 @@ function sortedRows(rows: AccountListRow[], key: SortKey, dir: SortDir): Account
   })
 }
 
-function SortLabel({ active, dir }: { active: boolean; dir: SortDir }) {
-  if (!active) return <span className="text-onix-300 font-normal">↕</span>
-  return <span className="text-onix-800 font-normal">{dir === 'asc' ? '↑' : '↓'}</span>
-}
-
 export default function AccountsTable({ accounts }: { accounts: AccountListRow[] }) {
+  const [query, setQuery] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('business_name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  const rows = useMemo(() => sortedRows(accounts, sortKey, sortDir), [accounts, sortKey, sortDir])
+  const filtered = useMemo(
+    () => accounts.filter(a => accountMatchesQuery(a, query)),
+    [accounts, query],
+  )
+
+  const rows = useMemo(() => sortedRows(filtered, sortKey, sortDir), [filtered, sortKey, sortDir])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -68,39 +99,57 @@ export default function AccountsTable({ accounts }: { accounts: AccountListRow[]
     }
   }
 
-  function header(key: SortKey, label: string) {
-    const active = sortKey === key
-    return (
-      <th className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide">
-        <button
-          type="button"
-          onClick={() => toggleSort(key)}
-          className="inline-flex items-center gap-1.5 hover:text-onix-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
-        >
-          {label}
-          <SortLabel active={active} dir={sortDir} />
-        </button>
-      </th>
-    )
-  }
+  const emptyMessage =
+    accounts.length === 0
+      ? 'No accounts found.'
+      : 'No accounts match your search.'
 
   return (
-    <div className="bg-white border border-arctic-200 rounded-lg overflow-hidden">
-      <table className="min-w-full divide-y divide-arctic-200 text-sm">
-        <thead className="bg-arctic-50">
-          <tr>
-            {header('business_name', 'Account')}
-            <th className="px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide">Owner</th>
-            {header('primary_owner_email', 'Email')}
-            {header('location_count', 'Locations')}
-            {header('primary_owner_phone', 'Phone')}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-arctic-100">
+    <div className="space-y-3">
+      <div className="min-w-[280px] max-w-md">
+        <label htmlFor="accounts-search" className="sr-only">
+          Search accounts
+        </label>
+        <input
+          id="accounts-search"
+          type="search"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="Search account, owner, or email…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          className="w-full rounded-xl border border-arctic-300 bg-white px-4 py-2.5 text-sm text-onix-950 placeholder:text-onix-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+      </div>
+
+      <div className="bg-white border border-arctic-200 rounded-lg overflow-hidden">
+        <table className="min-w-full divide-y divide-arctic-200 text-sm">
+          <thead className="bg-arctic-50">
+            <tr>
+              {SORTABLE_HEADERS.map(header => (
+                <th
+                  key={header.key}
+                  scope="col"
+                  className="cursor-pointer select-none px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-onix-600 transition-colors hover:text-onix-900"
+                  onClick={() => toggleSort(header.key)}
+                  aria-sort={
+                    sortKey === header.key
+                      ? sortDir === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                >
+                  {header.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-arctic-100">
           {rows.length === 0 ? (
             <tr>
               <td colSpan={5} className="px-4 py-8 text-center text-onix-400">
-                No accounts found.
+                {emptyMessage}
               </td>
             </tr>
           ) : (
@@ -132,6 +181,7 @@ export default function AccountsTable({ accounts }: { accounts: AccountListRow[]
           )}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
