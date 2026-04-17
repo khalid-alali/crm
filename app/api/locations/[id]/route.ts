@@ -4,6 +4,7 @@ import { detectChain } from '@/lib/chain-detect'
 import { geocodeAddress } from '@/lib/geocode'
 import { getAppSession } from '@/lib/app-auth'
 import { normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
+import { upsertLocationShopContact } from '@/lib/contact-sync'
 import { revalidatePath } from 'next/cache'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -11,15 +12,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const session = await getAppSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
+  const body = await req.json() as Record<string, unknown>
   const {
     programStatuses,
     lat: _lat,
     lng: _lng,
     geocoded_at: _geocodedAt,
     motherduck_shop_id: incomingAdminShopId,
+    primary_contact_name,
+    primary_contact_email,
+    primary_contact_phone,
     ...rawFields
-  } = body as Record<string, unknown>
+  } = body
 
   if (incomingAdminShopId !== undefined) {
     return NextResponse.json(
@@ -30,14 +34,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const allowedLocationFields = [
     'name',
     'chain_name',
-    'owner_id',
+    'account_id',
     'address_line1',
     'city',
     'state',
     'postal_code',
-    'primary_contact_name',
-    'primary_contact_email',
-    'primary_contact_phone',
     'status',
     'assigned_to',
     'source',
@@ -48,26 +49,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (key in rawFields) fields[key] = rawFields[key]
   }
 
+  if ('owner_id' in body && body.owner_id !== undefined && !('account_id' in fields)) {
+    fields.account_id = body.owner_id
+  }
+
   if ('assigned_to' in fields) {
     fields.assigned_to = normalizeBdrAssignedTo(
       typeof fields.assigned_to === 'string' ? fields.assigned_to : null,
     )
   }
 
-  // Only auto-detect chain if name changed and chain_name not set
-  if (typeof fields.name === 'string' && fields.name && !fields.chain_name) {
-    // Get current chain_name
-    const { data: existing } = await supabaseAdmin
-      .from('locations')
-      .select('chain_name')
-      .eq('id', id)
-      .single()
+  if (typeof fields.name === 'string' && fields.name && !('chain_name' in fields)) {
+    const { data: existing } = await supabaseAdmin.from('locations').select('chain_name').eq('id', id).single()
     if (!existing?.chain_name) {
       fields.chain_name = detectChain(fields.name) ?? null
     }
   }
 
-  // Geocode if address changed
   if ('address_line1' in fields || 'city' in fields || 'state' in fields || 'postal_code' in fields) {
     const { data: current } = await supabaseAdmin
       .from('locations')
@@ -75,7 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .eq('id', id)
       .single()
     const merged = { ...current, ...fields }
-    const coords = await geocodeAddress(merged)
+    const coords = await geocodeAddress(merged as { address_line1?: string; city?: string; state?: string; postal_code?: string })
     if (coords) {
       fields.lat = coords.lat
       fields.lng = coords.lng
@@ -92,13 +90,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  const hasPrimaryUpdate =
+    typeof primary_contact_name === 'string' ||
+    typeof primary_contact_email === 'string' ||
+    typeof primary_contact_phone === 'string'
+  if (hasPrimaryUpdate && location.account_id) {
+    await upsertLocationShopContact(supabaseAdmin, {
+      locationId: id,
+      accountId: location.account_id as string,
+      name: typeof primary_contact_name === 'string' ? primary_contact_name : '',
+      email: typeof primary_contact_email === 'string' ? primary_contact_email : '',
+      phone: typeof primary_contact_phone === 'string' ? primary_contact_phone : '',
+    })
+  }
+
   if (programStatuses) {
     for (const [program, status] of Object.entries(programStatuses)) {
-      await supabaseAdmin.from('program_enrollments').upsert({
-        location_id: id,
-        program,
-        status,
-      }, { onConflict: 'location_id,program' })
+      await supabaseAdmin.from('program_enrollments').upsert(
+        {
+          location_id: id,
+          program,
+          status,
+        },
+        { onConflict: 'location_id,program' },
+      )
     }
   }
 

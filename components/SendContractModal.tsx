@@ -13,10 +13,12 @@ export type SendContractDraftPrefill = {
 interface Props {
   locationId: string
   shop: {
-    owner_id?: string | null
-    owners?: { name?: string | null; email?: string | null } | null
+    account_id?: string | null
+    accounts?: { business_name?: string | null } | null
   }
-  /** When set, updates this draft then sends; otherwise creates a new contract (requires shop owner link). */
+  primaryContactName: string
+  primaryContactEmail: string
+  /** When set, updates this draft then sends; otherwise creates a new contract (requires account link). */
   initialDraft?: SendContractDraftPrefill | null
   fromShopDetail?: boolean
   onClose: () => void
@@ -26,35 +28,37 @@ interface Props {
 export default function SendContractModal({
   locationId,
   shop,
+  primaryContactName,
+  primaryContactEmail,
   initialDraft,
   fromShopDetail,
   onClose,
   onSent,
 }: Props) {
-  const [ownerName, setOwnerName] = useState(
-    () => (initialDraft?.counterparty_name?.trim() || shop.owners?.name || '').trim()
+  const [signerName, setSignerName] = useState(
+    () => (initialDraft?.counterparty_name?.trim() || primaryContactName || '').trim(),
   )
-  const [ownerEmail, setOwnerEmail] = useState(
-    () => (initialDraft?.counterparty_email?.trim() || shop.owners?.email || '').trim()
+  const [signerEmail, setSignerEmail] = useState(
+    () => (initialDraft?.counterparty_email?.trim() || primaryContactEmail || '').trim(),
   )
   const [standardRate, setStandardRate] = useState(() =>
     initialDraft?.standard_labor_rate != null && Number.isFinite(Number(initialDraft.standard_labor_rate))
       ? String(initialDraft.standard_labor_rate)
-      : ''
+      : '',
   )
   const [warrantyRate, setWarrantyRate] = useState(() =>
     initialDraft?.warranty_labor_rate != null && Number.isFinite(Number(initialDraft.warranty_labor_rate))
       ? String(initialDraft.warranty_labor_rate)
-      : ''
+      : '',
   )
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
 
-  const needsOwnerLink = !initialDraft?.id && !shop.owner_id
+  const needsAccountLink = !initialDraft?.id && !shop.account_id
   const canSubmit =
-    !needsOwnerLink &&
-    ownerName.trim() &&
-    ownerEmail.trim().includes('@') &&
+    !needsAccountLink &&
+    signerName.trim() &&
+    signerEmail.trim().includes('@') &&
     standardRate.trim() &&
     Number.isFinite(Number(standardRate)) &&
     Number(standardRate) > 0 &&
@@ -69,8 +73,8 @@ export default function SendContractModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          counterparty_name: ownerName.trim(),
-          counterparty_email: ownerEmail.trim(),
+          counterparty_name: signerName.trim(),
+          counterparty_email: signerEmail.trim(),
           standard_labor_rate: Number(standardRate),
           warranty_labor_rate: warrantyRate.trim() === '' ? null : Number(warrantyRate),
           existing_draft_contract_id: initialDraft?.id ?? null,
@@ -97,32 +101,32 @@ export default function SendContractModal({
           </button>
         </div>
         <div className="px-5 py-4 space-y-4">
-          {needsOwnerLink && (
+          {needsAccountLink && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              Link an owner on the Edit page before sending a new contract, or open the Contracts tab if you already have a draft.
+              Link an account on the shop page before sending a new contract, or open the Contracts tab if you already have a draft.
             </p>
           )}
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div>
             <label className="block text-xs font-medium text-onix-600 mb-1">
-              Shop owner name <span className="text-red-500">*</span>
+              Owner (signer) name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              value={ownerName}
-              onChange={e => setOwnerName(e.target.value)}
+              value={signerName}
+              onChange={e => setSignerName(e.target.value)}
               className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-onix-600 mb-1">
-              Shop owner email <span className="text-red-500">*</span>
+              Owner (signer) email <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
-              value={ownerEmail}
-              onChange={e => setOwnerEmail(e.target.value)}
+              value={signerEmail}
+              onChange={e => setSignerEmail(e.target.value)}
               className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>

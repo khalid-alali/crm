@@ -17,11 +17,11 @@ export interface ShopRow {
   state: string | null
   status: string
   assigned_to: string | null
-  primary_contact_name: string | null
-  primary_contact_email: string | null
   created_at: string
   last_activity_at: string | null
-  owners: { name: string } | null
+  accounts: { id: string; business_name: string } | null
+  primary_owner_name: string | null
+  primary_owner_email: string | null
   program_enrollments: { program: string; status: string }[]
 }
 
@@ -29,12 +29,12 @@ interface Props {
   shops: ShopRow[]
 }
 
-type SortColumn = 'shop' | 'owner' | 'location' | 'status' | 'programs' | 'lastActivity'
+type SortColumn = 'shop' | 'primaryOwner' | 'location' | 'status' | 'programs' | 'lastActivity'
 type SortDirection = 'asc' | 'desc'
 
 const SORTABLE_HEADERS: { key: SortColumn; label: string }[] = [
   { key: 'shop', label: 'Shop' },
-  { key: 'owner', label: 'Owner' },
+  { key: 'primaryOwner', label: 'Owner' },
   { key: 'location', label: 'Location' },
   { key: 'status', label: 'Status' },
   { key: 'programs', label: 'Programs' },
@@ -71,8 +71,8 @@ export default function ShopTable({ shops }: Props) {
         case 'shop':
           compare = sortText(aShop.name).localeCompare(sortText(bShop.name))
           break
-        case 'owner':
-          compare = sortText(aShop.owners?.name).localeCompare(sortText(bShop.owners?.name))
+        case 'primaryOwner':
+          compare = sortText(aShop.primary_owner_name).localeCompare(sortText(bShop.primary_owner_name))
           break
         case 'location': {
           const aLocation = [aShop.city, aShop.state].filter(Boolean).join(', ')
@@ -164,7 +164,7 @@ export default function ShopTable({ shops }: Props) {
                   {shop.name}
                 </Link>
               </td>
-              <td className="px-4 py-2.5 text-onix-600">{shop.owners?.name ?? '—'}</td>
+              <td className="px-4 py-2.5 text-onix-600">{shop.primary_owner_name ?? '—'}</td>
               <td className="px-4 py-2.5 text-onix-600">
                 {[shop.city, shop.state].filter(Boolean).join(', ') || '—'}
               </td>

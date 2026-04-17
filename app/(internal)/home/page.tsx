@@ -19,7 +19,7 @@ type ContractRow = {
   signing_date: string | null
   standard_labor_rate: number | null
   warranty_labor_rate: number | null
-  owners: { name: string }[] | null
+  accounts: { business_name: string } | { business_name: string }[] | null
   contract_locations: ContractLocation[] | null
 }
 
@@ -49,7 +49,7 @@ export default async function HomePage() {
     supabaseAdmin
       .from('contracts')
       .select(
-        'id, status, created_at, signing_date, standard_labor_rate, warranty_labor_rate, owners(name), contract_locations(location_id, locations(id, name, city, state))',
+        'id, status, created_at, signing_date, standard_labor_rate, warranty_labor_rate, accounts(business_name), contract_locations(location_id, locations(id, name, city, state))',
       )
       .in('status', ['sent', 'viewed'])
       .order('created_at', { ascending: false })
@@ -57,7 +57,7 @@ export default async function HomePage() {
     supabaseAdmin
       .from('contracts')
       .select(
-        'id, status, created_at, signing_date, standard_labor_rate, warranty_labor_rate, owners(name), contract_locations(location_id, locations(id, name, city, state))',
+        'id, status, created_at, signing_date, standard_labor_rate, warranty_labor_rate, accounts(business_name), contract_locations(location_id, locations(id, name, city, state))',
       )
       .eq('status', 'signed')
       .order('signing_date', { ascending: false })
@@ -103,7 +103,9 @@ export default async function HomePage() {
           ) : (
             awaiting.map(contract => {
               const location = firstLocation(contract)
-              const owner = contract.owners?.[0]?.name ?? 'Unknown owner'
+              const acc = contract.accounts
+              const accountLabel =
+                (Array.isArray(acc) ? acc[0]?.business_name : acc?.business_name) ?? 'Unknown account'
               const rates = formatRates(contract)
               const statusLabel = contract.status === 'viewed' ? 'Viewed' : 'Sent'
 
@@ -113,7 +115,7 @@ export default async function HomePage() {
                     <p className="text-base font-semibold text-onix-900">
                       {location?.name ?? 'Contract without linked shop'}
                     </p>
-                    <p className="text-sm text-onix-500">{[owner, rates].filter(Boolean).join(' · ')}</p>
+                    <p className="text-sm text-onix-500">{[accountLabel, rates].filter(Boolean).join(' · ')}</p>
                   </div>
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
                     <Clock3 className="h-3.5 w-3.5" aria-hidden />
@@ -151,7 +153,9 @@ export default async function HomePage() {
           ) : (
             recentlySigned.map(contract => {
               const location = firstLocation(contract)
-              const owner = contract.owners?.[0]?.name ?? 'Unknown owner'
+              const acc = contract.accounts
+              const accountLabel =
+                (Array.isArray(acc) ? acc[0]?.business_name : acc?.business_name) ?? 'Unknown account'
               const cityState = [location?.city, location?.state].filter(Boolean).join(', ')
 
               const content = (
@@ -160,7 +164,7 @@ export default async function HomePage() {
                     <p className="text-base font-semibold text-onix-900">
                       {location?.name ?? 'Signed contract without linked shop'}
                     </p>
-                    <p className="text-sm text-onix-500">{[owner, cityState].filter(Boolean).join(' · ')}</p>
+                    <p className="text-sm text-onix-500">{[accountLabel, cityState].filter(Boolean).join(' · ')}</p>
                   </div>
                   <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
                     Signed

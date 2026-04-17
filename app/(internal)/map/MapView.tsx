@@ -29,8 +29,8 @@ interface Location {
   lat: number | string | null
   lng: number | string | null
   address_line1: string | null
-  primary_contact_name: string | null
-  primary_contact_email: string | null
+  primary_owner_name: string | null
+  primary_owner_email: string | null
 }
 
 function toLngLat(loc: Location): [number, number] | null {

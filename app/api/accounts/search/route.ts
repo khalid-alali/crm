@@ -8,14 +8,10 @@ export async function GET(req: NextRequest) {
 
   const q = req.nextUrl.searchParams.get('q') ?? ''
 
-  let query = supabaseAdmin
-    .from('owners')
-    .select('id, name, email')
-    .order('name')
-    .limit(20)
+  let query = supabaseAdmin.from('accounts').select('id, business_name').order('business_name').limit(20)
 
   if (q) {
-    query = query.ilike('name', `%${q}%`)
+    query = query.ilike('business_name', `%${q}%`)
   }
 
   const { data } = await query

@@ -1,8 +1,10 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 import { getAppSession } from '@/lib/app-auth'
+import { canDeleteContracts } from '@/lib/contract-permissions'
 import ShopDetailTabs from './ShopDetailTabs'
 import { getSignedContractDocUrl } from '@/lib/contract-documents'
+import { resolvePrimaryContact } from '@/lib/primary-contact'
 
 export default async function ShopDetailPage({
   params,
@@ -19,7 +21,7 @@ export default async function ShopDetailPage({
     .from('locations')
     .select(`
       *,
-      owners(*),
+      accounts(*),
       program_enrollments(*),
       activity_log(*),
       contract_locations(
@@ -36,7 +38,7 @@ export default async function ShopDetailPage({
       shop.contract_locations.map(async (cl: any) => {
         if (!cl?.contracts) return
         cl.contracts.doc_url = await getSignedContractDocUrl(cl.contracts)
-      })
+      }),
     )
   }
 
@@ -49,11 +51,11 @@ export default async function ShopDetailPage({
     status: string
   }[] = []
 
-  if (shop.owner_id) {
+  if (shop.account_id) {
     const { data: siblings } = await supabaseAdmin
       .from('locations')
       .select('id, name, chain_name, city, state, status')
-      .eq('owner_id', shop.owner_id)
+      .eq('account_id', shop.account_id)
       .order('name')
     siblingLocations = siblings ?? []
   } else {
@@ -69,6 +71,10 @@ export default async function ShopDetailPage({
     ]
   }
 
+  const primary = await resolvePrimaryContact(supabaseAdmin, shop.account_id as string | null | undefined, id)
+  const primaryContactDisplayName = primary?.name?.trim() || primary?.email?.trim() || ''
+  const primaryContactEmail = primary?.email?.trim() || ''
+
   return (
     <div className="p-6">
       <ShopDetailTabs
@@ -76,6 +82,9 @@ export default async function ShopDetailPage({
         siblingLocations={siblingLocations}
         defaultTab={tab ?? 'activity'}
         senderName={session?.user?.name ?? session?.user?.email ?? 'RepairWise'}
+        primaryContactDisplayName={primaryContactDisplayName}
+        primaryContactEmail={primaryContactEmail}
+        allowContractDelete={canDeleteContracts(session?.user?.email)}
       />
     </div>
   )

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import { attachPrimaryContactsToLocations } from '@/lib/primary-contact'
 import { BDR_ASSIGNEES } from '@/lib/bdr-assignees'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import ShopsFilters from './ShopsFilters'
@@ -37,7 +38,7 @@ interface SearchParams {
 
 const PIPELINE_LOCATION_SELECT = `
   *,
-  owners(name),
+  accounts(id, business_name),
   program_enrollments(program, status)
 `
 
@@ -104,7 +105,10 @@ export default async function ShopsPage({
     if (sp.assigned_to) listQuery = listQuery.eq('assigned_to', sp.assigned_to)
 
     const [{ data: shopRows }, { data: metaRows }] = await Promise.all([listQuery, metaQuery])
-    shops = await attachLastActivity(shopRows ?? [])
+    shops = await attachPrimaryContactsToLocations(
+      supabaseAdmin,
+      (await attachLastActivity(shopRows ?? [])) as unknown as { id: string; account_id: string | null }[],
+    )
     const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
     counts = meta.counts
     chains = meta.chains
@@ -115,7 +119,10 @@ export default async function ShopsPage({
       // "All" view should hide churned (inactive) by default.
       .neq('status', 'inactive')
       .order('updated_at', { ascending: false })
-    shops = await attachLastActivity(shopRows ?? [])
+    shops = await attachPrimaryContactsToLocations(
+      supabaseAdmin,
+      (await attachLastActivity(shopRows ?? [])) as unknown as { id: string; account_id: string | null }[],
+    )
 
     const { data: metaRows } = await metaQuery
     const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])

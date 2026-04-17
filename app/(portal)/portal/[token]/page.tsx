@@ -1,5 +1,6 @@
 import { verifyPortalToken } from '@/lib/portal-token'
 import { supabaseAdmin } from '@/lib/supabase'
+import { resolvePrimaryContact } from '@/lib/primary-contact'
 import PortalForm from './PortalForm'
 
 export default async function PortalPage({ params }: { params: Promise<{ token: string }> }) {
@@ -33,6 +34,18 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
     )
   }
 
+  const primary = await resolvePrimaryContact(
+    supabaseAdmin,
+    (location as { account_id?: string | null }).account_id ?? null,
+    locationId,
+  )
+  const locationForForm = {
+    ...location,
+    primary_contact_name: primary?.name ?? '',
+    primary_contact_email: primary?.email ?? '',
+    primary_contact_phone: primary?.phone ?? '',
+  }
+
   return (
     <div className="min-h-screen bg-arctic-50 py-12 px-4">
       <div className="max-w-lg mx-auto">
@@ -41,7 +54,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
           <p className="text-sm text-onix-600 mt-1">Confirm your shop information</p>
         </div>
         <div className="bg-white rounded-lg border border-arctic-200 shadow-sm p-6">
-          <PortalForm location={location as any} token={token} />
+          <PortalForm location={locationForForm as any} token={token} />
         </div>
       </div>
     </div>

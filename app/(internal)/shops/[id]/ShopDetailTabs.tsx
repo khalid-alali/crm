@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Check, FileText, Loader2, Mail, Pencil, X } from 'lucide-react'
+import { Ban, Check, FileText, Loader2, Mail, Pencil, Trash2, X } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import DeleteShopButton from '@/components/DeleteShopButton'
 import EmailModal from '@/components/EmailModal'
 import SendContractModal, { type SendContractDraftPrefill } from '@/components/SendContractModal'
-import ReviseSentContractModal from '@/components/ReviseSentContractModal'
-import OwnerSelect from '@/components/OwnerSelect'
+import { contractStatusBadgeClass, contractStatusLabel } from '@/lib/contract-status-display'
+import AccountSelect from '@/components/AccountSelect'
+import LocationContactsSection from '@/components/LocationContactsSection'
 import StateSelect from '@/components/StateSelect'
 import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
@@ -24,15 +25,7 @@ const PROGRAM_STATUSES = ['not_enrolled', 'pending_activation', 'active', 'suspe
 const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
 const TABS = ['activity', 'contracts', 'programs'] as const
 type TabKey = (typeof TABS)[number]
-type EditField =
-  | 'name'
-  | 'owner'
-  | 'primary_contact_name'
-  | 'primary_contact_email'
-  | 'primary_contact_phone'
-  | 'location'
-  | 'source'
-  | 'notes'
+type EditField = 'name' | 'account' | 'location' | 'source' | 'notes'
 
 type SiblingLocation = {
   id: string
@@ -45,6 +38,10 @@ interface Props {
   siblingLocations: SiblingLocation[]
   defaultTab: string
   senderName: string
+  primaryContactDisplayName: string
+  primaryContactEmail: string
+  /** Server-derived: only khalid@repairwise.pro */
+  allowContractDelete?: boolean
 }
 
 type AdminSearchResult = {
@@ -57,8 +54,8 @@ type AdminSearchResult = {
   postal_code: string | null
   motherduck_shop_id: string
   primary_contact_email: string | null
-  owner_name: string | null
-  owner_email: string | null
+  account_primary_name: string | null
+  account_primary_email: string | null
 }
 
 function fmtDate(value: string | null | undefined): string {
@@ -80,17 +77,15 @@ function contractAwaitingSignature(contract: { status?: string; zoho_sign_reques
   return (st === 'sent' || st === 'viewed') && Boolean(rid)
 }
 
-function contractIsSentWithZohoRequest(contract: { status?: string; zoho_sign_request_id?: string | null }) {
-  const rid = typeof contract.zoho_sign_request_id === 'string' ? contract.zoho_sign_request_id.trim() : ''
-  return contract.status === 'sent' && Boolean(rid)
-}
-
 function contractDateSubline(contract: { status?: string; signing_date?: string | null; zoho_sent_at?: string | null }) {
   if (contract.status === 'signed') {
     return <div className="mt-2 text-xs text-onix-600">Completed on: {fmtDate(contract.signing_date)}</div>
   }
   if (contract.status === 'sent' || contract.status === 'viewed') {
     return <div className="mt-2 text-xs text-onix-600">Sent: {fmtDate(contract.zoho_sent_at)}</div>
+  }
+  if (contract.status === 'revoked') {
+    return <div className="mt-2 text-xs text-onix-600">Recalled in Zoho Sign (revoked)</div>
   }
   return null
 }
@@ -104,7 +99,15 @@ function activityBadge(value: string | null | undefined): string {
   return `${days}d ago`
 }
 
-export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, senderName }: Props) {
+export default function ShopDetailTabs({
+  shop,
+  siblingLocations,
+  defaultTab,
+  senderName,
+  primaryContactDisplayName,
+  primaryContactEmail,
+  allowContractDelete = false,
+}: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<TabKey>(defaultTab === 'contracts' || defaultTab === 'programs' ? defaultTab : 'activity')
   const [status, setStatus] = useState(shop.status)
@@ -126,28 +129,25 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
   const [showSendContractModal, setShowSendContractModal] = useState(false)
   const [sendContractModalDraft, setSendContractModalDraft] = useState<SendContractDraftPrefill | null>(null)
   const [remindingContractId, setRemindingContractId] = useState<string | null>(null)
+  const [remindSuccessContractId, setRemindSuccessContractId] = useState<string | null>(null)
+  const remindSuccessClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [contractActionError, setContractActionError] = useState<string | null>(null)
-  const [reviseContractModal, setReviseContractModal] = useState<{
-    id: string
-    counterparty_name: string | null
-    counterparty_email: string | null
-  } | null>(null)
+  const [revokingContractId, setRevokingContractId] = useState<string | null>(null)
+  const [deletingContractId, setDeletingContractId] = useState<string | null>(null)
   const [currentAdminShopId, setCurrentAdminShopId] = useState(shop.motherduck_shop_id ?? '')
   const [adminSaving, setAdminSaving] = useState(false)
   const [showAdminMatchModal, setShowAdminMatchModal] = useState(false)
   const [adminSearch, setAdminSearch] = useState('')
   const [adminSearching, setAdminSearching] = useState(false)
   const [adminResults, setAdminResults] = useState<AdminSearchResult[]>([])
+  const [adminSearchCompleted, setAdminSearchCompleted] = useState(false)
   const [adminFeedback, setAdminFeedback] = useState<string | null>(null)
   const [inlineEdit, setInlineEdit] = useState<EditField | null>(null)
   const [inlineSaving, setInlineSaving] = useState(false)
   const [inlineError, setInlineError] = useState<string | null>(null)
   const [inlineDraft, setInlineDraft] = useState({
     name: shop.name ?? '',
-    owner_id: shop.owner_id ?? null,
-    primary_contact_name: shop.primary_contact_name ?? '',
-    primary_contact_email: shop.primary_contact_email ?? '',
-    primary_contact_phone: shop.primary_contact_phone ?? '',
+    account_id: shop.account_id ?? null,
     address_line1: shop.address_line1 ?? '',
     city: shop.city ?? '',
     state: shop.state ?? '',
@@ -162,10 +162,7 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
     setCurrentAdminShopId(shop.motherduck_shop_id ?? '')
     setInlineDraft({
       name: shop.name ?? '',
-      owner_id: shop.owner_id ?? null,
-      primary_contact_name: shop.primary_contact_name ?? '',
-      primary_contact_email: shop.primary_contact_email ?? '',
-      primary_contact_phone: shop.primary_contact_phone ?? '',
+      account_id: shop.account_id ?? null,
       address_line1: shop.address_line1 ?? '',
       city: shop.city ?? '',
       state: shop.state ?? '',
@@ -175,7 +172,19 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
     })
     setInlineEdit(null)
     setInlineError(null)
-  }, [shop.assigned_to, shop.status, shop.motherduck_shop_id])
+  }, [
+    shop.assigned_to,
+    shop.status,
+    shop.motherduck_shop_id,
+    shop.account_id,
+    shop.name,
+    shop.address_line1,
+    shop.city,
+    shop.state,
+    shop.postal_code,
+    shop.source,
+    shop.notes,
+  ])
 
   useEffect(() => {
     if (tab !== 'programs') return
@@ -212,6 +221,12 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
     }
   }, [tab, shop.id, shop.motherduck_shop_id])
 
+  useEffect(() => {
+    return () => {
+      if (remindSuccessClearTimer.current) clearTimeout(remindSuccessClearTimer.current)
+    }
+  }, [])
+
   const contracts = shop.contract_locations?.map((cl: any) => cl.contracts).filter(Boolean) ?? []
   const draftContract = contracts.find((contract: any) => contract.status === 'draft')
   const sentAwaitingSignatureContracts = contracts
@@ -225,14 +240,26 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
   const headerContractIsResend = !draftContract && Boolean(primarySentContract)
   const headerRemindInFlight =
     Boolean(primarySentContract) && remindingContractId === primarySentContract?.id
+  const headerRevokeInFlight =
+    Boolean(primarySentContract) && revokingContractId === primarySentContract?.id
 
   async function remindContract(contractId: string) {
     setContractActionError(null)
+    if (remindSuccessClearTimer.current) {
+      clearTimeout(remindSuccessClearTimer.current)
+      remindSuccessClearTimer.current = null
+    }
+    setRemindSuccessContractId(null)
     setRemindingContractId(contractId)
     try {
       const res = await fetch(`/api/locations/${shop.id}/contracts/${contractId}/zoho-remind`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Reminder failed')
+      setRemindSuccessContractId(contractId)
+      remindSuccessClearTimer.current = setTimeout(() => {
+        setRemindSuccessContractId(null)
+        remindSuccessClearTimer.current = null
+      }, 6000)
       router.refresh()
     } catch (e: unknown) {
       setContractActionError(e instanceof Error ? e.message : 'Reminder failed')
@@ -240,6 +267,61 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
       setRemindingContractId(null)
     }
   }
+
+  async function revokeContract(contractId: string) {
+    if (
+      !window.confirm(
+        'Revoke this contract in Zoho Sign? The signer loses access to this envelope. You can send a new contract afterward.',
+      )
+    ) {
+      return
+    }
+    setContractActionError(null)
+    if (remindSuccessClearTimer.current) {
+      clearTimeout(remindSuccessClearTimer.current)
+      remindSuccessClearTimer.current = null
+    }
+    setRemindSuccessContractId(null)
+    setRevokingContractId(contractId)
+    try {
+      const res = await fetch(`/api/locations/${shop.id}/contracts/${contractId}/zoho-revoke`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Revoke failed')
+      router.refresh()
+    } catch (e: unknown) {
+      setContractActionError(e instanceof Error ? e.message : 'Revoke failed')
+    } finally {
+      setRevokingContractId(null)
+    }
+  }
+
+  async function deleteContract(contractId: string, displayName: string) {
+    if (
+      !window.confirm(
+        `Permanently delete “${displayName}” from the CRM? In-flight Zoho requests are recalled first. This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    setContractActionError(null)
+    if (remindSuccessClearTimer.current) {
+      clearTimeout(remindSuccessClearTimer.current)
+      remindSuccessClearTimer.current = null
+    }
+    setRemindSuccessContractId(null)
+    setDeletingContractId(contractId)
+    try {
+      const res = await fetch(`/api/contracts/${contractId}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Delete failed')
+      router.refresh()
+    } catch (e: unknown) {
+      setContractActionError(e instanceof Error ? e.message : 'Delete failed')
+    } finally {
+      setDeletingContractId(null)
+    }
+  }
+
   const activityLog = [...(shop.activity_log ?? [])].sort(
     (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   )
@@ -337,6 +419,7 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
     setAdminFeedback(null)
     setAdminSearch(shop.name ?? '')
     setAdminResults([])
+    setAdminSearchCompleted(false)
     setShowAdminMatchModal(true)
   }
 
@@ -344,6 +427,7 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
     const q = adminSearch.trim()
     if (q.length < 2) {
       setAdminResults([])
+      setAdminSearchCompleted(false)
       return
     }
     setAdminSearching(true)
@@ -353,10 +437,15 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
     if (!res.ok) {
       setAdminFeedback(data.error ?? 'Search failed')
       setAdminSearching(false)
+      setAdminSearchCompleted(true)
       return
     }
-    setAdminResults(Array.isArray(data.results) ? data.results : [])
+    const raw = Array.isArray(data.results) ? data.results : []
+    setAdminResults(
+      [...raw].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })),
+    )
     setAdminSearching(false)
+    setAdminSearchCompleted(true)
   }
 
   async function saveInline(patch: Record<string, unknown>) {
@@ -405,8 +494,52 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
       </div>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-[2rem] font-semibold tracking-tight text-onix-950">{shop.name}</h1>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          {inlineEdit === 'name' ? (
+            <div className="flex min-w-0 w-full max-w-2xl flex-wrap items-center gap-2">
+              <input
+                value={inlineDraft.name}
+                onChange={e => {
+                  setInlineError(null)
+                  setInlineDraft(d => ({ ...d, name: e.target.value }))
+                }}
+                className="min-h-[2.75rem] min-w-0 flex-1 rounded-lg border border-arctic-300 px-3 py-2 text-xl font-semibold text-onix-950"
+                aria-label="Shop name"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const n = inlineDraft.name.trim()
+                  if (!n) {
+                    setInlineError('Shop name is required')
+                    return
+                  }
+                  void saveInline({ name: n })
+                }}
+                disabled={inlineSaving}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInlineEdit(null)
+                  setInlineDraft(d => ({ ...d, name: shop.name ?? '' }))
+                  setInlineError(null)
+                }}
+                className="rounded-lg border border-arctic-300 bg-white px-3 py-2 text-sm font-medium text-onix-800 hover:bg-arctic-50"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-[2rem] font-semibold tracking-tight text-onix-950">{shop.name}</h1>
+              {editIcon('name')}
+            </>
+          )}
           <StatusBadge status={status} />
           {shop.chain_name && <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">{shop.chain_name}</span>}
         </div>
@@ -450,7 +583,7 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
               )
               setShowSendContractModal(true)
             }}
-            disabled={headerRemindInFlight}
+            disabled={headerRemindInFlight || headerRevokeInFlight}
             className="inline-flex items-center gap-1 rounded-lg border border-arctic-300 bg-white px-4 py-2 text-sm font-medium text-onix-900 hover:bg-arctic-50 disabled:opacity-60"
           >
             {headerRemindInFlight ? (
@@ -463,7 +596,18 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
           <DeleteShopButton shopId={shop.id} shopName={shop.name} className="rounded-lg border border-red-500 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50" />
         </div>
       </div>
+      {inlineEdit === 'name' && inlineError && <p className="text-sm text-red-600">{inlineError}</p>}
       {contractActionError && <p className="text-sm text-red-600">{contractActionError}</p>}
+      {remindSuccessContractId && (
+        <p
+          className="flex items-center gap-1.5 text-sm font-medium text-emerald-700"
+          role="status"
+          aria-live="polite"
+        >
+          <Check className="h-4 w-4 shrink-0" aria-hidden />
+          Reminder sent — the signer will get another email from Zoho Sign.
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="space-y-3 lg:border-r lg:border-arctic-200 lg:pr-6">
@@ -481,19 +625,19 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
             </div>
           </div>
           <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-onix-400">
-            Owner
-            {editIcon('owner')}
+            Account
+            {editIcon('account')}
           </div>
-          {inlineEdit === 'owner' ? (
+          {inlineEdit === 'account' ? (
             <div className="space-y-2">
-              <OwnerSelect
-                value={inlineDraft.owner_id}
-                onChange={ownerId => setInlineDraft(d => ({ ...d, owner_id: ownerId }))}
+              <AccountSelect
+                value={inlineDraft.account_id}
+                onChange={accountId => setInlineDraft(d => ({ ...d, account_id: accountId }))}
               />
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => saveInline({ owner_id: inlineDraft.owner_id })}
+                  onClick={() => saveInline({ account_id: inlineDraft.account_id })}
                   disabled={inlineSaving}
                   className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60"
                 >
@@ -509,77 +653,22 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
               </div>
             </div>
           ) : (
-            <>
-              <div className="text-sm text-onix-800">{shop.owners?.name ?? 'No owner linked'}</div>
-              {shop.owners?.email && <div className="text-sm text-onix-500">{shop.owners.email}</div>}
-            </>
-          )}
-          {shop.owners?.phone && (
-            <a
-              href={`tel:${String(shop.owners.phone).replace(/[^\d+]/g, '')}`}
-              className="block text-sm text-brand-700 hover:underline"
-            >
-              {shop.owners.phone}
-            </a>
+            <div className="text-sm text-onix-800">
+              {shop.accounts?.business_name ? (
+                <Link href={`/accounts/${shop.account_id}`} className="text-brand-700 hover:underline">
+                  {shop.accounts.business_name}
+                </Link>
+              ) : (
+                'No account linked'
+              )}
+            </div>
           )}
 
-          <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-onix-400">
-            Primary Contact Name
-            {editIcon('primary_contact_name')}
-          </div>
-          {inlineEdit === 'primary_contact_name' ? (
-            <div className="flex items-center gap-2">
-              <input
-                value={inlineDraft.primary_contact_name}
-                onChange={e => setInlineDraft(d => ({ ...d, primary_contact_name: e.target.value }))}
-                className="w-full rounded border border-arctic-300 px-2 py-1 text-sm"
-              />
-              <button type="button" onClick={() => saveInline({ primary_contact_name: inlineDraft.primary_contact_name })} disabled={inlineSaving} className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60">Save</button>
-            </div>
-          ) : (
-            <div className="text-sm text-onix-800">{shop.primary_contact_name || '—'}</div>
-          )}
-
-          <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-onix-400">
-            Primary Contact Email
-            {editIcon('primary_contact_email')}
-          </div>
-          {inlineEdit === 'primary_contact_email' ? (
-            <div className="flex items-center gap-2">
-              <input
-                value={inlineDraft.primary_contact_email}
-                onChange={e => setInlineDraft(d => ({ ...d, primary_contact_email: e.target.value }))}
-                className="w-full rounded border border-arctic-300 px-2 py-1 text-sm"
-              />
-              <button type="button" onClick={() => saveInline({ primary_contact_email: inlineDraft.primary_contact_email })} disabled={inlineSaving} className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60">Save</button>
-            </div>
-          ) : (
-            shop.primary_contact_email && <div className="text-sm text-onix-500">{shop.primary_contact_email}</div>
-          )}
-
-          <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-onix-400">
-            Primary Contact Phone
-            {editIcon('primary_contact_phone')}
-          </div>
-          {inlineEdit === 'primary_contact_phone' ? (
-            <div className="flex items-center gap-2">
-              <input
-                value={inlineDraft.primary_contact_phone}
-                onChange={e => setInlineDraft(d => ({ ...d, primary_contact_phone: e.target.value }))}
-                className="w-full rounded border border-arctic-300 px-2 py-1 text-sm"
-              />
-              <button type="button" onClick={() => saveInline({ primary_contact_phone: inlineDraft.primary_contact_phone })} disabled={inlineSaving} className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60">Save</button>
-            </div>
-          ) : (
-            shop.primary_contact_phone && (
-              <a
-                href={`tel:${String(shop.primary_contact_phone).replace(/[^\d+]/g, '')}`}
-                className="block text-sm text-brand-700 hover:underline"
-              >
-                {shop.primary_contact_phone}
-              </a>
-            )
-          )}
+          <LocationContactsSection
+            accountId={shop.account_id ?? null}
+            locationId={shop.id}
+            locationOptions={siblingLocations.map(l => ({ id: l.id, name: l.name }))}
+          />
 
           <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-onix-400">
             Location
@@ -662,12 +751,12 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
                   rel="noopener noreferrer"
                   className="text-xs text-brand-700 hover:underline"
                 >
-                  Open current admin shop
+                  Open admin
                 </a>
               )}
             </div>
             <div className="rounded border border-arctic-200 bg-arctic-50 p-2 text-xs text-onix-700">
-              <div className="font-mono text-onix-600">{currentAdminShopId || 'No admin shop linked'}</div>
+              {currentAdminShopId ? 'Linked to RepairWise admin.' : 'No admin shop linked yet.'}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -689,7 +778,7 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
             {adminFeedback && <div className="text-xs text-onix-600">{adminFeedback}</div>}
           </div>
           <div className="border-t border-arctic-200 pt-3">
-            <div className="mb-2 text-xs uppercase tracking-wide text-onix-400">Locations by this owner</div>
+            <div className="mb-2 text-xs uppercase tracking-wide text-onix-400">Locations for this account</div>
             <div className="space-y-1">
               {siblingLocations.map(loc => (
                 <Link key={loc.id} href={`/shops/${loc.id}`} className="flex items-center justify-between rounded px-1 py-1 hover:bg-arctic-50">
@@ -764,46 +853,100 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
                 <div key={contract.id} className="rounded-lg border border-arctic-200 bg-white p-4">
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-medium">{contract.counterparty_company || contract.counterparty_name || 'Contract'}</div>
-                    <span className="rounded-full bg-arctic-100 px-2 py-0.5 text-xs font-medium text-onix-700">{contract.status}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${contractStatusBadgeClass(contract.status)}`}
+                    >
+                      {contractStatusLabel(contract.status)}
+                    </span>
                   </div>
                   {contractDateSubline(contract)}
                   {contract.doc_url && <a href={contract.doc_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-xs text-brand-600 hover:underline">View document</a>}
-                  {(contractAwaitingSignature(contract) || contractIsSentWithZohoRequest(contract)) && (
+                  {contractAwaitingSignature(contract) && (
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {contractAwaitingSignature(contract) && (
+                      <button
+                        type="button"
+                        onClick={() => remindContract(contract.id)}
+                        disabled={
+                          remindingContractId === contract.id ||
+                          revokingContractId === contract.id ||
+                          deletingContractId === contract.id
+                        }
+                        className="inline-flex items-center gap-1 rounded-md border border-arctic-300 bg-white px-3 py-1.5 text-xs font-medium text-onix-800 hover:bg-arctic-50 disabled:opacity-60"
+                      >
+                        {remindingContractId === contract.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <FileText className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                        Resend contract
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => revokeContract(contract.id)}
+                        disabled={
+                          revokingContractId === contract.id ||
+                          remindingContractId === contract.id ||
+                          deletingContractId === contract.id
+                        }
+                        className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-800 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        {revokingContractId === contract.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <Ban className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                        Revoke in Zoho
+                      </button>
+                      {allowContractDelete && contract.status !== 'signed' && (
                         <button
                           type="button"
-                          onClick={() => remindContract(contract.id)}
-                          disabled={remindingContractId === contract.id}
-                          className="inline-flex items-center gap-1 rounded-md border border-arctic-300 bg-white px-3 py-1.5 text-xs font-medium text-onix-800 hover:bg-arctic-50 disabled:opacity-60"
+                          onClick={() =>
+                            deleteContract(
+                              contract.id,
+                              contract.counterparty_company || contract.counterparty_name || 'Contract',
+                            )
+                          }
+                          disabled={
+                            deletingContractId === contract.id ||
+                            remindingContractId === contract.id ||
+                            revokingContractId === contract.id
+                          }
+                          className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-800 hover:bg-red-50 disabled:opacity-60"
                         >
-                          {remindingContractId === contract.id ? (
+                          {deletingContractId === contract.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                           ) : (
-                            <FileText className="h-3.5 w-3.5" aria-hidden />
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
                           )}
-                          Resend contract
-                        </button>
-                      )}
-                      {contractIsSentWithZohoRequest(contract) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setContractActionError(null)
-                            setReviseContractModal({
-                              id: contract.id,
-                              counterparty_name: contract.counterparty_name ?? '',
-                              counterparty_email: contract.counterparty_email ?? '',
-                            })
-                          }}
-                          className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-100"
-                        >
-                          <Pencil className="h-3.5 w-3.5" aria-hidden />
-                          Revise signer & resubmit
+                          Delete
                         </button>
                       )}
                     </div>
                   )}
+                  {allowContractDelete &&
+                    contract.status !== 'signed' &&
+                    !contractAwaitingSignature(contract) && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteContract(
+                              contract.id,
+                              contract.counterparty_company || contract.counterparty_name || 'Contract',
+                            )
+                          }
+                          disabled={deletingContractId === contract.id}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-800 hover:bg-red-50 disabled:opacity-60"
+                        >
+                          {deletingContractId === contract.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                          Delete
+                        </button>
+                      </div>
+                    )}
                 </div>
               ))}
             </div>
@@ -820,7 +963,7 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
                 </div>
               ))}
               <div className="flex items-center justify-between">
-                <span className="w-36 text-sm font-medium">Operational Status</span>
+                <span className="w-36 text-sm font-medium">VinFast Status</span>
                 <span className="text-sm text-onix-700">
                   {operationalStatusLoading
                     ? 'Loading...'
@@ -839,8 +982,8 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
         <EmailModal
           locationId={shop.id}
           shopName={shop.name}
-          contactName={shop.primary_contact_name ?? ''}
-          contactEmail={shop.primary_contact_email ?? ''}
+          contactName={primaryContactDisplayName}
+          contactEmail={primaryContactEmail}
           template="intro"
           senderName={senderName}
           fromShopDetail
@@ -857,27 +1000,13 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
           key={sendContractModalDraft?.id ?? 'new'}
           locationId={shop.id}
           shop={shop}
+          primaryContactName={primaryContactDisplayName}
+          primaryContactEmail={primaryContactEmail}
           initialDraft={sendContractModalDraft}
           fromShopDetail
           onClose={() => setShowSendContractModal(false)}
           onSent={() => {
             setShowSendContractModal(false)
-            router.refresh()
-          }}
-        />
-      )}
-
-      {reviseContractModal && (
-        <ReviseSentContractModal
-          key={reviseContractModal.id}
-          locationId={shop.id}
-          contractId={reviseContractModal.id}
-          initialRecipientName={reviseContractModal.counterparty_name ?? ''}
-          initialRecipientEmail={reviseContractModal.counterparty_email ?? ''}
-          fromShopDetail
-          onClose={() => setReviseContractModal(null)}
-          onDone={() => {
-            setReviseContractModal(null)
             router.refresh()
           }}
         />
@@ -889,11 +1018,16 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
             <div className="flex items-center justify-between border-b border-arctic-200 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-onix-900">Manual admin matching</h2>
-                <p className="text-xs text-onix-500">Search by shop name or shop email and choose the correct admin shop.</p>
+                <p className="text-xs text-onix-500">
+                  Search by shop or address text, then pick the matching admin shop.
+                </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowAdminMatchModal(false)}
+                onClick={() => {
+                  setShowAdminMatchModal(false)
+                  setAdminSearchCompleted(false)
+                }}
                 className="rounded p-1 text-onix-500 hover:bg-arctic-100 hover:text-onix-800"
                 aria-label="Close admin matching modal"
               >
@@ -912,7 +1046,7 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
                       void searchAdminShops()
                     }
                   }}
-                  placeholder="Search MotherDuck shops by name or email"
+                  placeholder="Shop name, city, street, or ZIP"
                   className="w-full rounded border border-arctic-300 px-3 py-2 text-sm"
                 />
                 <button
@@ -926,9 +1060,14 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
               </div>
 
               <div className="max-h-80 space-y-2 overflow-y-auto">
-                {adminResults.length === 0 && (
+                {adminResults.length === 0 && !adminSearchCompleted && (
                   <div className="rounded border border-dashed border-arctic-300 px-3 py-4 text-sm text-onix-500">
                     Search to load possible matches.
+                  </div>
+                )}
+                {adminResults.length === 0 && adminSearchCompleted && (
+                  <div className="rounded border border-dashed border-arctic-300 px-3 py-4 text-sm text-onix-500">
+                    No matches for that search. Try a different shop name, city, street, or ZIP.
                   </div>
                 )}
                 {adminResults.map(result => (
@@ -939,11 +1078,10 @@ export default function ShopDetailTabs({ shop, siblingLocations, defaultTab, sen
                     disabled={adminSaving}
                     className="block w-full rounded-lg border border-arctic-200 bg-white px-3 py-2 text-left hover:border-brand-300 hover:bg-brand-50 disabled:opacity-60"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-medium text-onix-900">{result.name}</div>
-                      <div className="font-mono text-xs text-onix-500">{result.motherduck_shop_id}</div>
+                    <div className="text-sm font-medium text-onix-900">{result.name}</div>
+                    <div className="mt-1 text-xs text-onix-600">
+                      {result.primary_contact_email ?? result.account_primary_email ?? 'No email'}
                     </div>
-                    <div className="mt-1 text-xs text-onix-600">{result.primary_contact_email ?? result.owner_email ?? 'No email'}</div>
                     <div className="mt-1 text-xs text-onix-500">
                       {[result.address_line1, result.city, result.state, result.postal_code].filter(Boolean).join(', ') || 'No address'}
                     </div>

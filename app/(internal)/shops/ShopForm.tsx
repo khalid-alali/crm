@@ -6,7 +6,7 @@ import { detectChain, KNOWN_CHAINS } from '@/lib/chain-detect'
 import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { LOCATION_SOURCES, formatLocationSource } from '@/lib/location-source'
-import OwnerSelect from '@/components/OwnerSelect'
+import AccountSelect from '@/components/AccountSelect'
 import StateSelect from '@/components/StateSelect'
 
 const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
@@ -29,7 +29,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
   const [form, setForm] = useState({
     name: initial?.name ?? '',
     chain_name: initial?.chain_name ?? '',
-    owner_id: initial?.owner_id ?? null,
+    account_id: initial?.account_id ?? initial?.owner_id ?? null,
     address_line1: initial?.address_line1 ?? '',
     city: initial?.city ?? '',
     state: initial?.state ?? '',
@@ -54,76 +54,86 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const isNew = !locationId
-  const [ownerChoice, setOwnerChoice] = useState<'existing' | 'new'>('existing')
-  const [newOwner, setNewOwner] = useState({
+  const [accountChoice, setAccountChoice] = useState<'existing' | 'new'>('existing')
+  const [newAccount, setNewAccount] = useState({
     name: '',
     email: '',
     phone: '',
-    title: '',
   })
-  const [primarySameAsOwner, setPrimarySameAsOwner] = useState(false)
-  const [ownerDetails, setOwnerDetails] = useState<{
-    name: string
+  const [primarySameAsAccount, setPrimarySameAsAccount] = useState(false)
+  const [accountDetails, setAccountDetails] = useState<{
+    business_name: string
+    contactName: string
     email: string
     phone: string
   } | null>(null)
-  const [ownerFetchFailed, setOwnerFetchFailed] = useState(false)
+  const [accountFetchFailed, setAccountFetchFailed] = useState(false)
 
   useEffect(() => {
-    if (!primarySameAsOwner || !form.owner_id || (isNew && ownerChoice === 'new')) {
-      setOwnerDetails(null)
-      setOwnerFetchFailed(false)
+    if (!primarySameAsAccount || !form.account_id || (isNew && accountChoice === 'new')) {
+      setAccountDetails(null)
+      setAccountFetchFailed(false)
       return
     }
-    setOwnerFetchFailed(false)
+    setAccountFetchFailed(false)
     let cancel = false
-    fetch(`/api/owners/${form.owner_id}`)
-      .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then((data: { name: string; email: string | null; phone: string | null }) => {
+    async function load() {
+      try {
+        const [accRes, conRes] = await Promise.all([
+          fetch(`/api/accounts/${form.account_id}`),
+          fetch(`/api/contacts?account_id=${encodeURIComponent(form.account_id!)}`),
+        ])
+        if (!accRes.ok) throw new Error('account')
+        const acc = await accRes.json()
+        const contacts = conRes.ok ? await conRes.json() : []
         if (cancel) return
-        setOwnerDetails({
-          name: data.name ?? '',
-          email: data.email ?? '',
-          phone: data.phone ?? '',
+        const list = Array.isArray(contacts) ? contacts : []
+        const primary = list.find((c: { is_primary?: boolean }) => c.is_primary) ?? list[0]
+        setAccountDetails({
+          business_name: acc.business_name ?? '',
+          contactName: primary?.name ?? acc.business_name ?? '',
+          email: primary?.email ?? '',
+          phone: primary?.phone ?? '',
         })
-      })
-      .catch(() => {
+      } catch {
         if (!cancel) {
-          setOwnerDetails(null)
-          setOwnerFetchFailed(true)
+          setAccountDetails(null)
+          setAccountFetchFailed(true)
         }
-      })
+      }
+    }
+    void load()
     return () => {
       cancel = true
     }
-  }, [primarySameAsOwner, form.owner_id, isNew, ownerChoice])
+  }, [primarySameAsAccount, form.account_id, isNew, accountChoice])
 
   useEffect(() => {
-    if (!primarySameAsOwner) return
-    if (isNew && ownerChoice === 'new') {
+    if (!primarySameAsAccount) return
+    if (isNew && accountChoice === 'new') {
       setForm(f => ({
         ...f,
-        primary_contact_name: newOwner.name,
-        primary_contact_email: newOwner.email,
-        primary_contact_phone: newOwner.phone,
+        primary_contact_name: newAccount.name,
+        primary_contact_email: newAccount.email,
+        primary_contact_phone: newAccount.phone,
       }))
       return
     }
-    if (!ownerDetails) return
+    if (!accountDetails) return
     setForm(f => ({
       ...f,
-      primary_contact_name: ownerDetails.name,
-      primary_contact_email: ownerDetails.email,
-      primary_contact_phone: ownerDetails.phone,
+      primary_contact_name: accountDetails.contactName,
+      primary_contact_email: accountDetails.email,
+      primary_contact_phone: accountDetails.phone,
     }))
   }, [
-    primarySameAsOwner,
+    primarySameAsAccount,
     isNew,
-    ownerChoice,
-    newOwner.name,
-    newOwner.email,
-    newOwner.phone,
-    ownerDetails,
+    accountChoice,
+    newAccount.name,
+    newAccount.email,
+    newAccount.phone,
+    accountDetails,
   ])
 
   function f(name: string) {
@@ -149,13 +159,13 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
     setError('')
     try {
       if (isNew) {
-        if (ownerChoice === 'existing' && !form.owner_id) {
-          setError('Select an owner from the list.')
+        if (accountChoice === 'existing' && !form.account_id) {
+          setError('Select an account from the list.')
           setSaving(false)
           return
         }
-        if (ownerChoice === 'new' && !newOwner.name.trim()) {
-          setError('New owner name is required.')
+        if (accountChoice === 'new' && !newAccount.name.trim()) {
+          setError('Account / primary contact name is required.')
           setSaving(false)
           return
         }
@@ -163,13 +173,12 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
       const url = locationId ? `/api/locations/${locationId}` : '/api/locations'
       const method = locationId ? 'PATCH' : 'POST'
       const payload: Record<string, unknown> = { ...form, programStatuses }
-      if (isNew && ownerChoice === 'new') {
-        payload.owner_id = null
-        payload.newOwner = {
-          name: newOwner.name.trim(),
-          email: newOwner.email.trim() || undefined,
-          phone: newOwner.phone.trim() || undefined,
-          title: newOwner.title.trim() || undefined,
+      if (isNew && accountChoice === 'new') {
+        payload.account_id = null
+        payload.newAccount = {
+          name: newAccount.name.trim(),
+          email: newAccount.email.trim() || undefined,
+          phone: newAccount.phone.trim() || undefined,
         }
       }
       const res = await fetch(url, {
@@ -227,51 +236,53 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
           <p className="text-xs text-onix-600 mt-1">Optional. Shop name blur can auto-pick a chain when it matches.</p>
         </div>
         <div className="space-y-3">
-          <span className="block text-xs font-medium text-onix-600">Owner</span>
+          <span className="block text-xs font-medium text-onix-600">Account</span>
           {isNew ? (
             <>
               <div className="flex flex-col gap-2">
                 <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="radio"
-                    name="ownerChoice"
-                    checked={ownerChoice === 'existing'}
+                    name="accountChoice"
+                    checked={accountChoice === 'existing'}
                     onChange={() => {
-                      setOwnerChoice('existing')
-                      setPrimarySameAsOwner(false)
+                      setAccountChoice('existing')
+                      setPrimarySameAsAccount(false)
                     }}
                     className="border-arctic-300"
                   />
-                  Pick existing owner
+                  Pick existing account
                 </label>
                 <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="radio"
-                    name="ownerChoice"
-                    checked={ownerChoice === 'new'}
+                    name="accountChoice"
+                    checked={accountChoice === 'new'}
                     onChange={() => {
-                      setOwnerChoice('new')
-                      setForm(f => ({ ...f, owner_id: null }))
-                      setPrimarySameAsOwner(false)
+                      setAccountChoice('new')
+                      setForm(f => ({ ...f, account_id: null }))
+                      setPrimarySameAsAccount(false)
                     }}
                     className="border-arctic-300"
                   />
-                  Create new owner
+                  Create new account
                 </label>
               </div>
-              {ownerChoice === 'existing' ? (
-                <OwnerSelect
-                  value={form.owner_id}
-                  onChange={ownerId => setForm(f => ({ ...f, owner_id: ownerId }))}
+              {accountChoice === 'existing' ? (
+                <AccountSelect
+                  value={form.account_id}
+                  onChange={accountId => setForm(f => ({ ...f, account_id: accountId }))}
                 />
               ) : (
                 <div className="space-y-3 border-l-2 border-arctic-200 ml-1.5 pl-4">
                   <div>
-                    <label className="block text-xs font-medium text-onix-600 mb-1">Owner name *</label>
+                    <label className="block text-xs font-medium text-onix-600 mb-1">
+                      Business / account name * <span className="text-onix-400">(also used for primary contact)</span>
+                    </label>
                     <input
-                      value={newOwner.name}
-                      onChange={e => setNewOwner(o => ({ ...o, name: e.target.value }))}
-                      required={ownerChoice === 'new'}
+                      value={newAccount.name}
+                      onChange={e => setNewAccount(o => ({ ...o, name: e.target.value }))}
+                      required={accountChoice === 'new'}
                       className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
                     />
                   </div>
@@ -280,36 +291,27 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
                       <label className="block text-xs font-medium text-onix-600 mb-1">Email</label>
                       <input
                         type="email"
-                        value={newOwner.email}
-                        onChange={e => setNewOwner(o => ({ ...o, email: e.target.value }))}
+                        value={newAccount.email}
+                        onChange={e => setNewAccount(o => ({ ...o, email: e.target.value }))}
                         className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-onix-600 mb-1">Phone</label>
                       <input
-                        value={newOwner.phone}
-                        onChange={e => setNewOwner(o => ({ ...o, phone: e.target.value }))}
+                        value={newAccount.phone}
+                        onChange={e => setNewAccount(o => ({ ...o, phone: e.target.value }))}
                         className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
                       />
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-onix-600 mb-1">Title</label>
-                    <input
-                      value={newOwner.title}
-                      onChange={e => setNewOwner(o => ({ ...o, title: e.target.value }))}
-                      className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
-                      placeholder="e.g. Owner, GM"
-                    />
                   </div>
                 </div>
               )}
             </>
           ) : (
-            <OwnerSelect
-              value={form.owner_id}
-              onChange={ownerId => setForm(f => ({ ...f, owner_id: ownerId }))}
+            <AccountSelect
+              value={form.account_id}
+              onChange={accountId => setForm(f => ({ ...f, account_id: accountId }))}
             />
           )}
         </div>
@@ -345,26 +347,26 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
         <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
           <input
             type="checkbox"
-            checked={primarySameAsOwner}
-            onChange={e => setPrimarySameAsOwner(e.target.checked)}
+            checked={primarySameAsAccount}
+            onChange={e => setPrimarySameAsAccount(e.target.checked)}
             className="rounded border-arctic-300"
           />
-          Primary contact is same as owner info
+          Primary contact is same as account primary
         </label>
-        {primarySameAsOwner &&
-          form.owner_id &&
-          !(isNew && ownerChoice === 'new') &&
-          !ownerDetails &&
-          !ownerFetchFailed && <p className="text-xs text-onix-600">Loading owner…</p>}
-        {primarySameAsOwner && ownerFetchFailed && (
-          <p className="text-xs text-red-600">Could not load owner. Uncheck the box and enter primary contact manually.</p>
+        {primarySameAsAccount &&
+          form.account_id &&
+          !(isNew && accountChoice === 'new') &&
+          !accountDetails &&
+          !accountFetchFailed && <p className="text-xs text-onix-600">Loading account…</p>}
+        {primarySameAsAccount && accountFetchFailed && (
+          <p className="text-xs text-red-600">Could not load account. Uncheck the box and enter primary contact manually.</p>
         )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-onix-600 mb-1">Name</label>
             <input
               {...f('primary_contact_name')}
-              disabled={primarySameAsOwner}
+              disabled={primarySameAsAccount}
               className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm disabled:bg-arctic-50 disabled:text-onix-800"
             />
           </div>
@@ -372,7 +374,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
             <label className="block text-xs font-medium text-onix-600 mb-1">Phone</label>
             <input
               {...f('primary_contact_phone')}
-              disabled={primarySameAsOwner}
+              disabled={primarySameAsAccount}
               className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm disabled:bg-arctic-50 disabled:text-onix-800"
             />
           </div>
@@ -382,7 +384,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
           <input
             {...f('primary_contact_email')}
             type="email"
-            disabled={primarySameAsOwner}
+            disabled={primarySameAsAccount}
             className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm disabled:bg-arctic-50 disabled:text-onix-800"
           />
         </div>

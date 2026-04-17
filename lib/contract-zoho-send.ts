@@ -1,12 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { createAndSendDocument } from '@/lib/zohosign'
 import { buildZohoSignContractFieldTextData } from '@/lib/zoho-sign-contract-fields'
-
-function normalizeOwnerEmbed(owners: unknown): { email?: string; name?: string; phone?: string } | null {
-  if (!owners) return null
-  if (Array.isArray(owners)) return (owners[0] as { email?: string; name?: string; phone?: string }) ?? null
-  return owners as { email?: string; name?: string; phone?: string }
-}
+import { resolvePrimaryContact } from '@/lib/primary-contact'
 
 export async function sendContractViaZoho(
   contractId: string,
@@ -20,18 +15,25 @@ export async function sendContractViaZoho(
 ): Promise<void> {
   const { data: contract } = await supabaseAdmin
     .from('contracts')
-    .select('*, owners(*)')
+    .select('*, contract_locations(location_id)')
     .eq('id', contractId)
     .single()
 
   if (!contract) throw new Error('Contract not found')
 
-  const owner = normalizeOwnerEmbed(contract.owners)
-  const recipientEmail = (contract.counterparty_email as string | null) ?? owner?.email
-  const recipientName = (contract.counterparty_name as string | null) ?? owner?.name ?? 'Recipient'
+  const cl = contract.contract_locations as { location_id: string }[] | undefined
+  const locationId = cl?.[0]?.location_id ?? null
+  const primary = await resolvePrimaryContact(
+    supabaseAdmin,
+    contract.account_id as string | null | undefined,
+    locationId,
+  )
+  const recipientEmail = (contract.counterparty_email as string | null) ?? primary?.email ?? null
+  const recipientName =
+    (contract.counterparty_name as string | null) ?? primary?.name ?? primary?.email ?? 'Recipient'
 
   if (!recipientEmail) {
-    throw new Error('No recipient email on contract or owner')
+    throw new Error('No recipient email on contract or primary contact')
   }
 
   const bdName =
@@ -68,7 +70,7 @@ export async function sendContractViaZoho(
     fieldTextData,
   })
 
-  await supabaseAdmin
+  const { data: updatedRow, error: persistErr } = await supabaseAdmin
     .from('contracts')
     .update({
       zoho_sign_request_id: requestId,
@@ -76,6 +78,15 @@ export async function sendContractViaZoho(
       zoho_sent_at: new Date().toISOString(),
     })
     .eq('id', contractId)
+    .select('id')
+    .maybeSingle()
+
+  if (persistErr) {
+    throw new Error(`Failed to save contract after Zoho send: ${persistErr.message}`)
+  }
+  if (!updatedRow) {
+    throw new Error('Failed to save contract after Zoho send: no matching contract row was updated')
+  }
 
   const { data: contractLocations } = await supabaseAdmin
     .from('contract_locations')

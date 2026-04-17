@@ -6,6 +6,7 @@ import { renderTemplate } from '@/lib/email-templates'
 import { notificationsFrom } from '@/lib/resend-notifications'
 import { laborRateFromSignedFields, warrantyRateFromSignedFields } from '@/lib/zoho-sign-contract-fields'
 import { syncContractPdfFromZoho } from '@/lib/contract-documents'
+import { resolvePrimaryContact } from '@/lib/primary-contact'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -21,7 +22,7 @@ type NormalizedZohoEvent = {
     | 'request_reassigned'
     | 'reminder_sent'
     | 'unknown'
-  contractStatus?: 'sent' | 'viewed' | 'signed' | 'declined'
+  contractStatus?: 'sent' | 'viewed' | 'signed' | 'declined' | 'revoked'
   activitySubject?: string
   activityBody?: string
   shouldFinalizeSignedContract?: boolean
@@ -155,9 +156,9 @@ function normalizeZohoEvent(payload: Record<string, unknown>, eventRequest: Reco
   if (eventType.includes('request_recalled') || requestStatus === 'recalled') {
     return {
       key: 'request_recalled',
-      contractStatus: 'declined',
-      activitySubject: 'Contract recalled',
-      activityBody: `Contract was recalled by ${recalledBy}.`,
+      contractStatus: 'revoked',
+      activitySubject: 'Contract revoked in Zoho Sign',
+      activityBody: `Request was recalled (revoked) by ${recalledBy}.`,
     }
   }
   if (eventType.includes('request_reassigned')) {
@@ -177,12 +178,16 @@ function normalizeZohoEvent(payload: Record<string, unknown>, eventRequest: Reco
   return { key: 'unknown' }
 }
 
-async function applyContractStatus(contractId: string, status: 'sent' | 'viewed' | 'signed' | 'declined') {
+async function applyContractStatus(
+  contractId: string,
+  status: 'sent' | 'viewed' | 'signed' | 'declined' | 'revoked',
+) {
   let fromStatuses: string[] = []
   if (status === 'sent') fromStatuses = ['draft']
   else if (status === 'viewed') fromStatuses = ['draft', 'sent', 'viewed']
   else if (status === 'signed') fromStatuses = ['draft', 'sent', 'viewed']
   else if (status === 'declined') fromStatuses = ['draft', 'sent', 'viewed']
+  else if (status === 'revoked') fromStatuses = ['sent', 'viewed']
 
   await supabaseAdmin.from('contracts').update({ status }).eq('id', contractId).in('status', fromStatuses)
 }
@@ -216,7 +221,7 @@ export async function POST(req: NextRequest) {
 
   const { data: contract } = await supabaseAdmin
     .from('contracts')
-    .select('id, owner_id, status, doc_storage_path')
+    .select('id, account_id, status, doc_storage_path')
     .eq('zoho_sign_request_id', requestId)
     .single()
 
@@ -224,6 +229,9 @@ export async function POST(req: NextRequest) {
     console.warn(`[zohosign webhook] No contract with zoho_sign_request_id=${requestId} — send may not have persisted the Zoho request id, or the row was created outside the app. Run: npm run reconcile:zoho`)
     return NextResponse.json({ ok: true })
   }
+
+  const skipRecallDuplicateActivity =
+    normalized.key === 'request_recalled' && contract.status === 'revoked'
 
   if (normalized.contractStatus) {
     await applyContractStatus(contract.id, normalized.contractStatus)
@@ -235,7 +243,12 @@ export async function POST(req: NextRequest) {
     .eq('contract_id', contract.id)
   const locationIds = contractLocations?.map(cl => cl.location_id) ?? []
 
-  if (normalized.activitySubject && normalized.activityBody && locationIds.length > 0) {
+  if (
+    !skipRecallDuplicateActivity &&
+    normalized.activitySubject &&
+    normalized.activityBody &&
+    locationIds.length > 0
+  ) {
     await supabaseAdmin.from('activity_log').insert(
       locationIds.map(locationId => ({
         location_id: locationId,
@@ -316,9 +329,15 @@ export async function POST(req: NextRequest) {
       for (const locationId of locationIds) {
         const { data: loc } = await supabaseAdmin
           .from('locations')
-          .select('name, primary_contact_email, primary_contact_name')
+          .select('name, account_id')
           .eq('id', locationId)
           .single()
+
+        const primary = await resolvePrimaryContact(
+          supabaseAdmin,
+          loc?.account_id ?? null,
+          locationId,
+        )
 
         await supabaseAdmin.from('activity_log').insert({
           location_id: locationId,
@@ -328,15 +347,15 @@ export async function POST(req: NextRequest) {
           sent_by: 'system',
         })
 
-        if (loc?.primary_contact_email) {
+        if (primary?.email) {
           const { subject, body } = renderTemplate('onboarding', {
-            shop_name: loc.name,
-            contact_name: loc.primary_contact_name ?? 'there',
+            shop_name: loc?.name ?? 'your shop',
+            contact_name: primary.name ?? 'there',
             sender_name: 'The RepairWise Team',
           })
           await resend.emails.send({
             from: notificationsFrom('RepairWise', automationLocal),
-            to: loc.primary_contact_email,
+            to: primary.email,
             subject,
             text: body,
           })

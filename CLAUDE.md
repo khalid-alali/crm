@@ -60,13 +60,14 @@ PORTAL_JWT_SECRET=
 
 ### Data model
 
-Three concepts that must not be conflated:
+Four concepts that must not be conflated:
 
 1. **`locations`** — one row per physical shop. Always the atomic unit. Never merge locations.
-2. **`owners`** — the person or entity that signs contracts, may control 1–many locations. This is the real FK for contracts, not location.
-3. **`chain_name`** — a plain text field on `locations` for brand/franchise (Midas, AAMCO). Display and filter only. No separate chains table. Never a FK.
+2. **`accounts`** — business entities (legal or operating name). May control many locations. This is the real FK for contracts, not location.
+3. **`contacts`** — people tied to an account and optionally scoped to one location (roles include `owner`, GM, billing, etc.). Email flows use the resolved primary contact (`lib/primary-contact.ts`).
+4. **`chain_name`** — a plain text field on `locations` for brand/franchise (Midas, AAMCO). Display and filter only. No separate chains table. Never a FK.
 
-**Why:** The existing Airtable data conflated brand chains with owner-operators. Ali Habib owns Midas DTLA + BH + MDR — he's one `owner`, three `locations`, one `contract` covering all three. Midas-as-a-brand is just `chain_name = 'Midas'` on each location row. Same pattern: Eric Hamini owns AAMCO Bakersfield + Palmdale. Stress Free Auto Care has 28 locations under one contract.
+**Why:** The existing Airtable data conflated brand chains with owner-operators. Ali Habib owns Midas DTLA + BH + MDR — one `account`, three `locations`, one `contract` covering all three. Midas-as-a-brand is just `chain_name = 'Midas'` on each location row. Same pattern: Eric Hamini owns AAMCO Bakersfield + Palmdale. Stress Free Auto Care has 28 locations under one contract.
 
 ### Auth
 
@@ -76,20 +77,22 @@ The shop portal (`/portal/[token]`) is **public** — magic link JWT, no login.
 
 ### Contracts
 
-- Linked to `owner`, not `location`
+- Linked to `account`, not `location`
 - `contract_locations` junction table maps which locations a contract covers
 - `legal_entity_name` is stored raw from the Zoho Sign signed document — shops sometimes use DBA, sometimes legal entity name. Never normalize or reconcile with location display name.
 - Zoho Sign for contract signing
 
 ### Program enrollments
 
-Tracked at the **location level**, not owner level. Each location has up to 3 program rows (multi_drive, ev_program, oem_warranty). This is correct — a shop might be active on EV but not multi-drive.
+Tracked at the **location level**, not account level. Each location has up to 3 program rows (multi_drive, ev_program, oem_warranty). This is correct — a shop might be active on EV but not multi-drive.
 
 ---
 
 ## Database schema
 
-Migration file: `supabase/migrations/001_initial.sql`
+Apply migrations in order through `supabase/migrations/012_accounts_contacts.sql`. That migration renames `owners` → `accounts`, adds `contacts`, moves person fields off locations, and renames `owner_id` → `account_id` on `locations` and `contracts`.
+
+The excerpt below matches the original `001_initial.sql` bootstrap; live databases after 012 use `accounts`, `contacts`, and `account_id` as in that migration.
 
 ```sql
 create table owners (
@@ -218,9 +221,9 @@ app/
       [id]/
         page.tsx            -- shop detail
         edit/page.tsx       -- full edit form
-    owners/
-      page.tsx              -- owner list
-      [id]/page.tsx         -- owner detail
+    accounts/
+      page.tsx              -- account list
+      [id]/page.tsx         -- account detail + contacts
     map/
       page.tsx              -- map view
   (portal)/
@@ -231,6 +234,8 @@ app/
     webhooks/zohosign/route.ts
     email/send/route.ts
     geocode/route.ts
+    accounts/               -- account CRUD + search
+    contacts/               -- contact CRUD (query by account_id or location_id)
 components/
   ShopTable.tsx
   StatusBadge.tsx
@@ -239,7 +244,7 @@ components/
   NextActionButton.tsx
   EmailModal.tsx
   AddressForm.tsx
-  OwnerSelect.tsx
+  AccountSelect.tsx
 lib/
   supabase.ts               -- supabase client (service role for server, anon for client)
   chain-detect.ts
@@ -247,6 +252,7 @@ lib/
   geocode.ts
   zohosign.ts
   portal-token.ts
+  primary-contact.ts        -- resolvePrimaryContact for lists and email
 scripts/
   import.ts                 -- one-time CSV import
 ```
@@ -311,7 +317,7 @@ Run on every location insert/update. If `chain_name` is already set manually, do
 
 The most important page. BDR lives here.
 
-**Columns:** shop name + chain badge, owner, city/state, status pill, program pills, assigned to, next action button
+**Columns:** shop name + chain badge, Owner (resolved primary contact name), city/state, status pill, program pills, assigned to, next action button
 
 **Summary bar above table:**
 ```
@@ -349,7 +355,7 @@ Top: name, chain badge, status dropdown (in-place change), assigned_to
 1. **Details** — inline editable fields. Address section has compact inline "Edit address" form — saves + re-geocodes immediately without navigating away.
 2. **Programs** — three rows (Multi-drive, EV, OEM Warranty), each with status dropdown, single save button
 3. **Contracts** — contracts via `contract_locations`. Show `legal_entity_name` as "Signed as". Show `standard_labor_rate` and `warranty_labor_rate`. "Send contract via Zoho Sign" button.
-4. **Owner** — owner card with link to `/owners/[id]`
+4. **Account** — account name with link to `/accounts/[id]`; Contacts section (account-level + location-level)
 5. **Comms log** — chronological feed of emails, notes, status changes. "Add note" inline.
 
 ---
@@ -359,20 +365,21 @@ Top: name, chain badge, status dropdown (in-place change), assigned_to
 Fields:
 - Shop name — on blur: run `detectChain()`, auto-fill `chain_name`, show "Detected: Midas" with option to clear
 - Chain name — text, pre-filled by detection, always editable
-- Owner — searchable select with inline "Create new owner" option
+- Account — searchable select with inline "Create new account" option
 - Address line 1, City, State, Postal code — on postal code blur: geocode, show confirmation
-- Primary contact name, email, phone
+- Shop contact fields create or update a location-scoped contact (no `primary_contact_*` columns on `locations`)
 - Status, Assigned to, Source — dropdowns
 - Programs — three rows with status dropdowns
 - Notes
 
 ---
 
-## Owner page (`/owners/[id]`)
+## Account page (`/accounts/[id]`)
 
-- Owner details (editable)
-- All their locations (same table as pipeline view)
-- All contracts linked to this owner
+- Account `business_name` and notes (editable)
+- Contacts panel (grouped by role; add/edit/delete; primary contact toggle)
+- All locations for this account (same table as pipeline view)
+- All contracts linked to this account
 - Aggregate program enrollment across their locations
 
 ---
@@ -498,23 +505,23 @@ Two source CSVs in `scripts/data/`:
 
 **Locations import logic:**
 1. `detectChain(shopName)` → set `chain_name`
-2. Find or create `owner`: match by email first, then name. If chain and no contact, owner = chain entity name.
+2. Find or create `account`: match by email first, then name. If chain and no contact, account = chain entity name; ensure a matching contact row where CSV has person fields.
 3. Upsert `location`: match on name + city, or name alone if city missing
 4. For each non-empty program status column → upsert `program_enrollments`
 
 **Contracts import logic:**
-1. Find or create `owner` by `counterparty_email`
+1. Find or create `account` by `counterparty_email`
 2. Upsert `contract` row
 3. Parse `Shops 2` column (comma-separated) → fuzzy match each to `locations` → insert `contract_locations`
 4. No location match → still import contract with `location_id` links empty
 
 **Known data issues — handle gracefully, never crash:**
 - Malformed postal codes (`"e Ca "`, `" #108"`) — store as-is, geocoding will return null and skip
-- Multiple emails in one field — store raw in `primary_contact_email`
+- Multiple emails in one field — store raw on the contact `email` field
 - Blank company name on contracts — fall back to `counterparty_name`
 - L&M Automotive has duplicate contract rows — import both, add note "duplicate"
-- Stress Free Auto Care: 28 location rows, 1 contract → 1 owner, 28 `contract_locations` rows
-- Ali Habib: Midas DTLA + BH + MDR → 1 owner, 3 locations, 1 contract with 3 `contract_locations` rows
+- Stress Free Auto Care: 28 location rows, 1 contract → 1 account, 28 `contract_locations` rows
+- Ali Habib: Midas DTLA + BH + MDR → 1 account, 3 locations, 1 contract with 3 `contract_locations` rows
 - Eric Hamini: AAMCO Bakersfield + Palmdale → same pattern
 
 ---
@@ -529,8 +536,8 @@ Build and verify each step before moving to the next.
 4. `/shops` pipeline list — filters, status badges, next action buttons
 5. Shop detail page — tabs, inline address edit, comms log
 6. Email send — Resend integration, EmailModal, template rendering
-7. Add/edit shop form — chain detection, owner select, geocoding
-8. Owner pages
+7. Add/edit shop form — chain detection, account select, geocoding
+8. Account pages + contacts API
 9. Map view + geocode missing button
 10. Shop portal (magic link)
 11. Zoho Sign webhook

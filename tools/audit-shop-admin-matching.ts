@@ -19,7 +19,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-type OwnerRow = { name: string | null; email: string | null } | null
+type ContactMini = { email: string | null; is_primary: boolean | null }
 type ContractRow = {
   doc_storage_path: string | null
 }
@@ -28,10 +28,10 @@ type LocationRow = {
   name: string
   city: string | null
   state: string | null
-  owner_id: string | null
+  account_id: string | null
   motherduck_shop_id: string | null
-  primary_contact_email: string | null
-  owners: OwnerRow | OwnerRow[] | null
+  accounts: { business_name: string | null } | { business_name: string | null }[] | null
+  contacts: ContactMini[] | ContactMini | null
   contract_locations: Array<{ contracts: ContractRow | ContractRow[] | null }> | null
 }
 
@@ -63,17 +63,16 @@ function norm(value: string | null | undefined): string {
     .trim()
 }
 
-function ownerFromLocation(row: LocationRow): OwnerRow {
-  if (!row.owners) return null
-  if (Array.isArray(row.owners)) return row.owners[0] ?? null
-  return row.owners
+function contactsList(row: LocationRow): ContactMini[] {
+  const c = row.contacts
+  if (!c) return []
+  return Array.isArray(c) ? c : [c]
 }
 
 function bestEmail(row: LocationRow): string | null {
-  const owner = ownerFromLocation(row)
-  const ownerEmail = clean(owner?.email)?.toLowerCase() ?? null
-  if (ownerEmail) return ownerEmail
-  return clean(row.primary_contact_email)?.toLowerCase() ?? null
+  const list = contactsList(row)
+  const primary = list.find(x => x.is_primary) ?? list[0]
+  return clean(primary?.email)?.toLowerCase() ?? null
 }
 
 function hasContractPdf(row: LocationRow): boolean {
@@ -99,9 +98,9 @@ function scoreSuggestedMove(target: LocationRow, holder: LocationRow): { score: 
   const reasons: string[] = []
   let score = 0
 
-  if (target.owner_id && holder.owner_id && target.owner_id === holder.owner_id) {
+  if (target.account_id && holder.account_id && target.account_id === holder.account_id) {
     score += 90
-    reasons.push('same owner_id')
+    reasons.push('same account_id')
   }
 
   const targetEmail = bestEmail(target)
@@ -142,10 +141,10 @@ async function fetchLocations(): Promise<LocationRow[]> {
       name,
       city,
       state,
-      owner_id,
+      account_id,
       motherduck_shop_id,
-      primary_contact_email,
-      owners(name, email),
+      accounts(business_name),
+      contacts(email, is_primary),
       contract_locations(
         contracts(doc_storage_path)
       )
@@ -153,7 +152,7 @@ async function fetchLocations(): Promise<LocationRow[]> {
     .order('name', { ascending: true })
 
   if (error) throw error
-  return (data ?? []) as LocationRow[]
+  return (data ?? []) as unknown as LocationRow[]
 }
 
 function buildReviewSuggestions(locations: LocationRow[]): SuggestedMatch[] {
@@ -190,12 +189,13 @@ function printAnomalySection(title: string, rows: LocationRow[]) {
   console.log(`\n${title}: ${rows.length}`)
   if (rows.length === 0) return
   for (const row of rows.slice(0, 60)) {
-    const owner = ownerFromLocation(row)
-    const ownerName = clean(owner?.name) ?? '—'
+    const acc = row.accounts
+    const bn = Array.isArray(acc) ? acc[0]?.business_name : acc?.business_name
+    const accountName = clean(bn) ?? '—'
     const email = bestEmail(row) ?? '—'
     const pdfCount = contractPdfCount(row)
     console.log(
-      `- ${locationLabel(row)} | owner=${ownerName} | email=${email} | shop_id=${row.motherduck_shop_id ?? '—'} | pdf_contracts=${pdfCount}`,
+      `- ${locationLabel(row)} | account=${accountName} | email=${email} | shop_id=${row.motherduck_shop_id ?? '—'} | pdf_contracts=${pdfCount}`,
     )
   }
   if (rows.length > 60) console.log(`... truncated ${rows.length - 60} more rows`)

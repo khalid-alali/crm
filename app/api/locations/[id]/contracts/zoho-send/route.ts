@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
 import { sendContractViaZoho } from '@/lib/contract-zoho-send'
+import { resolvePrimaryContact } from '@/lib/primary-contact'
 
 function formatLocationAddress(loc: {
   address_line1?: string | null
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: location, error: locError } = await supabaseAdmin
     .from('locations')
-    .select('id, owner_id, address_line1, city, state, postal_code, owners(*)')
+    .select('id, account_id, address_line1, city, state, postal_code')
     .eq('id', id)
     .single()
 
@@ -62,10 +63,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Location not found' }, { status: 404 })
   }
 
-  const rawOwner = location.owners as unknown
-  const owner = Array.isArray(rawOwner) ? rawOwner[0] : rawOwner
   const address = formatLocationAddress(location)
-  const phone = (owner as { phone?: string | null } | null)?.phone ?? null
+  const primary = await resolvePrimaryContact(supabaseAdmin, location.account_id, id)
+  const phone = primary?.phone ?? null
 
   const existingId =
     typeof body.existing_draft_contract_id === 'string' && body.existing_draft_contract_id.trim()
@@ -114,9 +114,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     contractId = existingId
   } else {
-    if (!location.owner_id) {
+    if (!location.account_id) {
       return NextResponse.json(
-        { error: 'Link an owner to this shop before sending a new contract, or use an existing draft on the Contracts tab.' },
+        { error: 'Link an account to this shop before sending a new contract, or use an existing draft on the Contracts tab.' },
         { status: 400 }
       )
     }
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { data: created, error: insErr } = await supabaseAdmin
       .from('contracts')
       .insert({
-        owner_id: location.owner_id,
+        account_id: location.account_id,
         counterparty_name: name,
         counterparty_email: email,
         counterparty_phone: phone,

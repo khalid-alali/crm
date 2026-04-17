@@ -2,28 +2,27 @@
 
 import { useState, useEffect, useRef } from 'react'
 
-interface Owner {
+interface AccountOption {
   id: string
-  name: string
-  email: string | null
+  business_name: string
 }
 
 interface Props {
   value: string | null
-  onChange: (ownerId: string | null) => void
+  onChange: (accountId: string | null) => void
 }
 
-export default function OwnerSelect({ value, onChange }: Props) {
-  const [owners, setOwners] = useState<Owner[]>([])
+export default function AccountSelect({ value, onChange }: Props) {
+  const [accounts, setAccounts] = useState<AccountOption[]>([])
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
-  const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null)
+  const [selectedAccount, setSelectedAccount] = useState<AccountOption | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetch('/api/owners/search?q=' + encodeURIComponent(search))
+    fetch('/api/accounts/search?q=' + encodeURIComponent(search))
       .then(r => r.json())
-      .then(setOwners)
+      .then(setAccounts)
       .catch(() => {})
   }, [search])
 
@@ -37,18 +36,19 @@ export default function OwnerSelect({ value, onChange }: Props) {
 
   useEffect(() => {
     if (!value) {
-      setSelectedOwner(null)
+      setSelectedAccount(null)
       return
     }
-    // Ensure selected owner label is available even when not in current search results.
-    fetch(`/api/owners/${value}`)
+    fetch(`/api/accounts/${value}`)
       .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then((owner: Owner) => setSelectedOwner(owner))
-      .catch(() => setSelectedOwner(null))
+      .then((a: { id: string; business_name: string }) =>
+        setSelectedAccount({ id: a.id, business_name: a.business_name ?? '—' }),
+      )
+      .catch(() => setSelectedAccount(null))
   }, [value])
 
-  const selected = owners.find(o => o.id === value)
-  const selectedLabel = selected?.name ?? selectedOwner?.name ?? null
+  const selected = accounts.find(o => o.id === value)
+  const selectedLabel = selected?.business_name ?? selectedAccount?.business_name ?? null
 
   return (
     <div ref={ref} className="relative">
@@ -57,7 +57,7 @@ export default function OwnerSelect({ value, onChange }: Props) {
         onClick={() => setOpen(v => !v)}
         className="w-full text-left border border-arctic-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
       >
-        {selectedLabel ? selectedLabel : <span className="text-onix-400">Select owner…</span>}
+        {selectedLabel ? selectedLabel : <span className="text-onix-400">Select account…</span>}
       </button>
       {open && (
         <div className="absolute z-20 mt-1 w-full bg-white border border-arctic-200 rounded shadow-lg max-h-60 overflow-auto">
@@ -67,19 +67,21 @@ export default function OwnerSelect({ value, onChange }: Props) {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search owners…"
+              placeholder="Search accounts…"
               className="w-full border border-arctic-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
             />
           </div>
-          {owners.map(o => (
+          {accounts.map(o => (
             <button
               key={o.id}
               type="button"
-              onClick={() => { onChange(o.id); setOpen(false) }}
+              onClick={() => {
+                onChange(o.id)
+                setOpen(false)
+              }}
               className="w-full text-left px-3 py-2 text-sm hover:bg-arctic-50"
             >
-              <div>{o.name}</div>
-              {o.email && <div className="text-xs text-onix-400">{o.email}</div>}
+              <div>{o.business_name}</div>
             </button>
           ))}
         </div>

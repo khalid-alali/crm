@@ -23,7 +23,8 @@ function shopMatchesQuery(shop: ShopRow, raw: string): boolean {
     shop.name,
     shop.city,
     shop.chain_name,
-    shop.owners?.name,
+    shop.primary_owner_name,
+    shop.accounts?.business_name,
   ]
     .map(f => (f ?? '').toLowerCase())
 
@@ -94,7 +95,7 @@ export default function ShopsPageClient({ title, shops, children }: Props) {
               type="search"
               autoComplete="off"
               spellCheck={false}
-              placeholder="Search name, city, owner, chain..."
+              placeholder="Search name, city, account, owner, chain..."
               value={query}
               onChange={e => setQuery(e.target.value)}
               className="w-full rounded-xl border border-arctic-300 bg-white px-4 py-2.5 text-sm text-onix-950 placeholder:text-onix-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
