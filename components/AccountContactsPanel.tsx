@@ -102,9 +102,9 @@ export default function AccountContactsPanel({
         body: JSON.stringify({
           account_id: accountId,
           location_id,
-          name: form.name || null,
-          email: form.email || null,
-          phone: form.phone || null,
+          name: form.name.trim() || null,
+          email: form.email.trim() || null,
+          phone: form.phone.trim() || null,
           role: form.role,
           is_primary: form.is_primary,
         }),
@@ -132,9 +132,9 @@ export default function AccountContactsPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           location_id,
-          name: form.name || null,
-          email: form.email || null,
-          phone: form.phone || null,
+          name: form.name.trim() || null,
+          email: form.email.trim() || null,
+          phone: form.phone.trim() || null,
           role: form.role,
           is_primary: form.is_primary,
         }),
@@ -278,7 +278,7 @@ export default function AccountContactsPanel({
               onChange={e => setForm(f => ({ ...f, location_id: e.target.value }))}
               className="mt-0.5 w-full rounded border border-arctic-300 px-2 py-1 text-sm"
             >
-              <option value="">All locations (account default)</option>
+              <option value="">All locations</option>
               {locations.map(l => (
                 <option key={l.id} value={l.id}>
                   {l.name}

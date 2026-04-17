@@ -15,6 +15,7 @@ import StateSelect from '@/components/StateSelect'
 import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { LOCATION_SOURCES, formatLocationSource } from '@/lib/location-source'
+import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 
 const PROGRAMS = [
   { key: 'multi_drive', label: 'Multi-Drive' },
@@ -155,6 +156,8 @@ export default function ShopDetailTabs({
     source: shop.source ?? '',
     notes: shop.notes ?? '',
   })
+  const locationPostalCodeError =
+    inlineEdit === 'location' ? getPostalCodeError(inlineDraft.postal_code) : null
 
   useEffect(() => {
     setAssignedTo(normalizeBdrAssignedTo(shop.assigned_to))
@@ -695,10 +698,35 @@ export default function ShopDetailTabs({
                   value={inlineDraft.postal_code}
                   onChange={e => setInlineDraft(d => ({ ...d, postal_code: e.target.value }))}
                   placeholder="Postal"
-                  className="rounded border border-arctic-300 px-2 py-1 text-sm sm:col-span-7"
+                  inputMode="numeric"
+                  maxLength={5}
+                  className={`rounded px-2 py-1 text-sm sm:col-span-7 ${
+                    locationPostalCodeError ? 'border border-red-400' : 'border border-arctic-300'
+                  }`}
                 />
               </div>
-              <button type="button" onClick={() => saveInline({ address_line1: inlineDraft.address_line1, city: inlineDraft.city, state: inlineDraft.state, postal_code: inlineDraft.postal_code })} disabled={inlineSaving} className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60">Save</button>
+              {locationPostalCodeError && (
+                <p className="text-xs text-red-600">{locationPostalCodeError}</p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (locationPostalCodeError) {
+                    setInlineError(locationPostalCodeError)
+                    return
+                  }
+                  void saveInline({
+                    address_line1: inlineDraft.address_line1,
+                    city: inlineDraft.city,
+                    state: inlineDraft.state,
+                    postal_code: normalizePostalCode(inlineDraft.postal_code),
+                  })
+                }}
+                disabled={inlineSaving}
+                className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60"
+              >
+                Save
+              </button>
             </div>
           ) : (
             <div className="text-sm text-onix-800">

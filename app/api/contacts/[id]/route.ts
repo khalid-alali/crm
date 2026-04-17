@@ -20,12 +20,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const updates: Record<string, unknown> = {}
   if ('account_id' in body) updates.account_id = typeof body.account_id === 'string' ? body.account_id : null
   if ('location_id' in body) updates.location_id = typeof body.location_id === 'string' ? body.location_id : null
-  if (typeof body.name === 'string') updates.name = body.name.trim() || null
-  if (typeof body.email === 'string') updates.email = body.email.trim() || null
-  if (typeof body.phone === 'string') updates.phone = body.phone.trim() || null
+  if ('name' in body) updates.name = typeof body.name === 'string' ? body.name.trim() || null : null
+  if ('email' in body) updates.email = typeof body.email === 'string' ? body.email.trim() || null : null
+  if ('phone' in body) updates.phone = typeof body.phone === 'string' ? body.phone.trim() || null : null
   if ('role' in body && isContactRole(body.role)) updates.role = body.role
   if ('is_primary' in body) updates.is_primary = Boolean(body.is_primary)
-  if (typeof body.notes === 'string') updates.notes = body.notes.trim() || null
+  if ('notes' in body) updates.notes = typeof body.notes === 'string' ? body.notes.trim() || null : null
 
   const mergedAccountId =
     (updates.account_id !== undefined ? (updates.account_id as string | null) : existingRow.account_id) ?? null

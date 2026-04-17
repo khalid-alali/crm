@@ -5,6 +5,7 @@ import { geocodeAddress } from '@/lib/geocode'
 import { getAppSession } from '@/lib/app-auth'
 import { normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { upsertLocationShopContact } from '@/lib/contact-sync'
+import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 import { revalidatePath } from 'next/cache'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -57,6 +58,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     fields.assigned_to = normalizeBdrAssignedTo(
       typeof fields.assigned_to === 'string' ? fields.assigned_to : null,
     )
+  }
+
+  if ('postal_code' in fields) {
+    fields.postal_code = normalizePostalCode(fields.postal_code)
+    const postalCodeError = getPostalCodeError(fields.postal_code)
+    if (postalCodeError) {
+      return NextResponse.json({ error: postalCodeError }, { status: 400 })
+    }
   }
 
   if (typeof fields.name === 'string' && fields.name && !('chain_name' in fields)) {

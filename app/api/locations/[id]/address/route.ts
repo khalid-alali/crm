@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { geocodeAddress } from '@/lib/geocode'
 import { getAppSession } from '@/lib/app-auth'
+import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -9,7 +10,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { address_line1, city, state, postal_code } = body
+  const { address_line1, city, state } = body
+  const postal_code = normalizePostalCode(body.postal_code)
+  const postalCodeError = getPostalCodeError(postal_code)
+  if (postalCodeError) {
+    return NextResponse.json({ error: postalCodeError }, { status: 400 })
+  }
 
   const coords = await geocodeAddress({ address_line1, city, state, postal_code })
 

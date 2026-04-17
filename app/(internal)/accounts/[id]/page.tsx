@@ -97,6 +97,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       programCounts={programCounts}
       allowContractDelete={canDeleteContracts(session?.user?.email)}
       missingBusinessName={missingBusinessName}
+      canDeleteAccount={contractRows.length === 0}
     />
   )
 }

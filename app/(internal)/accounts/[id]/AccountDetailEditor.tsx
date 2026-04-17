@@ -12,7 +12,6 @@ interface Account {
 
 function formFromAccount(account: Account) {
   return {
-    business_name: account.business_name ?? '',
     notes: account.notes ?? '',
   }
 }
@@ -28,14 +27,6 @@ export default function AccountDetailEditor({ account }: { account: Account }) {
     if (editing) return
     setForm(formFromAccount(account))
   }, [account, editing])
-
-  function f(name: keyof typeof form) {
-    return {
-      value: form[name],
-      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-        setForm(f => ({ ...f, [name]: e.target.value })),
-    }
-  }
 
   function startEdit() {
     setError('')
@@ -55,7 +46,7 @@ export default function AccountDetailEditor({ account }: { account: Account }) {
       const res = await fetch(`/api/accounts/${account.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ notes: form.notes }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       setEditing(false)
@@ -70,7 +61,7 @@ export default function AccountDetailEditor({ account }: { account: Account }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-medium uppercase tracking-wide text-onix-400">Account</div>
+        <div className="text-xs font-medium uppercase tracking-wide text-onix-400">Account notes</div>
         {!editing && (
           <button
             type="button"
@@ -88,12 +79,13 @@ export default function AccountDetailEditor({ account }: { account: Account }) {
       {editing ? (
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-onix-400">Business name</label>
-            <input {...f('business_name')} className="w-full rounded border border-arctic-300 px-2 py-1 text-sm" />
-          </div>
-          <div>
             <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-onix-400">Notes</label>
-            <textarea {...f('notes')} rows={3} className="w-full rounded border border-arctic-300 px-2 py-1 text-sm" />
+            <textarea
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              rows={4}
+              className="w-full rounded border border-arctic-300 px-2 py-1 text-sm"
+            />
           </div>
           <div className="flex gap-2">
             <button
@@ -116,10 +108,6 @@ export default function AccountDetailEditor({ account }: { account: Account }) {
         </div>
       ) : (
         <div className="space-y-3">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-onix-400">Business name</div>
-            <div className="mt-0.5 text-sm font-medium text-onix-950">{account.business_name?.trim() || '—'}</div>
-          </div>
           <div>
             <div className="text-xs uppercase tracking-wide text-onix-400">Notes</div>
             <div className="mt-0.5 whitespace-pre-wrap text-sm text-onix-800">{account.notes?.trim() ? account.notes : '—'}</div>

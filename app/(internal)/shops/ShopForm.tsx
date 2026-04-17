@@ -6,6 +6,7 @@ import { detectChain, KNOWN_CHAINS } from '@/lib/chain-detect'
 import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { LOCATION_SOURCES, formatLocationSource } from '@/lib/location-source'
+import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 import AccountSelect from '@/components/AccountSelect'
 import StateSelect from '@/components/StateSelect'
 
@@ -56,7 +57,8 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
   const isNew = !locationId
   const [accountChoice, setAccountChoice] = useState<'existing' | 'new'>('existing')
   const [newAccount, setNewAccount] = useState({
-    name: '',
+    business_name: '',
+    primary_contact_name: '',
     email: '',
     phone: '',
   })
@@ -68,6 +70,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
     phone: string
   } | null>(null)
   const [accountFetchFailed, setAccountFetchFailed] = useState(false)
+  const postalCodeError = getPostalCodeError(form.postal_code)
 
   useEffect(() => {
     if (!primarySameAsAccount || !form.account_id || (isNew && accountChoice === 'new')) {
@@ -113,7 +116,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
     if (isNew && accountChoice === 'new') {
       setForm(f => ({
         ...f,
-        primary_contact_name: newAccount.name,
+        primary_contact_name: newAccount.primary_contact_name,
         primary_contact_email: newAccount.email,
         primary_contact_phone: newAccount.phone,
       }))
@@ -130,7 +133,8 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
     primarySameAsAccount,
     isNew,
     accountChoice,
-    newAccount.name,
+    newAccount.business_name,
+    newAccount.primary_contact_name,
     newAccount.email,
     newAccount.phone,
     accountDetails,
@@ -164,19 +168,34 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
           setSaving(false)
           return
         }
-        if (accountChoice === 'new' && !newAccount.name.trim()) {
-          setError('Account / primary contact name is required.')
+        if (accountChoice === 'new' && !newAccount.business_name.trim()) {
+          setError('Business / account name is required.')
+          setSaving(false)
+          return
+        }
+        if (accountChoice === 'new' && !newAccount.primary_contact_name.trim()) {
+          setError('Primary contact name is required.')
           setSaving(false)
           return
         }
       }
+      if (postalCodeError) {
+        setError(postalCodeError)
+        setSaving(false)
+        return
+      }
       const url = locationId ? `/api/locations/${locationId}` : '/api/locations'
       const method = locationId ? 'PATCH' : 'POST'
-      const payload: Record<string, unknown> = { ...form, programStatuses }
+      const payload: Record<string, unknown> = {
+        ...form,
+        postal_code: normalizePostalCode(form.postal_code),
+        programStatuses,
+      }
       if (isNew && accountChoice === 'new') {
         payload.account_id = null
         payload.newAccount = {
-          name: newAccount.name.trim(),
+          business_name: newAccount.business_name.trim(),
+          primary_contact_name: newAccount.primary_contact_name.trim(),
           email: newAccount.email.trim() || undefined,
           phone: newAccount.phone.trim() || undefined,
         }
@@ -277,11 +296,20 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
                 <div className="space-y-3 border-l-2 border-arctic-200 ml-1.5 pl-4">
                   <div>
                     <label className="block text-xs font-medium text-onix-600 mb-1">
-                      Business / account name * <span className="text-onix-400">(also used for primary contact)</span>
+                      Business / account name *
                     </label>
                     <input
-                      value={newAccount.name}
-                      onChange={e => setNewAccount(o => ({ ...o, name: e.target.value }))}
+                      value={newAccount.business_name}
+                      onChange={e => setNewAccount(o => ({ ...o, business_name: e.target.value }))}
+                      required={accountChoice === 'new'}
+                      className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-onix-600 mb-1">Primary contact name *</label>
+                    <input
+                      value={newAccount.primary_contact_name}
+                      onChange={e => setNewAccount(o => ({ ...o, primary_contact_name: e.target.value }))}
                       required={accountChoice === 'new'}
                       className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
                     />
@@ -337,7 +365,15 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
           </div>
           <div>
             <label className="block text-xs font-medium text-onix-600 mb-1">Postal Code</label>
-            <input {...f('postal_code')} className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm" />
+            <input
+              {...f('postal_code')}
+              inputMode="numeric"
+              maxLength={5}
+              className={`w-full rounded px-3 py-1.5 text-sm ${
+                postalCodeError ? 'border border-red-400' : 'border border-arctic-300'
+              }`}
+            />
+            {postalCodeError && <p className="mt-1 text-xs text-red-600">{postalCodeError}</p>}
           </div>
         </div>
       </section>

@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Loader2, Trash2 } from 'lucide-react'
+import { Loader2, Pencil, Trash2 } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import ChainBadge from '@/components/ChainBadge'
 import ProgramBadge from '@/components/ProgramBadge'
@@ -11,6 +11,7 @@ import StateSelect from '@/components/StateSelect'
 import AccountDetailEditor from './AccountDetailEditor'
 import AccountContactsPanel from '@/components/AccountContactsPanel'
 import { contractStatusBadgeClass, contractStatusLabel } from '@/lib/contract-status-display'
+import DeleteAccountButton from '@/components/DeleteAccountButton'
 
 const TABS = ['activity', 'contracts', 'programs'] as const
 type TabKey = (typeof TABS)[number]
@@ -81,6 +82,7 @@ export default function AccountDetailShell({
   programCounts,
   allowContractDelete = false,
   missingBusinessName = false,
+  canDeleteAccount = false,
 }: {
   account: AccountRow
   locations: LocationRow[]
@@ -89,11 +91,16 @@ export default function AccountDetailShell({
   programCounts: Record<string, number>
   allowContractDelete?: boolean
   missingBusinessName?: boolean
+  canDeleteAccount?: boolean
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<TabKey>('activity')
   const [deletingContractId, setDeletingContractId] = useState<string | null>(null)
   const [contractDeleteError, setContractDeleteError] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(account.business_name ?? '')
+  const [nameSaving, setNameSaving] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
   const [addingLoc, setAddingLoc] = useState(false)
   const [locSaving, setLocSaving] = useState(false)
   const [locError, setLocError] = useState('')
@@ -107,6 +114,10 @@ export default function AccountDetailShell({
 
   const activeEnrollmentTotal = Object.values(programCounts).reduce((a, b) => a + b, 0)
   const distinctStatuses = [...new Set(locations.map(l => l.status))]
+
+  useEffect(() => {
+    if (!editingName) setNameDraft(account.business_name ?? '')
+  }, [account.business_name, editingName])
 
   async function createLocation(e: React.FormEvent) {
     e.preventDefault()
@@ -164,6 +175,31 @@ export default function AccountDetailShell({
     }
   }
 
+  async function saveAccountName() {
+    const trimmed = nameDraft.trim()
+    if (!trimmed) {
+      setNameError('Account name is required.')
+      return
+    }
+    setNameSaving(true)
+    setNameError(null)
+    try {
+      const res = await fetch(`/api/accounts/${account.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business_name: trimmed }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Failed to update account name')
+      setEditingName(false)
+      router.refresh()
+    } catch (err: unknown) {
+      setNameError(err instanceof Error ? err.message : 'Failed to update account name')
+    } finally {
+      setNameSaving(false)
+    }
+  }
+
   return (
     <div className="p-6 max-w-6xl">
       <div className="mb-3 text-sm text-onix-600">
@@ -185,10 +221,61 @@ export default function AccountDetailShell({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <h1 className="text-xl font-semibold text-onix-900">{account.business_name}</h1>
-                <p className="mt-0.5 text-xs text-onix-500">Account record</p>
+              <div className="min-w-0">
+                {editingName ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={nameDraft}
+                      onChange={e => setNameDraft(e.target.value)}
+                      className="w-full max-w-xl rounded-md border border-arctic-300 px-2.5 py-1.5 text-xl font-semibold text-onix-900"
+                      aria-label="Account name"
+                      disabled={nameSaving}
+                    />
+                    <button
+                      type="button"
+                      onClick={saveAccountName}
+                      disabled={nameSaving}
+                      className="rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                    >
+                      {nameSaving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingName(false)
+                        setNameDraft(account.business_name ?? '')
+                        setNameError(null)
+                      }}
+                      disabled={nameSaving}
+                      className="rounded-md border border-arctic-300 bg-white px-2.5 py-1.5 text-xs font-medium text-onix-700 hover:bg-arctic-50 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-xl font-semibold text-onix-900">{account.business_name}</h1>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingName(true)
+                        setNameError(null)
+                      }}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded text-onix-400 hover:bg-arctic-100 hover:text-onix-700"
+                      aria-label="Edit account name"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </div>
+                )}
+                {nameError && <p className="mt-1 text-xs text-red-600">{nameError}</p>}
               </div>
+              <DeleteAccountButton
+                accountId={account.id}
+                accountName={account.business_name}
+                canDelete={canDeleteAccount}
+                className="rounded-lg border border-red-500 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:border-arctic-300 disabled:text-onix-400 disabled:hover:bg-white"
+              />
             </div>
           </div>
         </div>
