@@ -13,7 +13,7 @@ import AccountSelect from '@/components/AccountSelect'
 import LocationContactsSection from '@/components/LocationContactsSection'
 import StateSelect from '@/components/StateSelect'
 import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
-import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
+import { LOCATION_STATUS_LABELS, formatBulkPipelineStatusLogBody } from '@/lib/location-status-labels'
 import { LOCATION_SOURCES, formatLocationSource } from '@/lib/location-source'
 import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 
@@ -853,7 +853,11 @@ export default function ShopDetailTabs({
                       <span className="ml-auto text-xs text-onix-400">{fmtDate(entry.created_at)}</span>
                     </div>
                     {entry.subject && <div className="text-sm font-medium text-onix-800">{entry.subject}</div>}
-                    {entry.body && <div className="mt-1 whitespace-pre-wrap text-sm text-onix-700">{entry.body}</div>}
+                    {entry.body && (
+                      <div className="mt-1 whitespace-pre-wrap text-sm text-onix-700">
+                        {formatBulkPipelineStatusLogBody(entry.body)}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

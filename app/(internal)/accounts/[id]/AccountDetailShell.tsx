@@ -12,6 +12,7 @@ import AccountDetailEditor from './AccountDetailEditor'
 import AccountContactsPanel from '@/components/AccountContactsPanel'
 import { contractStatusBadgeClass, contractStatusLabel } from '@/lib/contract-status-display'
 import DeleteAccountButton from '@/components/DeleteAccountButton'
+import { formatBulkPipelineStatusLogBody } from '@/lib/location-status-labels'
 
 const TABS = ['activity', 'contracts', 'programs'] as const
 type TabKey = (typeof TABS)[number]
@@ -473,7 +474,9 @@ export default function AccountDetailShell({
                       </div>
                       {entry.subject && <div className="text-sm font-medium text-onix-800">{entry.subject}</div>}
                       {entry.body && (
-                        <div className="mt-1 whitespace-pre-wrap text-sm text-onix-700">{entry.body}</div>
+                        <div className="mt-1 whitespace-pre-wrap text-sm text-onix-700">
+                          {formatBulkPipelineStatusLogBody(entry.body)}
+                        </div>
                       )}
                     </div>
                   ))

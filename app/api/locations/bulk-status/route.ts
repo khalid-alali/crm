@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
+import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 
 const ALLOWED_STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive'] as const
 type PipelineStatus = (typeof ALLOWED_STATUSES)[number]
@@ -83,11 +84,12 @@ export async function POST(req: NextRequest) {
   }
 
   const sentBy = session.user?.email ?? 'unknown'
+  const label = (s: string) => LOCATION_STATUS_LABELS[s] ?? s
   const logRows = toUpdate.map(r => ({
     location_id: r.id,
     type: 'status_change' as const,
     subject: 'Pipeline status (bulk)',
-    body: `Bulk update: ${r.status} → ${nextStatus}`,
+    body: `Bulk update: ${label(r.status)} → ${label(nextStatus)}`,
     sent_by: sentBy,
   }))
 
