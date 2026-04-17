@@ -13,6 +13,15 @@ const nextConfig = {
   },
   // Prefer this repo as tracing root when a parent directory has another lockfile (e.g. pnpm).
   outputFileTracingRoot: path.join(__dirname),
+  // Next.js NFT does not follow @duckdb/node-bindings' dynamic require() of the
+  // platform package (e.g. linux-x64 on Vercel). Without this, prod lambdas 500
+  // immediately while local dev (darwin) still works.
+  outputFileTracingIncludes: {
+    '/*': [
+      './node_modules/@duckdb/node-bindings-linux-x64/**/*',
+      './node_modules/@duckdb/node-bindings-linux-arm64/**/*',
+    ],
+  },
   // Next 15: DuckDB native bindings must not be webpack-bundled.
   serverExternalPackages: ['@duckdb/node-api', '@duckdb/node-bindings'],
   webpack: (config, { isServer }) => {

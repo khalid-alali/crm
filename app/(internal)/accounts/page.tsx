@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import AccountsTable, { type AccountListRow } from '@/components/AccountsTable'
 import { supabaseAdmin } from '@/lib/supabase'
 import { attachPrimaryContactsToAccounts } from '@/lib/primary-contact'
@@ -36,7 +37,15 @@ export default async function AccountsPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-lg font-semibold mb-4">Accounts</h1>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h1 className="text-lg font-semibold">Accounts</h1>
+        <Link
+          href="/accounts/new"
+          className="shrink-0 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+        >
+          Add account
+        </Link>
+      </div>
       <AccountsTable accounts={accounts} />
     </div>
   )

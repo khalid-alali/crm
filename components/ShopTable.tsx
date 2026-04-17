@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import StatusBadge from './StatusBadge'
@@ -27,6 +27,14 @@ export interface ShopRow {
 
 interface Props {
   shops: ShopRow[]
+  /** When set, first column is row checkboxes + header “select all visible”. */
+  selection?: {
+    selectedIds: Set<string>
+    onToggleRow: (id: string) => void
+    onToggleAllVisible: () => void
+    allVisibleSelected: boolean
+    someVisibleSelected: boolean
+  }
 }
 
 type SortColumn = 'shop' | 'primaryOwner' | 'location' | 'status' | 'programs' | 'lastActivity'
@@ -53,10 +61,17 @@ function sortPrograms(enrollments: ShopRow['program_enrollments']) {
   return `${activePrograms.length.toString().padStart(2, '0')}:${activePrograms.join(',')}`
 }
 
-export default function ShopTable({ shops }: Props) {
+export default function ShopTable({ shops, selection }: Props) {
   const router = useRouter()
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const headerCheckboxRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const el = headerCheckboxRef.current
+    if (!el) return
+    el.indeterminate = Boolean(selection?.someVisibleSelected && !selection?.allVisibleSelected)
+  }, [selection?.allVisibleSelected, selection?.someVisibleSelected])
 
   const sortedShops = useMemo(() => {
     if (!sortColumn) return shops
@@ -121,6 +136,22 @@ export default function ShopTable({ shops }: Props) {
     <table className="min-w-full divide-y divide-arctic-200 text-sm">
       <thead className="bg-arctic-50">
         <tr>
+          {selection && (
+            <th
+              scope="col"
+              className="sticky z-10 w-10 border-b border-arctic-200 bg-arctic-50 px-2 py-2 text-left shadow-[0_1px_0_0_rgb(229_231_235)]"
+              style={{ top: 'var(--pipeline-toolbar-height, 12rem)' }}
+            >
+              <input
+                ref={headerCheckboxRef}
+                type="checkbox"
+                className="h-4 w-4 rounded border-arctic-300 text-brand-600 focus:ring-brand-500"
+                checked={selection.allVisibleSelected && shops.length > 0}
+                onChange={() => selection.onToggleAllVisible()}
+                aria-label="Select all shops in this list"
+              />
+            </th>
+          )}
           {SORTABLE_HEADERS.map(header => (
             <th
               key={header.key}
@@ -155,6 +186,20 @@ export default function ShopTable({ shops }: Props) {
               className="hover:bg-arctic-50 cursor-pointer"
               onClick={() => router.push(`/shops/${shop.id}`)}
             >
+              {selection && (
+                <td
+                  className="px-2 py-2.5"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-arctic-300 text-brand-600 focus:ring-brand-500"
+                    checked={selection.selectedIds.has(shop.id)}
+                    onChange={() => selection.onToggleRow(shop.id)}
+                    aria-label={`Select ${shop.name}`}
+                  />
+                </td>
+              )}
               <td className="px-4 py-2.5">
                 <Link
                   href={`/shops/${shop.id}`}
@@ -195,7 +240,7 @@ export default function ShopTable({ shops }: Props) {
           ))}
           {sortedShops.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-8 text-center text-onix-400">No shops found.</td>
+              <td colSpan={selection ? 8 : 7} className="px-4 py-8 text-center text-onix-400">No shops found.</td>
             </tr>
           )}
       </tbody>

@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import StatusBadge from '@/components/StatusBadge'
 import ChainBadge from '@/components/ChainBadge'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
+import { US_STATE_CODES_SET, US_STATE_OPTIONS } from '@/lib/us-states'
+import { US_CONTINENTAL_BOUNDS, US_STATE_BOUNDS } from '@/lib/us-state-map-bounds'
 
 const STATUS_COLORS: Record<string, string> = {
   lead: '#6D6E70',
@@ -18,6 +20,8 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
+/** Statuses shown in the map filter (churned is toggled separately). */
+const MAP_FILTER_STATUSES = STATUSES.filter(s => s !== 'inactive')
 
 interface Location {
   id: string
@@ -40,8 +44,28 @@ function toLngLat(loc: Location): [number, number] | null {
   return [lng, lat]
 }
 
-function featureCollection(locs: Location[], filterStatus: string): GeoJSON.FeatureCollection {
-  const list = filterStatus ? locs.filter(l => l.status === filterStatus) : locs
+function normalizeStateCode(raw: string | null): string | null {
+  if (!raw) return null
+  const t = raw.trim().toUpperCase()
+  return US_STATE_CODES_SET.has(t) ? t : null
+}
+
+function getVisibleLocations(locs: Location[], filterStatus: string, showChurned: boolean): Location[] {
+  if (filterStatus) {
+    return locs.filter(l => l.status === filterStatus)
+  }
+  if (!showChurned) {
+    return locs.filter(l => l.status !== 'inactive')
+  }
+  return locs
+}
+
+function featureCollection(
+  locs: Location[],
+  filterStatus: string,
+  showChurned: boolean,
+): GeoJSON.FeatureCollection {
+  const list = getVisibleLocations(locs, filterStatus, showChurned)
   const features: GeoJSON.Feature[] = list.flatMap(loc => {
     const ll = toLngLat(loc)
     if (!ll) return []
@@ -62,18 +86,53 @@ export default function MapView({ locations }: { locations: Location[] }) {
   const locationsRef = useRef(locations)
   locationsRef.current = locations
   const filterStatusRef = useRef('')
+  const showChurnedRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<Location | null>(null)
   const [filterStatus, setFilterStatus] = useState('')
   filterStatusRef.current = filterStatus
+  const [showChurned, setShowChurned] = useState(false)
+  showChurnedRef.current = showChurned
+  const [mapJump, setMapJump] = useState('')
   const [geocoding, setGeocoding] = useState(false)
   const [geocodeResult, setGeocodeResult] = useState<string | null>(null)
 
-  const scoped = filterStatus ? locations.filter(l => l.status === filterStatus) : locations
+  const scoped = useMemo(
+    () => getVisibleLocations(locations, filterStatus, showChurned),
+    [locations, filterStatus, showChurned],
+  )
   const pinsShown = scoped.filter(l => toLngLat(l) != null).length
-  const pinsOnMapAll = locations.filter(l => toLngLat(l) != null).length
-  const missingCoords = locations.length - pinsOnMapAll
-  const geocodeCandidates = locations.filter(l => toLngLat(l) == null && l.address_line1?.trim()).length
+  const missingCoords = scoped.length - pinsShown
+  const geocodeCandidates = scoped.filter(l => toLngLat(l) == null && l.address_line1?.trim()).length
+  const nonChurnedCount = useMemo(
+    () => locations.filter(l => l.status !== 'inactive').length,
+    [locations],
+  )
+  const churnedCount = useMemo(() => locations.filter(l => l.status === 'inactive').length, [locations])
+  const allRowCount = showChurned ? locations.length : nonChurnedCount
+
+  const stateCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const loc of scoped) {
+      const code = normalizeStateCode(loc.state)
+      if (!code) continue
+      m.set(code, (m.get(code) ?? 0) + 1)
+    }
+    return m
+  }, [scoped])
+
+  const statePickerOptions = useMemo(() => {
+    return US_STATE_OPTIONS.filter(({ code }) => (stateCounts.get(code) ?? 0) > 0)
+  }, [stateCounts])
+
+  useEffect(() => {
+    if (!mapJump) return
+    if (!statePickerOptions.some(o => o.code === mapJump)) setMapJump('')
+  }, [mapJump, statePickerOptions])
+
+  useEffect(() => {
+    if (selected && !scoped.some(l => l.id === selected.id)) setSelected(null)
+  }, [selected, scoped])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -90,7 +149,11 @@ export default function MapView({ locations }: { locations: Location[] }) {
     mapRef.current = map
 
     map.on('load', () => {
-      const data = featureCollection(locationsRef.current, filterStatusRef.current)
+      const data = featureCollection(
+        locationsRef.current,
+        filterStatusRef.current,
+        showChurnedRef.current,
+      )
       map.addSource('locations', {
         type: 'geojson',
         data,
@@ -146,8 +209,31 @@ export default function MapView({ locations }: { locations: Location[] }) {
     if (!map?.isStyleLoaded()) return
     const source = map.getSource('locations') as mapboxgl.GeoJSONSource | undefined
     if (!source) return
-    source.setData(featureCollection(locations, filterStatus))
-  }, [locations, filterStatus])
+    source.setData(featureCollection(locations, filterStatus, showChurned))
+  }, [locations, filterStatus, showChurned])
+
+  function flyMapToArea(code: string) {
+    const map = mapRef.current
+    if (!map) return
+    const apply = () => {
+      if (!code) {
+        map.fitBounds(US_CONTINENTAL_BOUNDS, { padding: 28, duration: 1100, maxZoom: 4.5 })
+        return
+      }
+      const b = US_STATE_BOUNDS[code]
+      if (!b) return
+      const maxZoom = code === 'AK' || code === 'HI' ? 5.5 : 8
+      map.fitBounds(
+        [
+          [b[0], b[1]],
+          [b[2], b[3]],
+        ],
+        { padding: 44, duration: 1100, maxZoom },
+      )
+    }
+    if (map.isStyleLoaded()) apply()
+    else map.once('load', apply)
+  }
 
   async function handleGeocodeAll() {
     setGeocoding(true)
@@ -167,7 +253,7 @@ export default function MapView({ locations }: { locations: Location[] }) {
   return (
     <div className="flex-1 flex relative">
       {/* Sidebar */}
-      <div className="w-52 bg-white border-r border-arctic-200 p-3 flex flex-col gap-3 z-10">
+      <div className="w-56 bg-white border-r border-arctic-200 p-3 flex flex-col gap-3 z-10">
         <div>
           <label className="block text-xs font-medium text-onix-600 mb-1">Filter by status</label>
           <select
@@ -175,8 +261,8 @@ export default function MapView({ locations }: { locations: Location[] }) {
             onChange={e => setFilterStatus(e.target.value)}
             className="w-full border border-arctic-300 rounded px-2 py-1 text-sm"
           >
-            <option value="">All ({locations.length})</option>
-            {STATUSES.map(s => {
+            <option value="">All ({allRowCount})</option>
+            {MAP_FILTER_STATUSES.map(s => {
               const cnt = locations.filter(l => l.status === s).length
               return (
                 <option key={s} value={s}>
@@ -185,21 +271,69 @@ export default function MapView({ locations }: { locations: Location[] }) {
               )
             })}
           </select>
+          <label
+            className={`mt-2 flex items-center gap-2 text-xs ${
+              filterStatus ? 'text-onix-400 cursor-not-allowed' : 'text-onix-700 cursor-pointer'
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="rounded border-arctic-300"
+              checked={showChurned}
+              disabled={Boolean(filterStatus)}
+              onChange={e => setShowChurned(e.target.checked)}
+            />
+            <span>Show churned ({churnedCount})</span>
+          </label>
+          {filterStatus ? (
+            <p className="text-[11px] text-onix-500 mt-1">Churned toggle applies in &quot;All&quot; view only.</p>
+          ) : null}
           <p className="text-xs text-onix-600 mt-1.5 leading-snug">
             {filterStatus
               ? `${pinsShown} on map for this status (${scoped.length} in status)`
-              : `${pinsShown} on map of ${locations.length} shops`}
-            {!filterStatus && missingCoords > 0 ? ` · ${missingCoords} lack coordinates` : null}
-            {!filterStatus && geocodeCandidates > 0 ? ` · ${geocodeCandidates} with address to geocode` : null}
+              : `${pinsShown} on map of ${allRowCount} shops`}
+            {missingCoords > 0 ? ` · ${missingCoords} lack coordinates` : null}
+            {geocodeCandidates > 0 ? ` · ${geocodeCandidates} with address to geocode` : null}
           </p>
         </div>
+        <div>
+          <label className="block text-xs font-medium text-onix-600 mb-1">Jump to state</label>
+          <select
+            value={mapJump}
+            onChange={e => {
+              const code = e.target.value
+              setMapJump(code)
+              flyMapToArea(code)
+            }}
+            className="w-full border border-arctic-300 rounded px-2 py-1 text-sm"
+          >
+            <option value="">— Select state —</option>
+            {statePickerOptions.map(({ code, name }) => (
+              <option key={code} value={code}>
+                {name} ({stateCounts.get(code)})
+              </option>
+            ))}
+          </select>
+          {statePickerOptions.length === 0 ? (
+            <p className="text-[11px] text-onix-500 mt-1">No shops with a US state in this view.</p>
+          ) : null}
+        </div>
         <div className="space-y-1.5">
-          {STATUSES.map(s => (
+          {MAP_FILTER_STATUSES.map(s => (
             <div key={s} className="flex items-center gap-2 text-xs">
               <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_COLORS[s] }} />
               <span className="text-onix-600">{LOCATION_STATUS_LABELS[s]}</span>
             </div>
           ))}
+          {showChurned && !filterStatus ? (
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ backgroundColor: STATUS_COLORS.inactive }}
+              />
+              <span className="text-onix-600">{LOCATION_STATUS_LABELS.inactive}</span>
+            </div>
+          ) : null}
         </div>
         {locations.length === 0 && (
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
@@ -224,7 +358,7 @@ export default function MapView({ locations }: { locations: Location[] }) {
 
       {/* Popup */}
       {selected && (
-        <div className="absolute bottom-6 left-60 bg-white border border-arctic-200 rounded-lg shadow-lg p-4 w-64 z-20">
+        <div className="absolute bottom-6 left-64 bg-white border border-arctic-200 rounded-lg shadow-lg p-4 w-64 z-20">
           <button
             type="button"
             onClick={() => setSelected(null)}
