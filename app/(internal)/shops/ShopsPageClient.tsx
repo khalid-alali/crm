@@ -39,10 +39,12 @@ function shopMatchesQuery(shop: ShopRow, raw: string): boolean {
 interface Props {
   title: string
   shops: ShopRow[]
+  /** Current pipeline status URL filter (e.g. inactive = Churned). */
+  pipelineStatusFilter?: string
   children: ReactNode
 }
 
-export default function ShopsPageClient({ title, shops, children }: Props) {
+export default function ShopsPageClient({ title, shops, pipelineStatusFilter, children }: Props) {
   const router = useRouter()
   const [query, setQuery] = useState('')
   const stickyToolbarRef = useRef<HTMLDivElement>(null)
@@ -237,6 +239,7 @@ export default function ShopsPageClient({ title, shops, children }: Props) {
       <div className="bg-white border border-arctic-200 rounded-lg">
         <ShopTable
           shops={filtered}
+          showDisqualifiedReasonColumn={pipelineStatusFilter === 'inactive'}
           selection={{
             selectedIds,
             onToggleRow: toggleRow,

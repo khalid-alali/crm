@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPortalToken } from '@/lib/portal-token'
 import { supabaseAdmin } from '@/lib/supabase'
-import { geocodeAddress } from '@/lib/geocode'
+import { geocodeAddress, stateFieldIsEmpty } from '@/lib/geocode'
 import { upsertLocationShopContact } from '@/lib/contact-sync'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -29,6 +29,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     update.lat = coords.lat
     update.lng = coords.lng
     update.geocoded_at = new Date().toISOString()
+    update.county = coords.county
+    if (coords.state && stateFieldIsEmpty(state)) {
+      update.state = coords.state
+    }
   }
 
   const { error } = await supabaseAdmin.from('locations').update(update).eq('id', locationId)

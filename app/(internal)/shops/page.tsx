@@ -34,6 +34,7 @@ interface SearchParams {
   state?: string
   assigned_to?: string
   program?: string
+  disqualified_reason?: string
 }
 
 const PIPELINE_LOCATION_SELECT = `
@@ -80,7 +81,8 @@ export default async function ShopsPage({
     sp.status ||
       sp.chain ||
       sp.state ||
-      sp.assigned_to,
+      sp.assigned_to ||
+      sp.disqualified_reason,
   )
 
   const metaQuery = supabaseAdmin.from('locations').select('status, chain_name')
@@ -96,6 +98,11 @@ export default async function ShopsPage({
       .order('updated_at', { ascending: false })
     if (sp.status) {
       listQuery = listQuery.eq('status', sp.status)
+      if (sp.status === 'inactive' && sp.disqualified_reason) {
+        listQuery = listQuery.eq('disqualified_reason', sp.disqualified_reason)
+      }
+    } else if (sp.disqualified_reason) {
+      listQuery = listQuery.eq('status', 'inactive').eq('disqualified_reason', sp.disqualified_reason)
     } else {
       // "All" view should hide churned (inactive) by default.
       listQuery = listQuery.neq('status', 'inactive')
@@ -132,7 +139,7 @@ export default async function ShopsPage({
 
   return (
     <div className="p-6">
-      <ShopsPageClient title="Pipeline" shops={shops as any}>
+      <ShopsPageClient title="Pipeline" shops={shops as any} pipelineStatusFilter={sp.status}>
         <ShopsFilters
           statuses={[...STATUSES]}
           statusLabels={LOCATION_STATUS_LABELS}

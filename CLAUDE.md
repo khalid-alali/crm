@@ -233,10 +233,17 @@ app/
     auth/[...nextauth]/route.ts
     webhooks/zohosign/route.ts
     email/send/route.ts
+    portal/
+      generate-token/route.ts   -- session auth; mints JWT for shop portal
+      location/route.ts         -- public; GET ?token= for portal prefill
+      submit-capabilities/route.ts -- public; saves capabilities + pipeline rule
+      [token]/update/route.ts   -- public; legacy address/contact updates
     geocode/route.ts
     accounts/               -- account CRUD + search
     contacts/               -- contact CRUD (query by account_id or location_id)
 components/
+  shop-detail/
+    CapabilitiesSection.tsx -- shop detail: submitted capabilities or empty state
   ShopTable.tsx
   StatusBadge.tsx
   ChainBadge.tsx
@@ -458,20 +465,13 @@ The Zoho Sign request ID is stored in `contracts.zoho_sign_request_id`. If your 
 
 ## Shop portal (`/portal/[token]`)
 
-Public route — no auth. Token is a signed JWT containing `locationId`, 7-day expiry.
+Public route — no NextAuth session. Shop-facing auth is a signed JWT (`PORTAL_JWT_SECRET`).
 
-```typescript
-// lib/portal-token.ts
-import jwt from 'jsonwebtoken'
+**Capabilities intake (primary):** BDRs mint a link via `POST /api/portal/generate-token` (requires session). JWT payload is `{ locationId, type: 'portal' }`, **30-day** expiry (`signCapabilitiesPortalToken` in `lib/portal-token.ts`). The portal page loads data with `GET /api/portal/location?token=…` and submits with `POST /api/portal/submit-capabilities`. Submissions write eight columns on `locations` (`bar_license_number`, `hours_of_operation`, `standard_warranty`, `total_techs`, `allocated_techs`, `daily_appointment_capacity`, `weekly_appointment_capacity`, `capabilities_submitted_at`), append an `activity_log` note (`sent_by: portal`), and if the location was **`contacted`**, auto-advance to **`in_review`** with a `status_change` log row. BAR license is collected only when `state` is CA. This flow replaces the old Fillout form; the intro email template uses `{{portal_url}}`, filled at send time after `generate-token`.
 
-export const generatePortalToken = (locationId: string) =>
-  jwt.sign({ locationId }, process.env.PORTAL_JWT_SECRET!, { expiresIn: '7d' })
+**Legacy address/contact updates:** `POST /api/portal/[token]/update` still uses `verifyPortalToken`, which accepts older JWTs that only had `locationId` (no `type`) in addition to `type: 'portal'`.
 
-export const verifyPortalToken = (token: string) =>
-  jwt.verify(token, process.env.PORTAL_JWT_SECRET!) as { locationId: string }
-```
-
-Portal shows: shop name (read-only), editable address (geocodes on save), editable contact info, read-only program enrollments, "Confirm info is correct" button. All saves log to `comms_log` as `address_update`.
+**Middleware:** Paths under `/portal` and `/api/portal` are excluded from the NextAuth edge matcher so shop owners are not forced through Google sign-in; internal-only routes still check `getAppSession` in the handler.
 
 ---
 

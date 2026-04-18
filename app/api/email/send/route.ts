@@ -3,6 +3,7 @@ import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
 import { firstNameLocalFromSessionUser, notificationsFrom } from '@/lib/resend-notifications'
+import { htmlToPlainText } from '@/lib/email-html'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -10,10 +11,36 @@ export async function POST(req: NextRequest) {
   const session = await getAppSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { locationId, to, subject, body, template, fromShopDetail } = await req.json()
+  const body = await req.json()
+  const {
+    locationId,
+    to,
+    subject,
+    bodyHtml,
+    body: bodyPlainLegacy,
+    template,
+    fromShopDetail,
+  } = body as {
+    locationId?: string
+    to?: string
+    subject?: string
+    bodyHtml?: string
+    body?: string
+    template?: string
+    fromShopDetail?: boolean
+  }
 
-  if (!locationId || !to || !subject || !body) {
+  const htmlRaw = typeof bodyHtml === 'string' ? bodyHtml.trim() : ''
+  const plainLegacy = typeof bodyPlainLegacy === 'string' ? bodyPlainLegacy.trim() : ''
+
+  if (!locationId || !to || !subject) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+
+  const useHtml = htmlRaw.length > 0
+  const plainForSend = useHtml ? htmlToPlainText(htmlRaw) : plainLegacy
+  if (!plainForSend) {
+    return NextResponse.json({ error: 'Missing email body' }, { status: 400 })
   }
 
   const replyTo = session.user?.email?.trim()
@@ -30,7 +57,7 @@ export async function POST(req: NextRequest) {
     to,
     replyTo,
     subject,
-    text: body,
+    ...(useHtml ? { html: htmlRaw, text: plainForSend } : { text: plainForSend }),
   })
 
   if (sendError) {
@@ -39,10 +66,9 @@ export async function POST(req: NextRequest) {
 
   const activityBody =
     fromShopDetail && template === 'intro'
-      ? `${body}\n\n— Sent from shop detail (Email)`
-      : body
+      ? `${plainForSend}\n\n— Sent from shop detail (Email)`
+      : plainForSend
 
-  // Log to activity_log
   await supabaseAdmin.from('activity_log').insert({
     location_id: locationId,
     type: 'email',
@@ -52,7 +78,6 @@ export async function POST(req: NextRequest) {
     sent_by: session.user?.email ?? 'unknown',
   })
 
-  // Auto-advance status
   if (template === 'intro') {
     await supabaseAdmin
       .from('locations')

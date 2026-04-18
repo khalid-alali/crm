@@ -7,6 +7,7 @@ import StatusBadge from './StatusBadge'
 import ProgramBadge from './ProgramBadge'
 import LastActivityCell from './LastActivityCell'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
+import { DISQUALIFIED_REASON_LABELS, type DisqualifiedReason } from '@/lib/location-outcome-reasons'
 
 export interface ShopRow {
   id: string
@@ -16,6 +17,7 @@ export interface ShopRow {
   city: string | null
   state: string | null
   status: string
+  disqualified_reason?: string | null
   assigned_to: string | null
   created_at: string
   last_activity_at: string | null
@@ -27,6 +29,8 @@ export interface ShopRow {
 
 interface Props {
   shops: ShopRow[]
+  /** When viewing Churned pipeline rows, show disqualified reason column. */
+  showDisqualifiedReasonColumn?: boolean
   /** When set, first column is row checkboxes + header “select all visible”. */
   selection?: {
     selectedIds: Set<string>
@@ -37,14 +41,15 @@ interface Props {
   }
 }
 
-type SortColumn = 'shop' | 'primaryOwner' | 'location' | 'status' | 'programs' | 'lastActivity'
+type SortColumn = 'shop' | 'primaryOwner' | 'location' | 'status' | 'disqualified' | 'programs' | 'lastActivity'
 type SortDirection = 'asc' | 'desc'
 
-const SORTABLE_HEADERS: { key: SortColumn; label: string }[] = [
+const BASE_SORTABLE_HEADERS: { key: SortColumn; label: string }[] = [
   { key: 'shop', label: 'Shop' },
   { key: 'primaryOwner', label: 'Owner' },
   { key: 'location', label: 'Location' },
   { key: 'status', label: 'Status' },
+  { key: 'disqualified', label: 'Disqualified reason' },
   { key: 'programs', label: 'Programs' },
   { key: 'lastActivity', label: 'Last activity' },
 ]
@@ -61,17 +66,34 @@ function sortPrograms(enrollments: ShopRow['program_enrollments']) {
   return `${activePrograms.length.toString().padStart(2, '0')}:${activePrograms.join(',')}`
 }
 
-export default function ShopTable({ shops, selection }: Props) {
+function disqualifiedSortLabel(reason: string | null | undefined) {
+  if (!reason) return ''
+  const key = reason as DisqualifiedReason
+  return DISQUALIFIED_REASON_LABELS[key] ?? reason
+}
+
+export default function ShopTable({ shops, selection, showDisqualifiedReasonColumn = false }: Props) {
   const router = useRouter()
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
+
+  const sortableHeaders = useMemo(() => {
+    if (showDisqualifiedReasonColumn) return BASE_SORTABLE_HEADERS
+    return BASE_SORTABLE_HEADERS.filter(h => h.key !== 'disqualified')
+  }, [showDisqualifiedReasonColumn])
 
   useEffect(() => {
     const el = headerCheckboxRef.current
     if (!el) return
     el.indeterminate = Boolean(selection?.someVisibleSelected && !selection?.allVisibleSelected)
   }, [selection?.allVisibleSelected, selection?.someVisibleSelected])
+
+  useEffect(() => {
+    if (!showDisqualifiedReasonColumn && sortColumn === 'disqualified') {
+      setSortColumn(null)
+    }
+  }, [showDisqualifiedReasonColumn, sortColumn])
 
   const sortedShops = useMemo(() => {
     if (!sortColumn) return shops
@@ -101,6 +123,11 @@ export default function ShopTable({ shops, selection }: Props) {
           compare = sortText(aStatus).localeCompare(sortText(bStatus))
           break
         }
+        case 'disqualified':
+          compare = sortText(disqualifiedSortLabel(aShop.disqualified_reason)).localeCompare(
+            sortText(disqualifiedSortLabel(bShop.disqualified_reason)),
+          )
+          break
         case 'programs':
           compare = sortPrograms(aShop.program_enrollments).localeCompare(
             sortPrograms(bShop.program_enrollments),
@@ -124,6 +151,7 @@ export default function ShopTable({ shops, selection }: Props) {
   }, [shops, sortColumn, sortDirection])
 
   function toggleSort(column: SortColumn) {
+    if (!showDisqualifiedReasonColumn && column === 'disqualified') return
     if (sortColumn === column) {
       setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'))
       return
@@ -152,7 +180,7 @@ export default function ShopTable({ shops, selection }: Props) {
               />
             </th>
           )}
-          {SORTABLE_HEADERS.map(header => (
+          {sortableHeaders.map(header => (
             <th
               key={header.key}
               scope="col"
@@ -216,6 +244,11 @@ export default function ShopTable({ shops, selection }: Props) {
               <td className="px-4 py-2.5">
                 <StatusBadge status={shop.status} />
               </td>
+              {showDisqualifiedReasonColumn && (
+                <td className="px-4 py-2.5 text-onix-600">
+                  {disqualifiedSortLabel(shop.disqualified_reason) || '—'}
+                </td>
+              )}
               <td className="px-4 py-2.5">
                 <ProgramBadge enrollments={shop.program_enrollments} />
               </td>
@@ -240,7 +273,12 @@ export default function ShopTable({ shops, selection }: Props) {
           ))}
           {sortedShops.length === 0 && (
             <tr>
-              <td colSpan={selection ? 8 : 7} className="px-4 py-8 text-center text-onix-400">No shops found.</td>
+              <td
+                colSpan={selection ? (showDisqualifiedReasonColumn ? 9 : 8) : showDisqualifiedReasonColumn ? 8 : 7}
+                className="px-4 py-8 text-center text-onix-400"
+              >
+                No shops found.
+              </td>
             </tr>
           )}
       </tbody>

@@ -29,6 +29,7 @@ interface Location {
   chain_name: string | null
   city: string | null
   state: string | null
+  county: string | null
   status: string
   lat: number | string | null
   lng: number | string | null
@@ -48,6 +49,68 @@ function normalizeStateCode(raw: string | null): string | null {
   if (!raw) return null
   const t = raw.trim().toUpperCase()
   return US_STATE_CODES_SET.has(t) ? t : null
+}
+
+const COUNTY_KEY_SEP = '||'
+
+/**
+ * County from Google is usually "Alameda County"; some rows may omit `state` on the location,
+ * which used to create a second bucket `||Alameda County` vs `CA||Alameda County`.
+ * Also strip a trailing ", ST" if it was stored inside `county`.
+ */
+function parseCountyField(raw: string): { base: string; embeddedState: string | null } {
+  const t = raw.trim()
+  const m = t.match(/^(.+),\s*([A-Za-z]{2})\s*$/)
+  if (m) {
+    const code = m[2]!.toUpperCase()
+    if (US_STATE_CODES_SET.has(code)) {
+      return { base: m[1]!.trim(), embeddedState: code }
+    }
+  }
+  return { base: t, embeddedState: null }
+}
+
+/** States explicitly known for each county name (from row `state` or embedded in county string). */
+function buildCountyNameToStates(scoped: Location[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>()
+  for (const loc of scoped) {
+    const raw = loc.county?.trim()
+    if (!raw) continue
+    const { base, embeddedState } = parseCountyField(raw)
+    const st = normalizeStateCode(loc.state) ?? embeddedState
+    if (st) {
+      if (!map.has(base)) map.set(base, new Set())
+      map.get(base)!.add(st)
+    }
+  }
+  return map
+}
+
+function resolvedCountyStateForPicker(loc: Location, countyNameToStates: Map<string, Set<string>>): string | null {
+  const raw = loc.county?.trim()
+  if (!raw) return null
+  const { base, embeddedState } = parseCountyField(raw)
+  const fromRow = normalizeStateCode(loc.state) ?? embeddedState
+  if (fromRow) return fromRow
+  const set = countyNameToStates.get(base)
+  if (set && set.size === 1) return [...set][0]!
+  return null
+}
+
+/** Stable key for county options (state disambiguates e.g. Orange County, CA vs FL). */
+function countyOptionKey(loc: Location, countyNameToStates: Map<string, Set<string>>): string | null {
+  const raw = loc.county?.trim()
+  if (!raw) return null
+  const { base } = parseCountyField(raw)
+  const st = resolvedCountyStateForPicker(loc, countyNameToStates) ?? ''
+  return `${st}${COUNTY_KEY_SEP}${base}`
+}
+
+function countyOptionLabel(loc: Location, countyNameToStates: Map<string, Set<string>>): string {
+  const raw = loc.county?.trim() ?? ''
+  const { base } = parseCountyField(raw)
+  const st = resolvedCountyStateForPicker(loc, countyNameToStates)
+  return st ? `${base}, ${st}` : base
 }
 
 function getVisibleLocations(locs: Location[], filterStatus: string, showChurned: boolean): Location[] {
@@ -94,6 +157,7 @@ export default function MapView({ locations }: { locations: Location[] }) {
   const [showChurned, setShowChurned] = useState(false)
   showChurnedRef.current = showChurned
   const [mapJump, setMapJump] = useState('')
+  const [countyJump, setCountyJump] = useState('')
   const [geocoding, setGeocoding] = useState(false)
   const [geocodeResult, setGeocodeResult] = useState<string | null>(null)
 
@@ -125,10 +189,39 @@ export default function MapView({ locations }: { locations: Location[] }) {
     return US_STATE_OPTIONS.filter(({ code }) => (stateCounts.get(code) ?? 0) > 0)
   }, [stateCounts])
 
+  const countyNameToStates = useMemo(() => buildCountyNameToStates(scoped), [scoped])
+
+  const countyPickerOptionsAll = useMemo(() => {
+    const m = new Map<string, { label: string; count: number }>()
+    for (const loc of scoped) {
+      const key = countyOptionKey(loc, countyNameToStates)
+      if (!key) continue
+      const label = countyOptionLabel(loc, countyNameToStates)
+      const prev = m.get(key)
+      if (prev) prev.count += 1
+      else m.set(key, { label, count: 1 })
+    }
+    return [...m.entries()]
+      .map(([key, v]) => ({ key, label: v.label, count: v.count }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [scoped, countyNameToStates])
+
+  /** When a state is chosen in "Jump to state", only counties in that state appear here. */
+  const countyPickerOptions = useMemo(() => {
+    if (!mapJump) return countyPickerOptionsAll
+    const prefix = `${mapJump}${COUNTY_KEY_SEP}`
+    return countyPickerOptionsAll.filter(o => o.key.startsWith(prefix))
+  }, [countyPickerOptionsAll, mapJump])
+
   useEffect(() => {
     if (!mapJump) return
     if (!statePickerOptions.some(o => o.code === mapJump)) setMapJump('')
   }, [mapJump, statePickerOptions])
+
+  useEffect(() => {
+    if (!countyJump) return
+    if (!countyPickerOptions.some(o => o.key === countyJump)) setCountyJump('')
+  }, [countyJump, countyPickerOptions])
 
   useEffect(() => {
     if (selected && !scoped.some(l => l.id === selected.id)) setSelected(null)
@@ -235,13 +328,68 @@ export default function MapView({ locations }: { locations: Location[] }) {
     else map.once('load', apply)
   }
 
+  function flyMapToCounty(key: string) {
+    if (!key) return
+    const map = mapRef.current
+    if (!map) return
+    const stateIndex = buildCountyNameToStates(scoped)
+    const subset = scoped.filter(l => countyOptionKey(l, stateIndex) === key)
+    const coords = subset.map(toLngLat).filter((ll): ll is [number, number] => ll != null)
+    const apply = () => {
+      if (coords.length === 0) return
+      if (coords.length === 1) {
+        map.flyTo({ center: coords[0], zoom: 11, duration: 1000, essential: true })
+        return
+      }
+      let w = Infinity
+      let s = Infinity
+      let e = -Infinity
+      let n = -Infinity
+      for (const [lng, lat] of coords) {
+        w = Math.min(w, lng)
+        s = Math.min(s, lat)
+        e = Math.max(e, lng)
+        n = Math.max(n, lat)
+      }
+      const padLng = Math.max((e - w) * 0.12, 0.02)
+      const padLat = Math.max((n - s) * 0.12, 0.02)
+      map.fitBounds(
+        [
+          [w - padLng, s - padLat],
+          [e + padLng, n + padLat],
+        ],
+        { padding: 36, duration: 1000, maxZoom: 12 },
+      )
+    }
+    if (map.isStyleLoaded()) apply()
+    else map.once('load', apply)
+  }
+
+  function clearFilters() {
+    setFilterStatus('')
+    setShowChurned(false)
+    setMapJump('')
+    setCountyJump('')
+    setSelected(null)
+    setGeocodeResult(null)
+    flyMapToArea('')
+  }
+
   async function handleGeocodeAll() {
     setGeocoding(true)
     setGeocodeResult(null)
     try {
       const res = await fetch('/api/geocode', { method: 'POST' })
       const data = await res.json()
-      setGeocodeResult(`Geocoded ${data.geocoded} of ${data.total} addresses`)
+      const countyPart =
+        typeof data.countyBackfilled === 'number' && data.countyBackfilled > 0
+          ? ` · County filled for ${data.countyBackfilled} of ${data.countyBackfillCandidates ?? 0}`
+          : ''
+      const statePart =
+        typeof data.stateBackfilled === 'number' && data.stateBackfilled > 0
+          ? ` · State filled for ${data.stateBackfilled}`
+          : ''
+      setGeocodeResult(`Geocoded ${data.geocoded} of ${data.total} addresses${countyPart}${statePart}`)
       router.refresh()
     } catch {
       setGeocodeResult('Error geocoding')
@@ -295,6 +443,13 @@ export default function MapView({ locations }: { locations: Location[] }) {
             {missingCoords > 0 ? ` · ${missingCoords} lack coordinates` : null}
             {geocodeCandidates > 0 ? ` · ${geocodeCandidates} with address to geocode` : null}
           </p>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="mt-2 w-full px-2 py-1.5 text-xs border border-arctic-300 rounded text-onix-800 hover:bg-arctic-50"
+          >
+            Clear filters
+          </button>
         </div>
         <div>
           <label className="block text-xs font-medium text-onix-600 mb-1">Jump to state</label>
@@ -316,6 +471,30 @@ export default function MapView({ locations }: { locations: Location[] }) {
           </select>
           {statePickerOptions.length === 0 ? (
             <p className="text-[11px] text-onix-500 mt-1">No shops with a US state in this view.</p>
+          ) : null}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-onix-600 mb-1">Jump to county</label>
+          <select
+            value={countyJump}
+            onChange={e => {
+              const key = e.target.value
+              setCountyJump(key)
+              flyMapToCounty(key)
+            }}
+            className="w-full border border-arctic-300 rounded px-2 py-1 text-sm max-w-full"
+          >
+            <option value="">— Select county —</option>
+            {countyPickerOptions.map(({ key, label, count }) => (
+              <option key={key} value={key} title={label}>
+                {label.length > 28 ? `${label.slice(0, 26)}…` : label} ({count})
+              </option>
+            ))}
+          </select>
+          {countyPickerOptionsAll.length === 0 ? (
+            <p className="text-[11px] text-onix-500 mt-1">No county data in this view (geocode to fill).</p>
+          ) : mapJump && countyPickerOptions.length === 0 ? (
+            <p className="text-[11px] text-onix-500 mt-1">No counties in this view for the selected state.</p>
           ) : null}
         </div>
         <div className="space-y-1.5">

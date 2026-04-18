@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { geocodeAddress } from '@/lib/geocode'
+import { geocodeAddress, stateFieldIsEmpty } from '@/lib/geocode'
 import { getAppSession } from '@/lib/app-auth'
 import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 
@@ -24,6 +24,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     update.lat = coords.lat
     update.lng = coords.lng
     update.geocoded_at = new Date().toISOString()
+    update.county = coords.county
+    if (coords.state && stateFieldIsEmpty(state)) {
+      update.state = coords.state
+    }
   }
 
   const { error } = await supabaseAdmin
@@ -41,5 +45,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     sent_by: session.user?.email ?? 'unknown',
   })
 
-  return NextResponse.json({ lat: coords?.lat, lng: coords?.lng })
+  return NextResponse.json({
+    lat: coords?.lat,
+    lng: coords?.lng,
+    county: coords?.county ?? null,
+    state: coords?.state && stateFieldIsEmpty(state) ? coords.state : undefined,
+  })
 }

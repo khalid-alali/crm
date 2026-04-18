@@ -1,62 +1,6 @@
-import { verifyPortalToken } from '@/lib/portal-token'
-import { supabaseAdmin } from '@/lib/supabase'
-import { resolvePrimaryContact } from '@/lib/primary-contact'
-import PortalForm from './PortalForm'
+import PortalCapabilitiesClient from './PortalCapabilitiesClient'
 
 export default async function PortalPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  let locationId: string
-  try {
-    const payload = verifyPortalToken(token)
-    locationId = payload.locationId
-  } catch {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-lg font-semibold text-red-600">Link expired or invalid</h1>
-          <p className="text-sm text-onix-600 mt-2">Please request a new link from RepairWise.</p>
-        </div>
-      </div>
-    )
-  }
-
-  const { data: location } = await supabaseAdmin
-    .from('locations')
-    .select('*, program_enrollments(*)')
-    .eq('id', locationId)
-    .single()
-
-  if (!location) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-onix-600">Shop not found.</p>
-      </div>
-    )
-  }
-
-  const primary = await resolvePrimaryContact(
-    supabaseAdmin,
-    (location as { account_id?: string | null }).account_id ?? null,
-    locationId,
-  )
-  const locationForForm = {
-    ...location,
-    primary_contact_name: primary?.name ?? '',
-    primary_contact_email: primary?.email ?? '',
-    primary_contact_phone: primary?.phone ?? '',
-  }
-
-  return (
-    <div className="min-h-screen bg-arctic-50 py-12 px-4">
-      <div className="max-w-lg mx-auto">
-        <div className="mb-8 text-center">
-          <h1 className="text-xl font-semibold">RepairWise Partner Portal</h1>
-          <p className="text-sm text-onix-600 mt-1">Confirm your shop information</p>
-        </div>
-        <div className="bg-white rounded-lg border border-arctic-200 shadow-sm p-6">
-          <PortalForm location={locationForForm as any} token={token} />
-        </div>
-      </div>
-    </div>
-  )
+  return <PortalCapabilitiesClient token={token} />
 }

@@ -2,8 +2,8 @@ export type TemplateKey = 'intro' | 'followup' | 'onboarding' | 'reengage'
 
 export const templates: Record<TemplateKey, { subject: string; body: string }> = {
   intro: {
-    subject: 'RepairWise Partnership — {{shop_name}}',
-    body: `Hi {{contact_name}},\n\n[Fill in intro copy]\n\nBest,\n{{sender_name}}`,
+    subject: 'Unlock New EV Repair Opportunities',
+    body: `Hi {{contact_name}},\n\n{{portal_url}}\n\nBest,\n{{sender_name}}`,
   },
   followup: {
     subject: 'Following up — RepairWise x {{shop_name}}',

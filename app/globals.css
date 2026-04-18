@@ -27,3 +27,47 @@
     @apply bg-arctic-50 text-onix-950;
   }
 }
+
+/* Tiptap — email compose (EmailBodyEditor) */
+.email-tiptap-editor .ProseMirror {
+  min-height: inherit;
+  outline: none;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #0f1114;
+}
+.email-tiptap-editor .ProseMirror p {
+  margin: 0.4em 0;
+}
+.email-tiptap-editor .ProseMirror ul,
+.email-tiptap-editor .ProseMirror ol {
+  margin: 0.45em 0;
+  padding-left: 1.35rem;
+}
+.email-tiptap-editor .ProseMirror ul {
+  list-style: disc;
+}
+.email-tiptap-editor .ProseMirror ol {
+  list-style: decimal;
+}
+.email-tiptap-editor .ProseMirror li {
+  margin: 0.15em 0;
+}
+.email-tiptap-editor .ProseMirror h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0.85em 0 0.35em;
+}
+.email-tiptap-editor .ProseMirror h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0.7em 0 0.3em;
+}
+.email-tiptap-editor .ProseMirror a {
+  color: #5568e6;
+  text-decoration: underline;
+}
+.email-tiptap-editor .ProseMirror strong {
+  font-weight: 600;
+}

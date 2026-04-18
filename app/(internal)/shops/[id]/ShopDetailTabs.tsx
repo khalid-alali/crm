@@ -11,11 +11,14 @@ import SendContractModal, { type SendContractDraftPrefill } from '@/components/S
 import { contractStatusBadgeClass, contractStatusLabel } from '@/lib/contract-status-display'
 import AccountSelect from '@/components/AccountSelect'
 import LocationContactsSection from '@/components/LocationContactsSection'
+import { CapabilitiesSection } from '@/components/shop-detail/CapabilitiesSection'
+import ActivityFeed from '@/components/ActivityFeed'
 import StateSelect from '@/components/StateSelect'
 import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
-import { LOCATION_STATUS_LABELS, formatBulkPipelineStatusLogBody } from '@/lib/location-status-labels'
+import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { LOCATION_SOURCES, formatLocationSource } from '@/lib/location-source'
 import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
+import { DISQUALIFIED_REASON_LABELS, DISQUALIFIED_REASON_VALUES } from '@/lib/location-outcome-reasons'
 
 const PROGRAMS = [
   { key: 'multi_drive', label: 'Multi-Drive' },
@@ -24,9 +27,9 @@ const PROGRAMS = [
 ]
 const PROGRAM_STATUSES = ['not_enrolled', 'pending_activation', 'active', 'suspended', 'terminated']
 const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
-const TABS = ['activity', 'contracts', 'programs'] as const
+const TABS = ['activity', 'contracts', 'programs', 'capabilities'] as const
 type TabKey = (typeof TABS)[number]
-type EditField = 'name' | 'account' | 'location' | 'source' | 'notes'
+type EditField = 'name' | 'account' | 'location' | 'source' | 'notes' | 'commercial'
 
 type SiblingLocation = {
   id: string
@@ -100,6 +103,7 @@ function activityBadge(value: string | null | undefined): string {
   return `${days}d ago`
 }
 
+/** Calendar-day distance from `iso` to today (0 = same local day). */
 export default function ShopDetailTabs({
   shop,
   siblingLocations,
@@ -110,7 +114,11 @@ export default function ShopDetailTabs({
   allowContractDelete = false,
 }: Props) {
   const router = useRouter()
-  const [tab, setTab] = useState<TabKey>(defaultTab === 'contracts' || defaultTab === 'programs' ? defaultTab : 'activity')
+  const [tab, setTab] = useState<TabKey>(
+    defaultTab === 'contracts' || defaultTab === 'programs' || defaultTab === 'capabilities'
+      ? defaultTab
+      : 'activity',
+  )
   const [status, setStatus] = useState(shop.status)
   const [operationalStatus, setOperationalStatus] = useState<string | null>(null)
   const [operationalStatusLoading, setOperationalStatusLoading] = useState(false)
@@ -146,6 +154,7 @@ export default function ShopDetailTabs({
   const [inlineEdit, setInlineEdit] = useState<EditField | null>(null)
   const [inlineSaving, setInlineSaving] = useState(false)
   const [inlineError, setInlineError] = useState<string | null>(null)
+  const [capabilitiesLinkFeedback, setCapabilitiesLinkFeedback] = useState<string | null>(null)
   const [inlineDraft, setInlineDraft] = useState({
     name: shop.name ?? '',
     account_id: shop.account_id ?? null,
@@ -156,6 +165,27 @@ export default function ShopDetailTabs({
     source: shop.source ?? '',
     notes: shop.notes ?? '',
   })
+  const [commercialDraft, setCommercialDraft] = useState({
+    shop_type: (shop.shop_type as string | null) ?? '',
+    high_priority_target: Boolean(shop.high_priority_target),
+    website: shop.website ?? '',
+    standard_labor_rate:
+      shop.standard_labor_rate != null && Number.isFinite(Number(shop.standard_labor_rate))
+        ? String(shop.standard_labor_rate)
+        : '',
+    warranty_labor_rate:
+      shop.warranty_labor_rate != null && Number.isFinite(Number(shop.warranty_labor_rate))
+        ? String(shop.warranty_labor_rate)
+        : '',
+    note: shop.note ?? '',
+  })
+  const [dqReason, setDqReason] = useState(() => (shop.disqualified_reason as string | null) ?? '')
+  const [dqNotes, setDqNotes] = useState(() => shop.disqualified_notes ?? '')
+  const [dqSaving, setDqSaving] = useState(false)
+  const [churnModalOpen, setChurnModalOpen] = useState(false)
+  const [churnModalReason, setChurnModalReason] = useState('')
+  const [churnModalNotes, setChurnModalNotes] = useState('')
+  const [churnModalSaving, setChurnModalSaving] = useState(false)
   const locationPostalCodeError =
     inlineEdit === 'location' ? getPostalCodeError(inlineDraft.postal_code) : null
 
@@ -187,6 +217,34 @@ export default function ShopDetailTabs({
     shop.postal_code,
     shop.source,
     shop.notes,
+  ])
+
+  useEffect(() => {
+    setCommercialDraft({
+      shop_type: (shop.shop_type as string | null) ?? '',
+      high_priority_target: Boolean(shop.high_priority_target),
+      website: shop.website ?? '',
+      standard_labor_rate:
+        shop.standard_labor_rate != null && Number.isFinite(Number(shop.standard_labor_rate))
+          ? String(shop.standard_labor_rate)
+          : '',
+      warranty_labor_rate:
+        shop.warranty_labor_rate != null && Number.isFinite(Number(shop.warranty_labor_rate))
+          ? String(shop.warranty_labor_rate)
+          : '',
+      note: shop.note ?? '',
+    })
+    setDqReason((shop.disqualified_reason as string | null) ?? '')
+    setDqNotes(shop.disqualified_notes ?? '')
+  }, [
+    shop.shop_type,
+    shop.high_priority_target,
+    shop.website,
+    shop.standard_labor_rate,
+    shop.warranty_labor_rate,
+    shop.note,
+    shop.disqualified_reason,
+    shop.disqualified_notes,
   ])
 
   useEffect(() => {
@@ -329,14 +387,85 @@ export default function ShopDetailTabs({
     (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   )
 
-  async function changeStatus(newStatus: string) {
-    setStatus(newStatus)
-    await fetch(`/api/locations/${shop.id}`, {
+  async function patchShopJson(payload: Record<string, unknown>) {
+    const res = await fetch(`/api/locations/${shop.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify(payload),
     })
-    router.refresh()
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Update failed')
+    return data
+  }
+
+  async function handleStatusSelect(next: string) {
+    if (next === status) return
+    if (next === 'inactive' && status !== 'inactive') {
+      setChurnModalReason('')
+      setChurnModalNotes('')
+      setChurnModalOpen(true)
+      return
+    }
+    if (status === 'inactive' && next !== 'inactive') {
+      if (
+        !window.confirm(
+          'Move this shop out of Churned? The disqualified reason, recorded date, and disqualified notes will be cleared.',
+        )
+      ) {
+        return
+      }
+      try {
+        await patchShopJson({ status: next })
+        setStatus(next)
+        setDqReason('')
+        setDqNotes('')
+        router.refresh()
+      } catch (e: unknown) {
+        window.alert(e instanceof Error ? e.message : 'Could not update status')
+      }
+      return
+    }
+    try {
+      await patchShopJson({ status: next })
+      setStatus(next)
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not update status')
+    }
+  }
+
+  async function confirmChurnModal() {
+    setChurnModalSaving(true)
+    try {
+      const payload: Record<string, unknown> = { status: 'inactive' }
+      if (churnModalReason) payload.disqualified_reason = churnModalReason
+      if (churnModalNotes.trim()) payload.disqualified_notes = churnModalNotes.trim()
+      await patchShopJson(payload)
+      setStatus('inactive')
+      setDqReason(churnModalReason)
+      setDqNotes(churnModalNotes.trim())
+      setChurnModalOpen(false)
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not update status')
+    } finally {
+      setChurnModalSaving(false)
+    }
+  }
+
+  async function saveDisqualifiedFields() {
+    setDqSaving(true)
+    try {
+      await patchShopJson({
+        disqualified_reason: dqReason || null,
+        disqualified_notes: dqNotes.trim() || null,
+      })
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not save')
+    } finally {
+      setDqSaving(false)
+    }
   }
 
   async function savePrograms() {
@@ -451,6 +580,33 @@ export default function ShopDetailTabs({
     setAdminSearchCompleted(true)
   }
 
+  async function sendCapabilitiesPortalLink() {
+    setCapabilitiesLinkFeedback(null)
+    try {
+      const res = await fetch('/api/portal/generate-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationId: shop.id }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; portalUrl?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not create portal link')
+      const portalUrl = data.portalUrl
+      if (!portalUrl) throw new Error('Missing portal URL')
+      await navigator.clipboard.writeText(portalUrl)
+      await fetch(`/api/locations/${shop.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          body: 'Capabilities portal link generated and copied to clipboard.',
+        }),
+      })
+      setCapabilitiesLinkFeedback('Link copied to clipboard.')
+      router.refresh()
+    } catch (e: unknown) {
+      setCapabilitiesLinkFeedback(e instanceof Error ? e.message : 'Failed to copy link')
+    }
+  }
+
   async function saveInline(patch: Record<string, unknown>) {
     setInlineSaving(true)
     setInlineError(null)
@@ -497,54 +653,93 @@ export default function ShopDetailTabs({
       </div>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          {inlineEdit === 'name' ? (
-            <div className="flex min-w-0 w-full max-w-2xl flex-wrap items-center gap-2">
-              <input
-                value={inlineDraft.name}
-                onChange={e => {
-                  setInlineError(null)
-                  setInlineDraft(d => ({ ...d, name: e.target.value }))
-                }}
-                className="min-h-[2.75rem] min-w-0 flex-1 rounded-lg border border-arctic-300 px-3 py-2 text-xl font-semibold text-onix-950"
-                aria-label="Shop name"
-                autoFocus
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {inlineEdit === 'name' ? (
+              <div className="flex min-w-0 w-full max-w-2xl flex-wrap items-center gap-2">
+                <input
+                  value={inlineDraft.name}
+                  onChange={e => {
+                    setInlineError(null)
+                    setInlineDraft(d => ({ ...d, name: e.target.value }))
+                  }}
+                  className="min-h-[2.75rem] min-w-0 flex-1 rounded-lg border border-arctic-300 px-3 py-2 text-xl font-semibold text-onix-950"
+                  aria-label="Shop name"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const n = inlineDraft.name.trim()
+                    if (!n) {
+                      setInlineError('Shop name is required')
+                      return
+                    }
+                    void saveInline({ name: n })
+                  }}
+                  disabled={inlineSaving}
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInlineEdit(null)
+                    setInlineDraft(d => ({ ...d, name: shop.name ?? '' }))
+                    setInlineError(null)
+                  }}
+                  className="rounded-lg border border-arctic-300 bg-white px-3 py-2 text-sm font-medium text-onix-800 hover:bg-arctic-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-[2rem] font-semibold tracking-tight text-onix-950">{shop.name}</h1>
+                {editIcon('name')}
+              </>
+            )}
+            <StatusBadge status={status} />
+            {shop.chain_name && <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">{shop.chain_name}</span>}
+          </div>
+          {inlineEdit === 'account' ? (
+            <div className="max-w-2xl space-y-2">
+              <AccountSelect
+                value={inlineDraft.account_id}
+                onChange={accountId => setInlineDraft(d => ({ ...d, account_id: accountId }))}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  const n = inlineDraft.name.trim()
-                  if (!n) {
-                    setInlineError('Shop name is required')
-                    return
-                  }
-                  void saveInline({ name: n })
-                }}
-                disabled={inlineSaving}
-                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setInlineEdit(null)
-                  setInlineDraft(d => ({ ...d, name: shop.name ?? '' }))
-                  setInlineError(null)
-                }}
-                className="rounded-lg border border-arctic-300 bg-white px-3 py-2 text-sm font-medium text-onix-800 hover:bg-arctic-50"
-              >
-                Cancel
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => saveInline({ account_id: inlineDraft.account_id })}
+                  disabled={inlineSaving}
+                  className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInlineEdit(null)}
+                  className="rounded border border-arctic-300 px-2 py-1 text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+              {inlineError && <p className="text-sm text-red-600">{inlineError}</p>}
             </div>
           ) : (
-            <>
-              <h1 className="text-[2rem] font-semibold tracking-tight text-onix-950">{shop.name}</h1>
-              {editIcon('name')}
-            </>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-onix-800">
+              {shop.accounts?.business_name ? (
+                <Link href={`/accounts/${shop.account_id}`} className="min-w-0 truncate text-brand-700 hover:underline">
+                  {shop.accounts.business_name}
+                </Link>
+              ) : (
+                <span className="text-onix-600">No account linked</span>
+              )}
+              {editIcon('account')}
+            </div>
           )}
-          <StatusBadge status={status} />
-          {shop.chain_name && <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">{shop.chain_name}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -618,54 +813,247 @@ export default function ShopDetailTabs({
             <div className="rounded-xl border border-arctic-200 bg-white p-3">
               <div className="text-xs uppercase tracking-wide text-onix-400">Status</div>
               <div className="mt-1 text-xl font-semibold text-brand-700">{LOCATION_STATUS_LABELS[status]}</div>
-              <select value={status} onChange={e => changeStatus(e.target.value)} className="mt-2 w-full rounded border border-arctic-300 px-2 py-1 text-xs">
-                {STATUSES.map(s => <option key={s} value={s}>{LOCATION_STATUS_LABELS[s]}</option>)}
+              <select
+                value={status}
+                onChange={e => void handleStatusSelect(e.target.value)}
+                className="mt-2 w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+              >
+                {STATUSES.map(s => (
+                  <option key={s} value={s}>
+                    {LOCATION_STATUS_LABELS[s]}
+                  </option>
+                ))}
               </select>
+              {status === 'inactive' && (
+                <div className="mt-3 space-y-2 border-t border-arctic-100 pt-3">
+                  <label className="block text-[11px] font-medium uppercase tracking-wide text-onix-500">
+                    Disqualified reason
+                  </label>
+                  <select
+                    value={dqReason}
+                    onChange={e => setDqReason(e.target.value)}
+                    className="w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+                  >
+                    <option value="">—</option>
+                    {DISQUALIFIED_REASON_VALUES.map(key => (
+                      <option key={key} value={key}>
+                        {DISQUALIFIED_REASON_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                  {shop.disqualified_at && (
+                    <p className="text-[11px] text-onix-500">
+                      First recorded{' '}
+                      {fmtDate(typeof shop.disqualified_at === 'string' ? shop.disqualified_at : null)}
+                    </p>
+                  )}
+                  <label className="block text-[11px] font-medium uppercase tracking-wide text-onix-500">
+                    Disqualified notes <span className="font-normal text-onix-400">(optional)</span>
+                  </label>
+                  <textarea
+                    value={dqNotes}
+                    onChange={e => setDqNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Context on why they churned…"
+                    className="w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+                  />
+                  <button
+                    type="button"
+                    disabled={dqSaving}
+                    onClick={() => void saveDisqualifiedFields()}
+                    className="w-full rounded bg-onix-800 px-2 py-1.5 text-xs font-medium text-white hover:bg-onix-950 disabled:opacity-50"
+                  >
+                    {dqSaving ? 'Saving…' : 'Save disqualified details'}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="rounded-xl border border-arctic-200 bg-white p-3">
               <div className="text-xs uppercase tracking-wide text-onix-400">Last Activity</div>
               <div className="mt-2 inline-flex rounded-md bg-emerald-100 px-2 py-1 text-sm font-medium text-emerald-700">{activityBadge(activityLog[0]?.created_at)}</div>
             </div>
           </div>
-          <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-onix-400">
-            Account
-            {editIcon('account')}
-          </div>
-          {inlineEdit === 'account' ? (
-            <div className="space-y-2">
-              <AccountSelect
-                value={inlineDraft.account_id}
-                onChange={accountId => setInlineDraft(d => ({ ...d, account_id: accountId }))}
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => saveInline({ account_id: inlineDraft.account_id })}
-                  disabled={inlineSaving}
-                  className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60"
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInlineEdit(null)}
-                  className="rounded border border-arctic-300 px-2 py-1 text-xs"
-                >
-                  Cancel
-                </button>
+
+          <div className="rounded-xl border border-arctic-200 bg-white p-3">
+            <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-onix-400">
+              Shop profile
+              {editIcon('commercial')}
+            </div>
+            {inlineEdit === 'commercial' ? (
+              <div className="mt-2 space-y-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-onix-600">Type</label>
+                  <select
+                    value={commercialDraft.shop_type}
+                    onChange={e => setCommercialDraft(d => ({ ...d, shop_type: e.target.value }))}
+                    className="mt-0.5 w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+                  >
+                    <option value="">—</option>
+                    <option value="generalist">Generalist</option>
+                    <option value="specialist">Specialist</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-onix-800">
+                  <input
+                    type="checkbox"
+                    checked={commercialDraft.high_priority_target}
+                    onChange={e => setCommercialDraft(d => ({ ...d, high_priority_target: e.target.checked }))}
+                    className="rounded border-arctic-300"
+                  />
+                  High priority target
+                </label>
+                <div>
+                  <label className="block text-[11px] font-medium text-onix-600">Website</label>
+                  <input
+                    type="url"
+                    value={commercialDraft.website}
+                    onChange={e => setCommercialDraft(d => ({ ...d, website: e.target.value }))}
+                    placeholder="https://"
+                    className="mt-0.5 w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-onix-600">Standard labor rate ($)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={commercialDraft.standard_labor_rate}
+                    onChange={e => setCommercialDraft(d => ({ ...d, standard_labor_rate: e.target.value }))}
+                    className="mt-0.5 w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-onix-600">Warranty labor rate ($)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={commercialDraft.warranty_labor_rate}
+                    onChange={e => setCommercialDraft(d => ({ ...d, warranty_labor_rate: e.target.value }))}
+                    className="mt-0.5 w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-onix-600">Note</label>
+                  <textarea
+                    value={commercialDraft.note}
+                    onChange={e => setCommercialDraft(d => ({ ...d, note: e.target.value }))}
+                    rows={2}
+                    className="mt-0.5 w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={inlineSaving}
+                    onClick={() => {
+                      const stdRaw = commercialDraft.standard_labor_rate.trim()
+                      const warRaw = commercialDraft.warranty_labor_rate.trim()
+                      if (stdRaw !== '' && (!Number.isFinite(Number(stdRaw)) || Number(stdRaw) < 0)) {
+                        setInlineError('Standard labor rate must be a valid non-negative number')
+                        return
+                      }
+                      if (warRaw !== '' && (!Number.isFinite(Number(warRaw)) || Number(warRaw) < 0)) {
+                        setInlineError('Warranty labor rate must be a valid non-negative number')
+                        return
+                      }
+                      setInlineSaving(true)
+                      setInlineError(null)
+                      void patchShopJson({
+                        shop_type: commercialDraft.shop_type === '' ? null : commercialDraft.shop_type,
+                        high_priority_target: commercialDraft.high_priority_target,
+                        website: commercialDraft.website.trim() || null,
+                        standard_labor_rate: stdRaw === '' ? null : Number(stdRaw),
+                        warranty_labor_rate: warRaw === '' ? null : Number(warRaw),
+                        note: commercialDraft.note.trim() || null,
+                      })
+                        .then(() => {
+                          setInlineEdit(null)
+                          router.refresh()
+                        })
+                        .catch(e => setInlineError(e instanceof Error ? e.message : 'Failed to save'))
+                        .finally(() => setInlineSaving(false))
+                    }}
+                    className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-60"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCommercialDraft({
+                        shop_type: (shop.shop_type as string | null) ?? '',
+                        high_priority_target: Boolean(shop.high_priority_target),
+                        website: shop.website ?? '',
+                        standard_labor_rate:
+                          shop.standard_labor_rate != null && Number.isFinite(Number(shop.standard_labor_rate))
+                            ? String(shop.standard_labor_rate)
+                            : '',
+                        warranty_labor_rate:
+                          shop.warranty_labor_rate != null && Number.isFinite(Number(shop.warranty_labor_rate))
+                            ? String(shop.warranty_labor_rate)
+                            : '',
+                        note: shop.note ?? '',
+                      })
+                      setInlineEdit(null)
+                      setInlineError(null)
+                    }}
+                    className="rounded border border-arctic-300 px-2 py-1 text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {inlineError && <p className="text-xs text-red-600">{inlineError}</p>}
               </div>
-            </div>
-          ) : (
-            <div className="text-sm text-onix-800">
-              {shop.accounts?.business_name ? (
-                <Link href={`/accounts/${shop.account_id}`} className="text-brand-700 hover:underline">
-                  {shop.accounts.business_name}
-                </Link>
-              ) : (
-                'No account linked'
-              )}
-            </div>
-          )}
+            ) : (
+              <dl className="mt-2 space-y-1.5 text-xs text-onix-800">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-onix-500">Type</dt>
+                  <dd>{shop.shop_type === 'specialist' ? 'Specialist' : shop.shop_type === 'generalist' ? 'Generalist' : '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-onix-500">High priority</dt>
+                  <dd>{shop.high_priority_target ? 'Yes' : 'No'}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-onix-500">Website</dt>
+                  <dd className="min-w-0 truncate text-right">
+                    {shop.website ? (
+                      <a
+                        href={shop.website.startsWith('http') ? shop.website : `https://${shop.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand-700 hover:underline"
+                      >
+                        {shop.website}
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-onix-500">Std labor</dt>
+                  <dd>
+                    {shop.standard_labor_rate != null && Number.isFinite(Number(shop.standard_labor_rate))
+                      ? `$${Number(shop.standard_labor_rate)}`
+                      : '—'}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-onix-500">Warranty labor</dt>
+                  <dd>
+                    {shop.warranty_labor_rate != null && Number.isFinite(Number(shop.warranty_labor_rate))
+                      ? `$${Number(shop.warranty_labor_rate)}`
+                      : '—'}
+                  </dd>
+                </div>
+                <div className="border-t border-arctic-100 pt-1">
+                  <dt className="text-onix-500">Note</dt>
+                  <dd className="mt-0.5 whitespace-pre-wrap text-onix-800">{shop.note || '—'}</dd>
+                </div>
+              </dl>
+            )}
+          </div>
 
           <LocationContactsSection
             accountId={shop.account_id ?? null}
@@ -733,6 +1121,9 @@ export default function ShopDetailTabs({
               {[shop.address_line1, [shop.city, shop.state].filter(Boolean).join(', '), shop.postal_code]
                 .filter(Boolean)
                 .join(' · ') || '—'}
+              {shop.county ? (
+                <div className="mt-0.5 text-xs text-onix-500">{shop.county}</div>
+              ) : null}
             </div>
           )}
 
@@ -768,7 +1159,7 @@ export default function ShopDetailTabs({
           ) : (
             <div className="text-sm text-onix-800 whitespace-pre-wrap">{shop.notes || '—'}</div>
           )}
-          {inlineError && <p className="text-xs text-red-600">{inlineError}</p>}
+          {inlineError && inlineEdit !== 'account' && <p className="text-xs text-red-600">{inlineError}</p>}
           <div className="border-t border-arctic-200 pt-3 space-y-2">
             <div className="flex items-start justify-between gap-2">
               <div className="text-xs uppercase tracking-wide text-onix-400">Admin Shop Match</div>
@@ -843,24 +1234,7 @@ export default function ShopDetailTabs({
                 <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={2} placeholder="Add a note..." className="flex-1 rounded-lg border border-arctic-300 px-3 py-2 text-sm" />
                 <button onClick={addNote} disabled={savingNote} className="rounded-lg bg-brand-700 px-5 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-60">{savingNote ? '...' : 'Add'}</button>
               </div>
-              <div className="space-y-2">
-                {activityLog.length === 0 && <p className="text-sm text-onix-400">No activity yet.</p>}
-                {activityLog.map((entry: any) => (
-                  <div key={entry.id} className="rounded-lg border border-arctic-200 border-l-4 border-arctic-300 p-4">
-                    <div className="mb-1 flex items-center gap-2">
-                      <span className="text-sm font-semibold uppercase text-onix-800">{entry.type?.replace('_', ' ') ?? 'activity'}</span>
-                      {entry.sent_by && <span className="text-xs text-onix-400">by {entry.sent_by}</span>}
-                      <span className="ml-auto text-xs text-onix-400">{fmtDate(entry.created_at)}</span>
-                    </div>
-                    {entry.subject && <div className="text-sm font-medium text-onix-800">{entry.subject}</div>}
-                    {entry.body && (
-                      <div className="mt-1 whitespace-pre-wrap text-sm text-onix-700">
-                        {formatBulkPipelineStatusLogBody(entry.body)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <ActivityFeed entries={activityLog} />
             </div>
           )}
 
@@ -1007,8 +1381,90 @@ export default function ShopDetailTabs({
               </button>
             </div>
           )}
+
+          {tab === 'capabilities' && (
+            <div className="space-y-3">
+              <CapabilitiesSection
+                location={{
+                  bar_license_number: shop.bar_license_number ?? null,
+                  hours_of_operation: shop.hours_of_operation ?? null,
+                  standard_warranty: shop.standard_warranty ?? null,
+                  total_techs: shop.total_techs ?? null,
+                  allocated_techs: shop.allocated_techs ?? null,
+                  daily_appointment_capacity: shop.daily_appointment_capacity ?? null,
+                  weekly_appointment_capacity: shop.weekly_appointment_capacity ?? null,
+                  capabilities_submitted_at: shop.capabilities_submitted_at ?? null,
+                  state: shop.state ?? null,
+                }}
+                onSendForm={sendCapabilitiesPortalLink}
+              />
+              {capabilitiesLinkFeedback && (
+                <p className="text-sm text-onix-600" role="status">
+                  {capabilitiesLinkFeedback}
+                </p>
+              )}
+            </div>
+          )}
         </section>
       </div>
+
+      {churnModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+            <div className="border-b border-arctic-200 px-5 py-4">
+              <h2 className="text-base font-semibold text-onix-950">Move to Churned</h2>
+              <p className="mt-1 text-sm text-onix-600">
+                Optional: capture why this shop left the pipeline. You can add or edit this later from the shop page.
+              </p>
+            </div>
+            <div className="space-y-3 px-5 py-4">
+              <div>
+                <label className="block text-xs font-medium text-onix-600">Disqualified reason</label>
+                <select
+                  value={churnModalReason}
+                  onChange={e => setChurnModalReason(e.target.value)}
+                  className="mt-1 w-full rounded border border-arctic-300 px-3 py-2 text-sm"
+                >
+                  <option value="">— Skip for now —</option>
+                  {DISQUALIFIED_REASON_VALUES.map(key => (
+                    <option key={key} value={key}>
+                      {DISQUALIFIED_REASON_LABELS[key]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-onix-600">Notes (optional)</label>
+                <textarea
+                  value={churnModalNotes}
+                  onChange={e => setChurnModalNotes(e.target.value)}
+                  rows={2}
+                  className="mt-1 w-full rounded border border-arctic-300 px-3 py-2 text-sm"
+                  placeholder="Additional context…"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-arctic-200 px-5 py-3">
+              <button
+                type="button"
+                disabled={churnModalSaving}
+                onClick={() => setChurnModalOpen(false)}
+                className="rounded-lg px-4 py-1.5 text-sm text-onix-600 hover:bg-arctic-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={churnModalSaving}
+                onClick={() => void confirmChurnModal()}
+                className="rounded-lg bg-onix-800 px-4 py-1.5 text-sm font-medium text-white hover:bg-onix-950 disabled:opacity-50"
+              >
+                {churnModalSaving ? 'Saving…' : 'Save as Churned'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showIntroModal && (
         <EmailModal
@@ -1035,6 +1491,16 @@ export default function ShopDetailTabs({
           primaryContactName={primaryContactDisplayName}
           primaryContactEmail={primaryContactEmail}
           initialDraft={sendContractModalDraft}
+          locationDefaultLaborRates={{
+            standard:
+              shop.standard_labor_rate != null && Number.isFinite(Number(shop.standard_labor_rate))
+                ? Number(shop.standard_labor_rate)
+                : null,
+            warranty:
+              shop.warranty_labor_rate != null && Number.isFinite(Number(shop.warranty_labor_rate))
+                ? Number(shop.warranty_labor_rate)
+                : null,
+          }}
           fromShopDetail
           onClose={() => setShowSendContractModal(false)}
           onSent={() => {

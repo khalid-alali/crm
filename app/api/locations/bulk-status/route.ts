@@ -93,8 +93,15 @@ export async function POST(req: NextRequest) {
     sent_by: sentBy,
   }))
 
+  const statusPatch: Record<string, unknown> = { status: nextStatus }
+  if (nextStatus !== 'inactive') {
+    statusPatch.disqualified_reason = null
+    statusPatch.disqualified_at = null
+    statusPatch.disqualified_notes = null
+  }
+
   for (const part of chunk(toUpdate.map(r => r.id), CHUNK)) {
-    const { error: upErr } = await supabaseAdmin.from('locations').update({ status: nextStatus }).in('id', part)
+    const { error: upErr } = await supabaseAdmin.from('locations').update(statusPatch).in('id', part)
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
   }
 

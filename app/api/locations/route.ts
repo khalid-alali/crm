@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { detectChain } from '@/lib/chain-detect'
-import { geocodeAddress } from '@/lib/geocode'
+import { geocodeAddress, stateFieldIsEmpty } from '@/lib/geocode'
 import { getAppSession } from '@/lib/app-auth'
 import { normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { upsertLocationShopContact } from '@/lib/contact-sync'
 import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
+const SHOP_TYPES = new Set(['generalist', 'specialist'])
 
 const LOCATION_INSERT_KEYS = [
   'name',
@@ -24,6 +25,12 @@ const LOCATION_INSERT_KEYS = [
   'lat',
   'lng',
   'geocoded_at',
+  'shop_type',
+  'high_priority_target',
+  'website',
+  'standard_labor_rate',
+  'warranty_labor_rate',
+  'note',
 ] as const
 
 export async function POST(req: NextRequest) {
@@ -104,6 +111,44 @@ export async function POST(req: NextRequest) {
     typeof fields.assigned_to === 'string' ? fields.assigned_to : null,
   )
 
+  if ('shop_type' in fields) {
+    const st = fields.shop_type
+    if (st === null || st === '') {
+      fields.shop_type = null
+    } else if (typeof st !== 'string' || !SHOP_TYPES.has(st)) {
+      return NextResponse.json({ error: 'Invalid shop type' }, { status: 400 })
+    }
+  }
+
+  if ('high_priority_target' in fields) {
+    fields.high_priority_target = Boolean(fields.high_priority_target)
+  }
+
+  if ('website' in fields && typeof fields.website === 'string') {
+    const w = fields.website.trim()
+    fields.website = w === '' ? null : w
+  }
+
+  for (const rateKey of ['standard_labor_rate', 'warranty_labor_rate'] as const) {
+    if (rateKey in fields) {
+      const raw = fields[rateKey]
+      if (raw === null || raw === '') {
+        fields[rateKey] = null
+      } else {
+        const n = Number(raw)
+        if (!Number.isFinite(n) || n < 0) {
+          return NextResponse.json({ error: `Invalid ${rateKey}` }, { status: 400 })
+        }
+        fields[rateKey] = n
+      }
+    }
+  }
+
+  if ('note' in fields) {
+    const trimmed = typeof fields.note === 'string' ? fields.note.trim() : ''
+    fields.note = trimmed === '' ? null : trimmed
+  }
+
   if ('postal_code' in fields) {
     fields.postal_code = normalizePostalCode(fields.postal_code)
     const postalCodeError = getPostalCodeError(fields.postal_code)
@@ -118,6 +163,10 @@ export async function POST(req: NextRequest) {
       fields.lat = coords.lat
       fields.lng = coords.lng
       fields.geocoded_at = new Date().toISOString()
+      fields.county = coords.county
+      if (coords.state && stateFieldIsEmpty(fields.state as string | undefined)) {
+        fields.state = coords.state
+      }
     }
   }
 

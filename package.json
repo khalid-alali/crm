@@ -20,11 +20,17 @@
     "normalize:address-line1": "npx tsx scripts/normalize-address-from-line1.ts",
     "normalize:address-line1:apply": "npx tsx scripts/normalize-address-from-line1.ts --apply",
     "match:motherduck-by-name": "npx tsx scripts/match-locations-motherduck-by-name.ts",
-    "match:motherduck-by-name:apply": "npx tsx scripts/match-locations-motherduck-by-name.ts --apply"
+    "match:motherduck-by-name:apply": "npx tsx scripts/match-locations-motherduck-by-name.ts --apply",
+    "import:crm-ready-csv": "npx tsx scripts/import-crm-import-ready-csv.ts",
+    "import:crm-ready-csv:apply": "npx tsx scripts/import-crm-import-ready-csv.ts --apply"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",
     "@supabase/supabase-js": "^2",
+    "@tiptap/extension-link": "^3.22.3",
+    "@tiptap/pm": "^3.22.3",
+    "@tiptap/react": "^3.22.3",
+    "@tiptap/starter-kit": "^3.22.3",
     "dotenv": "^16",
     "fuse.js": "^7",
     "jsonwebtoken": "^9",

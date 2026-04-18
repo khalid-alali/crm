@@ -5,7 +5,7 @@ import { attachPrimaryContactsToLocations } from '@/lib/primary-contact'
 export default async function MapPage() {
   const { data: locs } = await supabaseAdmin
     .from('locations')
-    .select('id, name, chain_name, city, state, status, lat, lng, address_line1, account_id')
+    .select('id, name, chain_name, city, state, county, status, lat, lng, address_line1, account_id')
 
   const locations = await attachPrimaryContactsToLocations(
     supabaseAdmin,

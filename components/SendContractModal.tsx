@@ -20,9 +20,31 @@ interface Props {
   primaryContactEmail: string
   /** When set, updates this draft then sends; otherwise creates a new contract (requires account link). */
   initialDraft?: SendContractDraftPrefill | null
+  /** Prefill contract rates from the shop row when there is no draft; user can still edit before send. */
+  locationDefaultLaborRates?: { standard: number | null; warranty: number | null } | null
   fromShopDetail?: boolean
   onClose: () => void
   onSent: () => void
+}
+
+function initialStandardRate(draft: SendContractDraftPrefill | null | undefined, loc: Props['locationDefaultLaborRates']) {
+  if (draft?.standard_labor_rate != null && Number.isFinite(Number(draft.standard_labor_rate))) {
+    return String(draft.standard_labor_rate)
+  }
+  if (loc?.standard != null && Number.isFinite(Number(loc.standard))) {
+    return String(loc.standard)
+  }
+  return ''
+}
+
+function initialWarrantyRate(draft: SendContractDraftPrefill | null | undefined, loc: Props['locationDefaultLaborRates']) {
+  if (draft?.warranty_labor_rate != null && Number.isFinite(Number(draft.warranty_labor_rate))) {
+    return String(draft.warranty_labor_rate)
+  }
+  if (loc?.warranty != null && Number.isFinite(Number(loc.warranty))) {
+    return String(loc.warranty)
+  }
+  return ''
 }
 
 export default function SendContractModal({
@@ -31,6 +53,7 @@ export default function SendContractModal({
   primaryContactName,
   primaryContactEmail,
   initialDraft,
+  locationDefaultLaborRates,
   fromShopDetail,
   onClose,
   onSent,
@@ -41,16 +64,8 @@ export default function SendContractModal({
   const [signerEmail, setSignerEmail] = useState(
     () => (initialDraft?.counterparty_email?.trim() || primaryContactEmail || '').trim(),
   )
-  const [standardRate, setStandardRate] = useState(() =>
-    initialDraft?.standard_labor_rate != null && Number.isFinite(Number(initialDraft.standard_labor_rate))
-      ? String(initialDraft.standard_labor_rate)
-      : '',
-  )
-  const [warrantyRate, setWarrantyRate] = useState(() =>
-    initialDraft?.warranty_labor_rate != null && Number.isFinite(Number(initialDraft.warranty_labor_rate))
-      ? String(initialDraft.warranty_labor_rate)
-      : '',
-  )
+  const [standardRate, setStandardRate] = useState(() => initialStandardRate(initialDraft, locationDefaultLaborRates))
+  const [warrantyRate, setWarrantyRate] = useState(() => initialWarrantyRate(initialDraft, locationDefaultLaborRates))
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
 

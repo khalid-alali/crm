@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { isBdrAssignee } from '@/lib/bdr-assignees'
+import { DISQUALIFIED_REASON_LABELS, DISQUALIFIED_REASON_VALUES } from '@/lib/location-outcome-reasons'
 
 interface SearchParams {
   status?: string
@@ -11,6 +12,7 @@ interface SearchParams {
   state?: string
   assigned_to?: string
   program?: string
+  disqualified_reason?: string
 }
 
 /** Active tab ring/bg aligned with StatusBadge palette */
@@ -45,6 +47,7 @@ export default function ShopsFilters({
   const [assigneeVal, setAssigneeVal] = useState(() =>
     isBdrAssignee(searchParams.assigned_to) ? searchParams.assigned_to : '',
   )
+  const [disqualifiedVal, setDisqualifiedVal] = useState(() => searchParams.disqualified_reason ?? '')
 
   const totalLocations = useMemo(
     () =>
@@ -58,11 +61,24 @@ export default function ShopsFilters({
     setAssigneeVal(isBdrAssignee(searchParams.assigned_to) ? searchParams.assigned_to : '')
   }, [searchParams.assigned_to])
 
+  useEffect(() => {
+    setDisqualifiedVal(searchParams.disqualified_reason ?? '')
+  }, [searchParams.disqualified_reason])
+
   function applyFilter(params: Partial<SearchParams>) {
     const sp = new URLSearchParams()
-    const merged = {
-      ...Object.fromEntries(Object.entries(searchParams).filter(([, v]) => v)),
-      ...params,
+    const merged: Record<string, string> = {
+      ...(Object.fromEntries(Object.entries(searchParams).filter(([, v]) => v)) as Record<string, string>),
+    }
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === '') {
+        delete merged[k]
+      } else {
+        merged[k] = v
+      }
+    }
+    if (merged.status && merged.status !== 'inactive') {
+      delete merged.disqualified_reason
     }
 
     for (const [k, v] of Object.entries(merged)) {
@@ -85,7 +101,7 @@ export default function ShopsFilters({
       <div className="flex flex-wrap items-center gap-1 text-sm">
         <button
           type="button"
-          onClick={() => applyFilter({ status: undefined })}
+          onClick={() => applyFilter({ status: undefined, disqualified_reason: undefined })}
           className={`rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors ${
             !searchParams.status ? allTabActive : statusTabIdle
           }`}
@@ -127,6 +143,31 @@ export default function ShopsFilters({
             </option>
           ))}
         </select>
+
+        {searchParams.status === 'inactive' && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="dq-reason-filter" className="text-xs font-medium text-onix-600">
+              Disqualified reason
+            </label>
+            <select
+              id="dq-reason-filter"
+              value={disqualifiedVal}
+              onChange={e => {
+                const raw = e.target.value
+                setDisqualifiedVal(raw)
+                applyFilter({ disqualified_reason: raw || undefined })
+              }}
+              className="rounded-xl border border-arctic-300 bg-white px-3 py-2 text-sm text-onix-800"
+            >
+              <option value="">All churned</option>
+              {DISQUALIFIED_REASON_VALUES.map(key => (
+                <option key={key} value={key}>
+                  {DISQUALIFIED_REASON_LABELS[key]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {chains.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">

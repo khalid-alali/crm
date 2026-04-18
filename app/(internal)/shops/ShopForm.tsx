@@ -42,6 +42,18 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
     assigned_to: normalizeBdrAssignedTo(initial?.assigned_to),
     source: initial?.source ?? '',
     notes: initial?.notes ?? '',
+    shop_type: (initial?.shop_type as string | undefined) ?? '',
+    high_priority_target: Boolean(initial?.high_priority_target),
+    website: initial?.website ?? '',
+    standard_labor_rate:
+      initial?.standard_labor_rate != null && Number.isFinite(Number(initial.standard_labor_rate))
+        ? String(initial.standard_labor_rate)
+        : '',
+    warranty_labor_rate:
+      initial?.warranty_labor_rate != null && Number.isFinite(Number(initial.warranty_labor_rate))
+        ? String(initial.warranty_labor_rate)
+        : '',
+    note: initial?.note ?? '',
   })
   const [detectedChain, setDetectedChain] = useState<string | null>(null)
   const [programStatuses, setProgramStatuses] = useState<Record<string, string>>(
@@ -186,10 +198,29 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
       }
       const url = locationId ? `/api/locations/${locationId}` : '/api/locations'
       const method = locationId ? 'PATCH' : 'POST'
+      const stdRaw = form.standard_labor_rate.trim()
+      const warRaw = form.warranty_labor_rate.trim()
+      if (stdRaw !== '' && (!Number.isFinite(Number(stdRaw)) || Number(stdRaw) < 0)) {
+        setError('Standard labor rate must be a valid non-negative number')
+        setSaving(false)
+        return
+      }
+      if (warRaw !== '' && (!Number.isFinite(Number(warRaw)) || Number(warRaw) < 0)) {
+        setError('Warranty labor rate must be a valid non-negative number')
+        setSaving(false)
+        return
+      }
+
       const payload: Record<string, unknown> = {
         ...form,
         postal_code: normalizePostalCode(form.postal_code),
         programStatuses,
+        shop_type: form.shop_type === '' ? null : form.shop_type,
+        high_priority_target: form.high_priority_target,
+        website: form.website.trim() || null,
+        standard_labor_rate: stdRaw === '' ? null : Number(stdRaw),
+        warranty_labor_rate: warRaw === '' ? null : Number(warRaw),
+        note: form.note.trim() || null,
       }
       if (isNew && accountChoice === 'new') {
         payload.account_id = null
@@ -422,6 +453,76 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
             type="email"
             disabled={primarySameAsAccount}
             className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm disabled:bg-arctic-50 disabled:text-onix-800"
+          />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-onix-800">Shop profile</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Type</label>
+            <select
+              value={form.shop_type}
+              onChange={e => setForm(f => ({ ...f, shop_type: e.target.value }))}
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">—</option>
+              <option value="generalist">Generalist</option>
+              <option value="specialist">Specialist</option>
+            </select>
+          </div>
+          <div className="flex items-end pb-1">
+            <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.high_priority_target}
+                onChange={e => setForm(f => ({ ...f, high_priority_target: e.target.checked }))}
+                className="rounded border-arctic-300"
+              />
+              High priority target
+            </label>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-onix-600 mb-1">Website</label>
+          <input
+            type="url"
+            value={form.website}
+            onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
+            placeholder="https://"
+            className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Standard labor rate ($)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.standard_labor_rate}
+              onChange={e => setForm(f => ({ ...f, standard_labor_rate: e.target.value }))}
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-onix-600 mb-1">Warranty labor rate ($)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.warranty_labor_rate}
+              onChange={e => setForm(f => ({ ...f, warranty_labor_rate: e.target.value }))}
+              className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-onix-600 mb-1">Note</label>
+          <textarea
+            value={form.note}
+            onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+            rows={2}
+            className="w-full border border-arctic-300 rounded px-3 py-1.5 text-sm"
           />
         </div>
       </section>

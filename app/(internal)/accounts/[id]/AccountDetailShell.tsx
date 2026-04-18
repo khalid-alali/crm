@@ -12,23 +12,10 @@ import AccountDetailEditor from './AccountDetailEditor'
 import AccountContactsPanel from '@/components/AccountContactsPanel'
 import { contractStatusBadgeClass, contractStatusLabel } from '@/lib/contract-status-display'
 import DeleteAccountButton from '@/components/DeleteAccountButton'
-import { formatBulkPipelineStatusLogBody } from '@/lib/location-status-labels'
+import ActivityFeed from '@/components/ActivityFeed'
 
 const TABS = ['activity', 'contracts', 'programs'] as const
 type TabKey = (typeof TABS)[number]
-
-function fmtDate(value: string | null | undefined): string {
-  if (!value) return '—'
-  const dt = new Date(value)
-  if (Number.isNaN(dt.getTime())) return '—'
-  return dt.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
 
 function accountInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -449,38 +436,9 @@ export default function AccountDetailShell({
                 <p className="text-xs text-onix-500">
                   Activity across all shops for this account. Add notes from each shop&apos;s Activity tab.
                 </p>
-                {activityEntries.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-onix-400">No activity yet.</p>
-                ) : (
-                  activityEntries.map(entry => (
-                    <div
-                      key={entry.id}
-                      className="rounded-lg border border-arctic-200 border-l-4 border-l-arctic-300 p-3"
-                    >
-                      <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-semibold uppercase text-onix-800">
-                          {entry.type?.replace(/_/g, ' ') ?? 'activity'}
-                        </span>
-                        {entry.locations?.name && (
-                          <Link
-                            href={`/shops/${entry.location_id}`}
-                            className="text-xs font-medium text-brand-600 hover:underline"
-                          >
-                            {entry.locations.name}
-                          </Link>
-                        )}
-                        {entry.sent_by && <span className="text-xs text-onix-400">by {entry.sent_by}</span>}
-                        <span className="ml-auto text-xs text-onix-400">{fmtDate(entry.created_at)}</span>
-                      </div>
-                      {entry.subject && <div className="text-sm font-medium text-onix-800">{entry.subject}</div>}
-                      {entry.body && (
-                        <div className="mt-1 whitespace-pre-wrap text-sm text-onix-700">
-                          {formatBulkPipelineStatusLogBody(entry.body)}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+                <div className={activityEntries.length === 0 ? 'py-6 text-center' : ''}>
+                  <ActivityFeed entries={activityEntries} showLocationLink />
+                </div>
               </div>
             )}
 
