@@ -9,7 +9,11 @@ import {
 } from '@/lib/portal-capabilities-schema'
 import { validatePortalEmail, validateUsPhoneOptional, stripPhoneToNationalDigits } from '@/lib/portal-phone-email'
 import { tryParsePortalHoursJson, validatePortalHoursModel } from '@/lib/portal-hours-schedule'
-import { PORTAL_INT_MAX, parseBoundedNonNegInt } from '@/lib/portal-capabilities-form'
+import {
+  PORTAL_INT_MAX,
+  allocatedPatchToInt,
+  parseBoundedNonNegInt,
+} from '@/lib/portal-capabilities-form'
 
 /** Client/API keys for PATCH body.patch (camelCase). */
 export const PORTAL_AUTOSAVE_LOCATION_KEYS = [
@@ -40,8 +44,6 @@ export const PORTAL_AUTOSAVE_CONTACT_KEYS = ['contact_name', 'contact_email', 'c
 export type PortalAutosaveLocationKey = (typeof PORTAL_AUTOSAVE_LOCATION_KEYS)[number]
 export type PortalAutosaveContactKey = (typeof PORTAL_AUTOSAVE_CONTACT_KEYS)[number]
 export type PortalAutosaveKey = PortalAutosaveLocationKey | PortalAutosaveContactKey
-
-export type PortalFieldSaveUi = 'idle' | 'saving' | 'saved' | 'error'
 
 const LOCATION_COLUMN: Record<PortalAutosaveLocationKey, string> = {
   shop_name: 'name',
@@ -117,14 +119,13 @@ export function validatePortalAutosaveField(
       const n = parseBoundedNonNegInt(typeof value === 'string' ? value : String(value ?? ''), max)
       if (n === null) return `Must be a whole number from 0 to ${max}`
       const alcRaw = ctx.allocatedTechsInput ?? ''
-      const alc = parseBoundedNonNegInt(alcRaw.trim(), PORTAL_INT_MAX.allocated_techs)
+      const alc = alcRaw.trim() !== '' ? allocatedPatchToInt(alcRaw.trim()) : null
       if (alc !== null && alc > n) return "Can't be less than allocated techs"
       return null
     }
     case 'allocated_techs': {
-      const max = PORTAL_INT_MAX.allocated_techs
-      const n = parseBoundedNonNegInt(typeof value === 'string' ? value : String(value ?? ''), max)
-      if (n === null) return `Must be a whole number from 0 to ${max}`
+      const n = allocatedPatchToInt(value)
+      if (n === null) return 'Invalid allocation choice'
       const totRaw = ctx.totalTechsInput ?? ''
       const tot = parseBoundedNonNegInt(totRaw.trim(), PORTAL_INT_MAX.total_techs)
       if (tot !== null && n > tot) return "Can't exceed total techs"

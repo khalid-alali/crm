@@ -63,6 +63,54 @@ export const PORTAL_INT_MAX = {
   two_post_lifts: 50,
 } as const
 
+/** Portal UI buckets for techs allocated to Fixlane; stored as ints 2, 5, 10, 11 (11 = "10+"). */
+export const ALLOCATED_TECHS_BUCKET_VALUES = ['1_2', '3_5', '6_10', '10_plus'] as const
+export type AllocatedTechsBucketValue = (typeof ALLOCATED_TECHS_BUCKET_VALUES)[number]
+
+export function isAllocatedTechsBucket(s: string): s is AllocatedTechsBucketValue {
+  return (ALLOCATED_TECHS_BUCKET_VALUES as readonly string[]).includes(s)
+}
+
+export function allocatedBucketToStoredInt(bucket: AllocatedTechsBucketValue): number {
+  switch (bucket) {
+    case '1_2':
+      return 2
+    case '3_5':
+      return 5
+    case '6_10':
+      return 10
+    case '10_plus':
+      return 11
+  }
+}
+
+/** Map DB integer back to bucket for the portal form (legacy any int >10 → 10+). */
+export function storedIntToAllocatedBucket(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n) || n <= 0) return ''
+  if (n <= 2) return '1_2'
+  if (n <= 5) return '3_5'
+  if (n <= 10) return '6_10'
+  return '10_plus'
+}
+
+/** Admin / read UI: show "10+" when stored value is the 10+ sentinel (≥11). */
+export function formatAllocatedTechsDisplay(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return '—'
+  if (n >= 11) return '10+'
+  return String(n)
+}
+
+/** Parse PATCH body value: bucket id, plain int string, or JSON number. */
+export function allocatedPatchToInt(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    if (value < 0 || value > PORTAL_INT_MAX.allocated_techs) return null
+    return value
+  }
+  const s = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  if (isAllocatedTechsBucket(s)) return allocatedBucketToStoredInt(s)
+  return parseBoundedNonNegInt(s, PORTAL_INT_MAX.allocated_techs)
+}
+
 export function parseBoundedNonNegInt(raw: string, max: number): number | null {
   const t = raw.trim()
   if (t === '') return null
@@ -117,8 +165,11 @@ export function validatePortalCapabilitiesForm(
 
   const te = intFieldError('total_techs', v.totalTechs)
   if (te) errors.total_techs = te
-  const ae = intFieldError('allocated_techs', v.allocatedTechs)
-  if (ae) errors.allocated_techs = ae
+
+  const bucket = v.allocatedTechs.trim()
+  if (!bucket) errors.allocated_techs = 'This field is required'
+  else if (!isAllocatedTechsBucket(bucket)) errors.allocated_techs = 'Please choose one option'
+
   const de = intFieldError('daily_appointment_capacity', v.dailyCap)
   if (de) errors.daily_appointment_capacity = de
   const we = intFieldError('weekly_appointment_capacity', v.weeklyCap)
@@ -129,7 +180,7 @@ export function validatePortalCapabilitiesForm(
   if (le) errors.two_post_lifts = le
 
   const tot = parseBoundedNonNegInt(v.totalTechs, PORTAL_INT_MAX.total_techs)
-  const alc = parseBoundedNonNegInt(v.allocatedTechs, PORTAL_INT_MAX.allocated_techs)
+  const alc = isAllocatedTechsBucket(bucket) ? allocatedBucketToStoredInt(bucket) : null
   if (tot !== null && alc !== null && alc > tot) {
     errors.allocated_techs = "Can't exceed total techs"
   }

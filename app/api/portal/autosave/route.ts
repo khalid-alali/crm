@@ -11,7 +11,11 @@ import {
   type PortalAutosaveKey,
   type PortalAutosaveCtx,
 } from '@/lib/portal-autosave'
-import { parseBoundedNonNegInt, PORTAL_INT_MAX } from '@/lib/portal-capabilities-form'
+import {
+  allocatedPatchToInt,
+  parseBoundedNonNegInt,
+  PORTAL_INT_MAX,
+} from '@/lib/portal-capabilities-form'
 import { stripPhoneToNationalDigits } from '@/lib/portal-phone-email'
 
 function isCA(state: string | null | undefined) {
@@ -97,7 +101,7 @@ export async function PATCH(req: NextRequest) {
       if (key === 'total_techs') {
         locationUpdate[col] = parseBoundedNonNegInt(str(value), PORTAL_INT_MAX.total_techs)
       } else if (key === 'allocated_techs') {
-        locationUpdate[col] = parseBoundedNonNegInt(str(value), PORTAL_INT_MAX.allocated_techs)
+        locationUpdate[col] = allocatedPatchToInt(value)
       } else if (key === 'daily_appointment_capacity') {
         locationUpdate[col] = parseBoundedNonNegInt(str(value), PORTAL_INT_MAX.daily_appointment_capacity)
       } else if (key === 'weekly_appointment_capacity') {

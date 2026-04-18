@@ -1,6 +1,7 @@
 'use client'
 
 import { formatHoursForDisplay } from '@/lib/portal-hours-schedule'
+import { formatAllocatedTechsDisplay } from '@/lib/portal-capabilities-form'
 
 interface CapabilitiesData {
   bar_license_number: string | null
@@ -58,7 +59,11 @@ export function CapabilitiesSection({ location, onSendForm }: Props) {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total Techs" value={location.total_techs} />
-        <StatCard label="Allocated to Fixlane" value={location.allocated_techs} />
+        <StatCard
+          label="Allocated to Fixlane"
+          value={location.allocated_techs}
+          formatValue={formatAllocatedTechsDisplay}
+        />
         <StatCard label="Daily Capacity" value={location.daily_appointment_capacity} />
         <StatCard label="Weekly Capacity" value={location.weekly_appointment_capacity} />
       </div>
@@ -72,10 +77,19 @@ export function CapabilitiesSection({ location, onSendForm }: Props) {
   )
 }
 
-function StatCard({ label, value }: { label: string; value: number | null }) {
+function StatCard({
+  label,
+  value,
+  formatValue,
+}: {
+  label: string
+  value: number | null
+  formatValue?: (n: number | null) => string
+}) {
+  const display = formatValue ? formatValue(value) : value ?? '—'
   return (
     <div className="rounded-lg bg-arctic-50 p-3">
-      <div className="text-2xl font-bold text-onix-950">{value ?? '—'}</div>
+      <div className="text-2xl font-bold text-onix-950">{display}</div>
       <div className="mt-0.5 text-xs text-onix-500">{label}</div>
     </div>
   )

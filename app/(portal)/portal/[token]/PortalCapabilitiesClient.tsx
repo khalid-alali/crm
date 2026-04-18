@@ -16,13 +16,15 @@ import {
   validatePortalAutosaveField,
   type PortalAutosaveKey,
   type PortalAutosaveCtx,
-  type PortalFieldSaveUi,
 } from '@/lib/portal-autosave'
 import {
   PORTAL_INT_MAX,
+  allocatedBucketToStoredInt,
   barLicenseDigitsOnly,
   isPortalCapabilitiesFormComplete,
+  storedIntToAllocatedBucket,
   validatePortalCapabilitiesForm,
+  type AllocatedTechsBucketValue,
   type PortalCapabilitiesFormValues,
   type PortalCapabilitiesFieldKey,
 } from '@/lib/portal-capabilities-form'
@@ -38,6 +40,13 @@ import {
 } from '@/lib/portal-hours-schedule'
 import { formatUsPhoneDisplay, stripPhoneToNationalDigits } from '@/lib/portal-phone-email'
 
+const ALLOCATED_TO_FIXLANE_OPTIONS: RadioOpt[] = [
+  { value: '1_2', label: '1–2' },
+  { value: '3_5', label: '3–5' },
+  { value: '6_10', label: '6–10' },
+  { value: '10_plus', label: '10+' },
+]
+
 type PageState =
   | 'loading'
   | 'form'
@@ -45,6 +54,9 @@ type PageState =
   | 'success'
   | 'expired'
   | 'error'
+
+/** Delay before showing inline validation messages so partial input (e.g. phone) does not flash errors while typing. */
+const FIELD_ERROR_DEBOUNCE_MS = 450
 
 type LocationPayload = {
   id: string
@@ -80,14 +92,6 @@ function numStr(v: number | null | undefined) {
 function pickStr(v: string | null | undefined, allowed: readonly string[]) {
   const s = (v ?? '').trim()
   return allowed.includes(s) ? s : ''
-}
-
-function FieldStatus({ fieldKey, ui }: { fieldKey: PortalAutosaveKey; ui: Partial<Record<PortalAutosaveKey, PortalFieldSaveUi>> }) {
-  const s = ui[fieldKey]
-  if (s === 'saving') return <span className="ml-2 text-xs font-normal text-gray-500">Saving…</span>
-  if (s === 'saved') return <span className="ml-2 text-xs font-normal text-emerald-600">Saved</span>
-  if (s === 'error') return <span className="ml-2 text-xs font-normal text-red-600">Not saved</span>
-  return null
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -138,8 +142,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
   const [forklift, setForklift] = useState('')
   const [hv_battery_table, setHvTable] = useState('')
   const [windshields, setWindshields] = useState('')
-
-  const [saveUi, setSaveUi] = useState<Partial<Record<PortalAutosaveKey, PortalFieldSaveUi>>>({})
 
   const pendingPatchRef = useRef<Partial<Record<PortalAutosaveKey, unknown>>>({})
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -205,44 +207,59 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
     ],
   )
 
-  const { errors: inlineErrors } = useMemo(() => validatePortalCapabilitiesForm(formSnapshot), [formSnapshot])
+  const formSnapshotRef = useRef(formSnapshot)
+  formSnapshotRef.current = formSnapshot
+
   const canSubmit = useMemo(() => isPortalCapabilitiesFormComplete(formSnapshot), [formSnapshot])
+
+  const [displayedErrors, setDisplayedErrors] = useState<Partial<Record<PortalCapabilitiesFieldKey, string>>>({})
+  const [touchedFields, setTouchedFields] = useState<Partial<Record<PortalCapabilitiesFieldKey, boolean>>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+
+  const markTouched = useCallback((k: PortalCapabilitiesFieldKey) => {
+    setTouchedFields(prev => (prev[k] ? prev : { ...prev, [k]: true }))
+  }, [])
+
+  const flushDisplayedErrors = useCallback(() => {
+    setDisplayedErrors(validatePortalCapabilitiesForm(formSnapshotRef.current).errors)
+  }, [])
+
+  useEffect(() => {
+    const id = setTimeout(flushDisplayedErrors, FIELD_ERROR_DEBOUNCE_MS)
+    return () => clearTimeout(id)
+  }, [formSnapshot, flushDisplayedErrors])
+
+  const visibleErrors = useMemo(() => {
+    if (submitAttempted) return displayedErrors
+    const out: Partial<Record<PortalCapabilitiesFieldKey, string>> = {}
+    const t = touchedFields
+    const show = (k: PortalCapabilitiesFieldKey) =>
+      !!t[k] ||
+      (k === 'allocated_techs' && !!t.total_techs) ||
+      (k === 'total_techs' && !!t.allocated_techs)
+    for (const key of Object.keys(displayedErrors) as PortalCapabilitiesFieldKey[]) {
+      const err = displayedErrors[key]
+      if (err && show(key)) out[key] = err
+    }
+    return out
+  }, [displayedErrors, touchedFields, submitAttempted])
+
+  useEffect(() => {
+    if (canSubmit) setSubmitAttempted(false)
+  }, [canSubmit])
 
   const flushAutosave = useCallback(async () => {
     const patch = { ...pendingPatchRef.current } as Record<string, unknown>
     pendingPatchRef.current = {}
-    const keys = Object.keys(patch) as PortalAutosaveKey[]
-    if (keys.length === 0) return
-    setSaveUi(s => {
-      const n = { ...s }
-      for (const k of keys) n[k] = 'saving'
-      return n
-    })
+    if (Object.keys(patch).length === 0) return
     try {
-      const res = await fetch('/api/portal/autosave', {
+      await fetch('/api/portal/autosave', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, patch }),
       })
-      if (!res.ok) {
-        setSaveUi(s => {
-          const n = { ...s }
-          for (const k of keys) n[k] = 'error'
-          return n
-        })
-        return
-      }
-      setSaveUi(s => {
-        const n = { ...s }
-        for (const k of keys) n[k] = 'saved'
-        return n
-      })
     } catch {
-      setSaveUi(s => {
-        const n = { ...s }
-        for (const k of keys) n[k] = 'error'
-        return n
-      })
+      /* silent: autosave is best-effort; submit will persist */
     }
   }, [token])
 
@@ -317,7 +334,7 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
           }
           setWarranty(loc.standard_warranty ?? '')
           setTotalTechs(numStr(loc.total_techs))
-          setAllocatedTechs(numStr(loc.allocated_techs))
+          setAllocatedTechs(storedIntToAllocatedBucket(loc.allocated_techs))
           setDailyCap(numStr(loc.daily_appointment_capacity))
           setWeeklyCap(numStr(loc.weekly_appointment_capacity))
           setParking(numStr(loc.capabilities_parking_spots_rw))
@@ -332,8 +349,9 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
           setForklift(pickStr(loc.capabilities_forklift, ['yes', 'no']))
           setHvTable(pickStr(loc.capabilities_hv_battery_table, ['yes', 'no']))
           setWindshields(pickStr(loc.capabilities_windshields, ['in_shop', 'sublet', 'no']))
-          setSaveUi({})
           setSubmitNetworkError('')
+          setTouchedFields({})
+          setSubmitAttempted(false)
           setState(loc.capabilities_submitted_at ? 'already_submitted' : 'form')
         }
       } catch {
@@ -350,6 +368,7 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
   }, [token])
 
   function updateHoursModel(updater: (m: PortalHoursModel) => PortalHoursModel) {
+    markTouched('hours_of_operation')
     setHoursModel(m => {
       const next = updater(m)
       queueMicrotask(() => scheduleFieldSave('hours_of_operation', stringifyPortalHours(next)))
@@ -369,6 +388,8 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
 
     const { errors, firstKey } = validatePortalCapabilitiesForm(formSnapshot)
     if (Object.keys(errors).length > 0) {
+      setSubmitAttempted(true)
+      setDisplayedErrors(errors)
       if (firstKey) {
         fieldRefs.current[firstKey]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
@@ -392,7 +413,7 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
           hours_of_operation: stringifyPortalHours(hoursModel),
           standard_warranty: standard_warranty.trim(),
           total_techs: parseInt(total_techs, 10),
-          allocated_techs: parseInt(allocated_techs, 10),
+          allocated_techs: allocatedBucketToStoredInt(allocated_techs as AllocatedTechsBucketValue),
           daily_appointment_capacity: parseInt(daily_appointment_capacity, 10),
           weekly_appointment_capacity: parseInt(weekly_appointment_capacity, 10),
           parking_spots_rw: parseInt(parking_spots_rw, 10),
@@ -482,63 +503,70 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
 
               <div className="space-y-3">
                 <div ref={fieldRefSetter(fieldRefs, 'shop_name')}>
-                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">
-                    Shop name *
-                    <FieldStatus fieldKey="shop_name" ui={saveUi} />
-                  </label>
+                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">Shop name *</label>
                   <input
                     value={shopName}
-                    onChange={e => setShopName(e.target.value)}
-                    onBlur={() => scheduleFieldSave('shop_name', shopName)}
+                    onChange={e => {
+                      markTouched('shop_name')
+                      setShopName(e.target.value)
+                    }}
+                    onBlur={() => {
+                      scheduleFieldSave('shop_name', shopName)
+                      flushDisplayedErrors()
+                    }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="organization"
-                    aria-invalid={!!inlineErrors.shop_name}
+                    aria-invalid={!!visibleErrors.shop_name}
                   />
-                  <FieldError message={inlineErrors.shop_name} />
+                  <FieldError message={visibleErrors.shop_name} />
                 </div>
                 <div ref={fieldRefSetter(fieldRefs, 'contact_name')}>
-                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">
-                    Contact name *
-                    <FieldStatus fieldKey="contact_name" ui={saveUi} />
-                  </label>
+                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">Contact name *</label>
                   <input
                     value={contactName}
-                    onChange={e => setContactName(e.target.value)}
-                    onBlur={() => scheduleFieldSave('contact_name', contactName)}
+                    onChange={e => {
+                      markTouched('contact_name')
+                      setContactName(e.target.value)
+                    }}
+                    onBlur={() => {
+                      scheduleFieldSave('contact_name', contactName)
+                      flushDisplayedErrors()
+                    }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="name"
-                    aria-invalid={!!inlineErrors.contact_name}
+                    aria-invalid={!!visibleErrors.contact_name}
                   />
-                  <FieldError message={inlineErrors.contact_name} />
+                  <FieldError message={visibleErrors.contact_name} />
                 </div>
                 <div ref={fieldRefSetter(fieldRefs, 'contact_email')}>
-                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">
-                    Email *
-                    <FieldStatus fieldKey="contact_email" ui={saveUi} />
-                  </label>
+                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">Email *</label>
                   <input
                     type="text"
                     value={contactEmail}
-                    onChange={e => setContactEmail(e.target.value)}
-                    onBlur={() => scheduleFieldSave('contact_email', contactEmail)}
+                    onChange={e => {
+                      markTouched('contact_email')
+                      setContactEmail(e.target.value)
+                    }}
+                    onBlur={() => {
+                      scheduleFieldSave('contact_email', contactEmail)
+                      flushDisplayedErrors()
+                    }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="email"
                     inputMode="email"
-                    aria-invalid={!!inlineErrors.contact_email}
+                    aria-invalid={!!visibleErrors.contact_email}
                   />
-                  <FieldError message={inlineErrors.contact_email} />
+                  <FieldError message={visibleErrors.contact_email} />
                 </div>
                 <div ref={fieldRefSetter(fieldRefs, 'contact_phone')}>
-                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">
-                    Phone
-                    <FieldStatus fieldKey="contact_phone" ui={saveUi} />
-                  </label>
+                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">Phone</label>
                   <input
                     type="tel"
                     inputMode="numeric"
                     value={phoneFocused ? contactPhoneDigits : formatUsPhoneDisplay(contactPhoneDigits)}
                     onFocus={() => setPhoneFocused(true)}
                     onChange={e => {
+                      markTouched('contact_phone')
                       const raw = e.target.value
                       const d = stripPhoneToNationalDigits(raw)
                       setContactPhoneDigits(d)
@@ -548,281 +576,306 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                       const d = stripPhoneToNationalDigits(contactPhoneDigits)
                       setContactPhoneDigits(d)
                       scheduleFieldSave('contact_phone', d)
+                      flushDisplayedErrors()
                     }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="tel"
-                    aria-invalid={!!inlineErrors.contact_phone}
+                    aria-invalid={!!visibleErrors.contact_phone}
                   />
-                  <FieldError message={inlineErrors.contact_phone} />
+                  <FieldError message={visibleErrors.contact_phone} />
                 </div>
               </div>
 
               <div ref={fieldRefSetter(fieldRefs, 'standard_warranty')}>
                 <label className="mb-1 flex flex-wrap items-center text-sm font-medium text-gray-900">
                   Standard warranty for repairs *
-                  <FieldStatus fieldKey="standard_warranty" ui={saveUi} />
                 </label>
                 <textarea
                   value={standard_warranty}
-                  onChange={e => setWarranty(e.target.value)}
-                  onBlur={() => scheduleFieldSave('standard_warranty', standard_warranty)}
+                  onChange={e => {
+                    markTouched('standard_warranty')
+                    setWarranty(e.target.value)
+                  }}
+                  onBlur={() => {
+                    scheduleFieldSave('standard_warranty', standard_warranty)
+                    flushDisplayedErrors()
+                  }}
                   rows={3}
                   placeholder="e.g. 12 months / 12,000 miles"
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                  aria-invalid={!!inlineErrors.standard_warranty}
+                  aria-invalid={!!visibleErrors.standard_warranty}
                 />
-                <FieldError message={inlineErrors.standard_warranty} />
+                <FieldError message={visibleErrors.standard_warranty} />
               </div>
 
               <IntField
+                fieldKey="total_techs"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'total_techs')}
                 label="How many techs do you have working full time at your shop?"
                 required
-                fieldKey="total_techs"
                 value={total_techs}
                 onChange={setTotalTechs}
-                onBlur={() => scheduleFieldSave('total_techs', total_techs)}
-                saveUi={saveUi}
+                onBlur={() => {
+                  scheduleFieldSave('total_techs', total_techs)
+                  flushDisplayedErrors()
+                }}
                 max={PORTAL_INT_MAX.total_techs}
-                error={inlineErrors.total_techs}
+                error={visibleErrors.total_techs}
               />
-              <IntField
-                fieldRef={fieldRefSetter(fieldRefs, 'allocated_techs')}
-                label="How many techs can you allocate to the Fixlane program?"
-                required
+              <RadioBlock
                 fieldKey="allocated_techs"
+                onFieldInteract={markTouched}
+                fieldRef={fieldRefSetter(fieldRefs, 'allocated_techs')}
+                legend="How many techs can you allocate to the Fixlane program?"
+                required
+                options={ALLOCATED_TO_FIXLANE_OPTIONS}
                 value={allocated_techs}
-                onChange={setAllocatedTechs}
-                onBlur={() => scheduleFieldSave('allocated_techs', allocated_techs)}
-                saveUi={saveUi}
-                max={PORTAL_INT_MAX.allocated_techs}
-                error={inlineErrors.allocated_techs}
+                onChange={v => {
+                  setAllocatedTechs(v)
+                  scheduleFieldSave('allocated_techs', allocatedBucketToStoredInt(v as AllocatedTechsBucketValue))
+                  flushDisplayedErrors()
+                }}
+                name="allocated"
+                error={visibleErrors.allocated_techs}
               />
               <IntField
-                fieldRef={fieldRefSetter(fieldRefs, 'daily_appointment_capacity')}
-                label="How many Fixlane appointments are you capable of supporting per day? (On days you have availability for Fixlane)"
-                required
                 fieldKey="daily_appointment_capacity"
+                onFieldInteract={markTouched}
+                fieldRef={fieldRefSetter(fieldRefs, 'daily_appointment_capacity')}
+                label="How many Fixlane appointments can you support per day?"
+                required
                 value={daily_appointment_capacity}
                 onChange={setDailyCap}
-                onBlur={() => scheduleFieldSave('daily_appointment_capacity', daily_appointment_capacity)}
-                saveUi={saveUi}
+                onBlur={() => {
+                  scheduleFieldSave('daily_appointment_capacity', daily_appointment_capacity)
+                  flushDisplayedErrors()
+                }}
                 max={PORTAL_INT_MAX.daily_appointment_capacity}
-                error={inlineErrors.daily_appointment_capacity}
+                error={visibleErrors.daily_appointment_capacity}
               />
               <IntField
-                fieldRef={fieldRefSetter(fieldRefs, 'weekly_appointment_capacity')}
-                label="How many Fixlane appointments are you capable of supporting per week?"
-                required
                 fieldKey="weekly_appointment_capacity"
+                onFieldInteract={markTouched}
+                fieldRef={fieldRefSetter(fieldRefs, 'weekly_appointment_capacity')}
+                label="How many Fixlane appointments can you support per week?"
+                required
                 value={weekly_appointment_capacity}
                 onChange={setWeeklyCap}
-                onBlur={() => scheduleFieldSave('weekly_appointment_capacity', weekly_appointment_capacity)}
-                saveUi={saveUi}
+                onBlur={() => {
+                  scheduleFieldSave('weekly_appointment_capacity', weekly_appointment_capacity)
+                  flushDisplayedErrors()
+                }}
                 max={PORTAL_INT_MAX.weekly_appointment_capacity}
-                error={inlineErrors.weekly_appointment_capacity}
+                error={visibleErrors.weekly_appointment_capacity}
               />
               <IntField
+                fieldKey="parking_spots_rw"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'parking_spots_rw')}
                 label="How many parking spots do you have that you could reserve for Fixlane vehicles?"
                 required
-                fieldKey="parking_spots_rw"
                 value={parking_spots_rw}
                 onChange={setParking}
-                onBlur={() => scheduleFieldSave('parking_spots_rw', parking_spots_rw)}
-                saveUi={saveUi}
+                onBlur={() => {
+                  scheduleFieldSave('parking_spots_rw', parking_spots_rw)
+                  flushDisplayedErrors()
+                }}
                 max={PORTAL_INT_MAX.parking_spots_rw}
-                error={inlineErrors.parking_spots_rw}
+                error={visibleErrors.parking_spots_rw}
               />
               <IntField
+                fieldKey="two_post_lifts"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'two_post_lifts')}
                 label="How many 2-post lifts do you have on-site?"
                 required
-                fieldKey="two_post_lifts"
                 value={two_post_lifts}
                 onChange={setLifts}
-                onBlur={() => scheduleFieldSave('two_post_lifts', two_post_lifts)}
-                saveUi={saveUi}
+                onBlur={() => {
+                  scheduleFieldSave('two_post_lifts', two_post_lifts)
+                  flushDisplayedErrors()
+                }}
                 max={PORTAL_INT_MAX.two_post_lifts}
-                error={inlineErrors.two_post_lifts}
+                error={visibleErrors.two_post_lifts}
               />
 
               <RadioBlock
+                fieldKey="afterhours_tow_ins"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'afterhours_tow_ins')}
                 legend="Does your shop accept afterhour tow-ins?"
                 required
-                fieldKey="afterhours_tow_ins"
                 options={YES_NO_OPTIONS}
                 value={afterhours_tow_ins}
                 onChange={v => {
                   setTow(v)
                   scheduleFieldSave('afterhours_tow_ins', v)
                 }}
-                saveUi={saveUi}
                 name="tow"
-                error={inlineErrors.afterhours_tow_ins}
+                error={visibleErrors.afterhours_tow_ins}
               />
               <RadioBlock
+                fieldKey="night_drops"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'night_drops')}
                 legend="Does your shop accept night-drops?"
                 required
-                fieldKey="night_drops"
                 options={YES_NO_OPTIONS}
                 value={night_drops}
                 onChange={v => {
                   setNightDrops(v)
                   scheduleFieldSave('night_drops', v)
                 }}
-                saveUi={saveUi}
                 name="night"
-                error={inlineErrors.night_drops}
+                error={visibleErrors.night_drops}
               />
               <RadioBlock
+                fieldKey="tires"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'tires')}
                 legend="Can your shop remove, replace, and balance tires?"
                 required
-                fieldKey="tires"
                 options={TIRES_OPTIONS}
                 value={tires}
                 onChange={v => {
                   setTires(v)
                   scheduleFieldSave('tires', v)
                 }}
-                saveUi={saveUi}
                 name="tires"
-                error={inlineErrors.tires}
+                error={visibleErrors.tires}
               />
               <RadioBlock
+                fieldKey="wheel_alignment"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'wheel_alignment')}
                 legend="Can your shop perform wheel alignments?"
                 required
-                fieldKey="wheel_alignment"
                 options={ALIGNMENT_OPTIONS}
                 value={wheel_alignment}
                 onChange={v => {
                   setAlignment(v)
                   scheduleFieldSave('wheel_alignment', v)
                 }}
-                saveUi={saveUi}
                 name="align"
-                error={inlineErrors.wheel_alignment}
+                error={visibleErrors.wheel_alignment}
               />
               <RadioBlock
+                fieldKey="body_work"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'body_work')}
                 legend="Can your shop perform body work? (Dents, scratches, glass, etc.)"
                 required
-                fieldKey="body_work"
                 options={BODY_WORK_OPTIONS}
                 value={body_work}
                 onChange={v => {
                   setBodyWork(v)
                   scheduleFieldSave('body_work', v)
                 }}
-                saveUi={saveUi}
                 name="body"
-                error={inlineErrors.body_work}
+                error={visibleErrors.body_work}
               />
               <RadioBlock
+                fieldKey="adas"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'adas')}
                 legend="Can your shop perform ADAS calibrations?"
                 required
-                fieldKey="adas"
                 options={ADAS_OPTIONS}
                 value={adas}
                 onChange={v => {
                   setAdas(v)
                   scheduleFieldSave('adas', v)
                 }}
-                saveUi={saveUi}
                 name="adas"
-                error={inlineErrors.adas}
+                error={visibleErrors.adas}
               />
               <RadioBlock
+                fieldKey="ac_work"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'ac_work')}
                 legend="Is your shop certified and equipped to perform A/C work?"
                 required
-                fieldKey="ac_work"
                 options={AC_OPTIONS}
                 value={ac_work}
                 onChange={v => {
                   setAc(v)
                   scheduleFieldSave('ac_work', v)
                 }}
-                saveUi={saveUi}
                 name="ac"
-                error={inlineErrors.ac_work}
+                error={visibleErrors.ac_work}
               />
               <RadioBlock
+                fieldKey="forklift"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'forklift')}
                 legend="Does your shop have a forklift? (For maneuvering HV batteries)"
                 required
-                fieldKey="forklift"
                 options={YES_NO_OPTIONS}
                 value={forklift}
                 onChange={v => {
                   setForklift(v)
                   scheduleFieldSave('forklift', v)
                 }}
-                saveUi={saveUi}
                 name="fork"
-                error={inlineErrors.forklift}
+                error={visibleErrors.forklift}
               />
               <RadioBlock
+                fieldKey="hv_battery_table"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'hv_battery_table')}
                 legend="Does your shop have an HV battery or scissor table?"
                 required
-                fieldKey="hv_battery_table"
                 options={YES_NO_OPTIONS}
                 value={hv_battery_table}
                 onChange={v => {
                   setHvTable(v)
                   scheduleFieldSave('hv_battery_table', v)
                 }}
-                saveUi={saveUi}
                 name="hv"
-                error={inlineErrors.hv_battery_table}
+                error={visibleErrors.hv_battery_table}
               />
               <RadioBlock
+                fieldKey="windshields"
+                onFieldInteract={markTouched}
                 fieldRef={fieldRefSetter(fieldRefs, 'windshields')}
                 legend="Can your shop replace front/rear windshields?"
                 required
-                fieldKey="windshields"
                 options={WINDSHIELD_OPTIONS}
                 value={windshields}
                 onChange={v => {
                   setWindshields(v)
                   scheduleFieldSave('windshields', v)
                 }}
-                saveUi={saveUi}
                 name="glass"
-                error={inlineErrors.windshields}
+                error={visibleErrors.windshields}
               />
 
               {isCA && (
                 <div ref={fieldRefSetter(fieldRefs, 'bar_license_number')}>
-                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">
-                    BAR license number *
-                    <FieldStatus fieldKey="bar_license_number" ui={saveUi} />
-                  </label>
+                  <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">BAR license number *</label>
                   <input
                     value={barLicenseDigits}
-                    onChange={e => setBarLicenseDigits(barLicenseDigitsOnly(e.target.value))}
-                    onBlur={() => scheduleFieldSave('bar_license_number', barLicenseDigits)}
+                    onChange={e => {
+                      markTouched('bar_license_number')
+                      setBarLicenseDigits(barLicenseDigitsOnly(e.target.value))
+                    }}
+                    onBlur={() => {
+                      scheduleFieldSave('bar_license_number', barLicenseDigits)
+                      flushDisplayedErrors()
+                    }}
                     placeholder="e.g. 123456"
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="off"
                     inputMode="numeric"
-                    aria-invalid={!!inlineErrors.bar_license_number}
+                    aria-invalid={!!visibleErrors.bar_license_number}
                   />
-                  <FieldError message={inlineErrors.bar_license_number} />
+                  <FieldError message={visibleErrors.bar_license_number} />
                 </div>
               )}
 
               <div ref={fieldRefSetter(fieldRefs, 'hours_of_operation')}>
-                <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">
-                  Hours of operation *
-                  <FieldStatus fieldKey="hours_of_operation" ui={saveUi} />
-                </label>
+                <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">Hours of operation *</label>
                 {hoursLegacyHint && (
                   <p className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     Previously saved as free text: <span className="font-medium">{hoursLegacyHint}</span>. Use the
@@ -830,15 +883,15 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                   </p>
                 )}
                 <HoursScheduleEditor model={hoursModel} onChange={updateHoursModel} />
-                <FieldError message={inlineErrors.hours_of_operation} />
+                <FieldError message={visibleErrors.hours_of_operation} />
               </div>
 
               {submitNetworkError && <p className="text-sm text-red-600">{submitNetworkError}</p>}
 
               <button
                 type="submit"
-                disabled={!canSubmit || submitting}
-                className="w-full rounded-md bg-gray-900 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                disabled={submitting}
+                className={`w-full rounded-md bg-gray-900 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 ${!canSubmit && !submitting ? 'opacity-60' : ''}`}
               >
                 {submitting ? 'Submitting…' : 'Submit'}
               </button>
@@ -913,24 +966,24 @@ function HoursScheduleEditor({
 }
 
 function IntField({
+  fieldKey,
+  onFieldInteract,
   label,
   required,
-  fieldKey,
   value,
   onChange,
   onBlur,
-  saveUi,
   max,
   error,
   fieldRef,
 }: {
+  fieldKey: PortalCapabilitiesFieldKey
+  onFieldInteract: (k: PortalCapabilitiesFieldKey) => void
   label: string
   required?: boolean
-  fieldKey: PortalAutosaveKey
   value: string
   onChange: (v: string) => void
   onBlur: () => void
-  saveUi: Partial<Record<PortalAutosaveKey, PortalFieldSaveUi>>
   max: number
   error?: string
   fieldRef: (el: HTMLElement | null) => void
@@ -940,7 +993,6 @@ function IntField({
       <label className="mb-1 flex flex-wrap items-center text-sm font-medium text-gray-900">
         {label}
         {required ? ' *' : ''}
-        <FieldStatus fieldKey={fieldKey} ui={saveUi} />
       </label>
       <input
         type="number"
@@ -950,6 +1002,7 @@ function IntField({
         inputMode="numeric"
         value={value}
         onChange={e => {
+          onFieldInteract(fieldKey)
           const t = e.target.value
           if (t === '') {
             onChange('')
@@ -969,24 +1022,24 @@ function IntField({
 }
 
 function RadioBlock({
+  fieldKey,
+  onFieldInteract,
   legend,
   required,
-  fieldKey,
   options,
   value,
   onChange,
-  saveUi,
   name,
   error,
   fieldRef,
 }: {
+  fieldKey: PortalCapabilitiesFieldKey
+  onFieldInteract: (k: PortalCapabilitiesFieldKey) => void
   legend: string
   required?: boolean
-  fieldKey: PortalAutosaveKey
   options: RadioOpt[]
   value: string
   onChange: (v: string) => void
-  saveUi: Partial<Record<PortalAutosaveKey, PortalFieldSaveUi>>
   name: string
   error?: string
   fieldRef: (el: HTMLElement | null) => void
@@ -996,7 +1049,6 @@ function RadioBlock({
       <legend className="flex flex-wrap items-center text-sm font-medium text-gray-900">
         {legend}
         {required ? ' *' : ''}
-        <FieldStatus fieldKey={fieldKey} ui={saveUi} />
       </legend>
       <div className="space-y-2 pl-0.5">
         {options.map(opt => (
@@ -1007,7 +1059,10 @@ function RadioBlock({
               name={name}
               value={opt.value}
               checked={value === opt.value}
-              onChange={() => onChange(opt.value)}
+              onChange={() => {
+                onFieldInteract(fieldKey)
+                onChange(opt.value)
+              }}
             />
             <span>{opt.label}</span>
           </label>
