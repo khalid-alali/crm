@@ -55,9 +55,6 @@ type PageState =
   | 'expired'
   | 'error'
 
-/** Delay before showing inline validation messages so partial input (e.g. phone) does not flash errors while typing. */
-const FIELD_ERROR_DEBOUNCE_MS = 450
-
 type LocationPayload = {
   id: string
   name: string
@@ -207,12 +204,13 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
     ],
   )
 
-  const formSnapshotRef = useRef(formSnapshot)
-  formSnapshotRef.current = formSnapshot
-
   const canSubmit = useMemo(() => isPortalCapabilitiesFormComplete(formSnapshot), [formSnapshot])
 
-  const [displayedErrors, setDisplayedErrors] = useState<Partial<Record<PortalCapabilitiesFieldKey, string>>>({})
+  const validationErrors = useMemo(
+    () => validatePortalCapabilitiesForm(formSnapshot).errors,
+    [formSnapshot],
+  )
+
   const [touchedFields, setTouchedFields] = useState<Partial<Record<PortalCapabilitiesFieldKey, boolean>>>({})
   const [submitAttempted, setSubmitAttempted] = useState(false)
 
@@ -220,29 +218,20 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
     setTouchedFields(prev => (prev[k] ? prev : { ...prev, [k]: true }))
   }, [])
 
-  const flushDisplayedErrors = useCallback(() => {
-    setDisplayedErrors(validatePortalCapabilitiesForm(formSnapshotRef.current).errors)
-  }, [])
-
-  useEffect(() => {
-    const id = setTimeout(flushDisplayedErrors, FIELD_ERROR_DEBOUNCE_MS)
-    return () => clearTimeout(id)
-  }, [formSnapshot, flushDisplayedErrors])
-
   const visibleErrors = useMemo(() => {
-    if (submitAttempted) return displayedErrors
+    if (submitAttempted) return validationErrors
     const out: Partial<Record<PortalCapabilitiesFieldKey, string>> = {}
     const t = touchedFields
     const show = (k: PortalCapabilitiesFieldKey) =>
       !!t[k] ||
       (k === 'allocated_techs' && !!t.total_techs) ||
       (k === 'total_techs' && !!t.allocated_techs)
-    for (const key of Object.keys(displayedErrors) as PortalCapabilitiesFieldKey[]) {
-      const err = displayedErrors[key]
+    for (const key of Object.keys(validationErrors) as PortalCapabilitiesFieldKey[]) {
+      const err = validationErrors[key]
       if (err && show(key)) out[key] = err
     }
     return out
-  }, [displayedErrors, touchedFields, submitAttempted])
+  }, [validationErrors, touchedFields, submitAttempted])
 
   useEffect(() => {
     if (canSubmit) setSubmitAttempted(false)
@@ -389,7 +378,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
     const { errors, firstKey } = validatePortalCapabilitiesForm(formSnapshot)
     if (Object.keys(errors).length > 0) {
       setSubmitAttempted(true)
-      setDisplayedErrors(errors)
       if (firstKey) {
         fieldRefs.current[firstKey]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
@@ -512,7 +500,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                     }}
                     onBlur={() => {
                       scheduleFieldSave('shop_name', shopName)
-                      flushDisplayedErrors()
                     }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="organization"
@@ -530,7 +517,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                     }}
                     onBlur={() => {
                       scheduleFieldSave('contact_name', contactName)
-                      flushDisplayedErrors()
                     }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="name"
@@ -549,7 +535,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                     }}
                     onBlur={() => {
                       scheduleFieldSave('contact_email', contactEmail)
-                      flushDisplayedErrors()
                     }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="email"
@@ -576,7 +561,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                       const d = stripPhoneToNationalDigits(contactPhoneDigits)
                       setContactPhoneDigits(d)
                       scheduleFieldSave('contact_phone', d)
-                      flushDisplayedErrors()
                     }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     autoComplete="tel"
@@ -598,7 +582,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                   }}
                   onBlur={() => {
                     scheduleFieldSave('standard_warranty', standard_warranty)
-                    flushDisplayedErrors()
                   }}
                   rows={3}
                   placeholder="e.g. 12 months / 12,000 miles"
@@ -618,7 +601,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                 onChange={setTotalTechs}
                 onBlur={() => {
                   scheduleFieldSave('total_techs', total_techs)
-                  flushDisplayedErrors()
                 }}
                 max={PORTAL_INT_MAX.total_techs}
                 error={visibleErrors.total_techs}
@@ -634,7 +616,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                 onChange={v => {
                   setAllocatedTechs(v)
                   scheduleFieldSave('allocated_techs', allocatedBucketToStoredInt(v as AllocatedTechsBucketValue))
-                  flushDisplayedErrors()
                 }}
                 name="allocated"
                 error={visibleErrors.allocated_techs}
@@ -649,7 +630,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                 onChange={setDailyCap}
                 onBlur={() => {
                   scheduleFieldSave('daily_appointment_capacity', daily_appointment_capacity)
-                  flushDisplayedErrors()
                 }}
                 max={PORTAL_INT_MAX.daily_appointment_capacity}
                 error={visibleErrors.daily_appointment_capacity}
@@ -664,7 +644,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                 onChange={setWeeklyCap}
                 onBlur={() => {
                   scheduleFieldSave('weekly_appointment_capacity', weekly_appointment_capacity)
-                  flushDisplayedErrors()
                 }}
                 max={PORTAL_INT_MAX.weekly_appointment_capacity}
                 error={visibleErrors.weekly_appointment_capacity}
@@ -679,7 +658,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                 onChange={setParking}
                 onBlur={() => {
                   scheduleFieldSave('parking_spots_rw', parking_spots_rw)
-                  flushDisplayedErrors()
                 }}
                 max={PORTAL_INT_MAX.parking_spots_rw}
                 error={visibleErrors.parking_spots_rw}
@@ -694,7 +672,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                 onChange={setLifts}
                 onBlur={() => {
                   scheduleFieldSave('two_post_lifts', two_post_lifts)
-                  flushDisplayedErrors()
                 }}
                 max={PORTAL_INT_MAX.two_post_lifts}
                 error={visibleErrors.two_post_lifts}
@@ -862,7 +839,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                     }}
                     onBlur={() => {
                       scheduleFieldSave('bar_license_number', barLicenseDigits)
-                      flushDisplayedErrors()
                     }}
                     placeholder="e.g. 123456"
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
