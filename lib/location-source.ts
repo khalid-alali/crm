@@ -5,6 +5,7 @@ export const LOCATION_SOURCES = [
   'inbound',
   'event',
   'import',
+  'historical_migration',
   'other',
 ] as const
 
@@ -15,6 +16,7 @@ export const LOCATION_SOURCE_LABELS: Record<string, string> = {
   inbound: 'Inbound',
   event: 'Event',
   import: 'Import',
+  historical_migration: 'Historical migration',
   other: 'Other',
 }
 
