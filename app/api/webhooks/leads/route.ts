@@ -10,6 +10,56 @@ type LeadPayload = {
   email?: unknown
   phone?: unknown
   zip_code?: unknown
+  /** Common Zapier / form aliases */
+  zip?: unknown
+  postal_code?: unknown
+}
+
+function leadPayloadFromFlat(get: (key: string) => string | undefined): LeadPayload {
+  return {
+    shop_name: get('shop_name'),
+    contact_name: get('contact_name'),
+    email: get('email'),
+    phone: get('phone'),
+    zip_code: get('zip_code') ?? get('zip') ?? get('postal_code'),
+  }
+}
+
+/**
+ * Zapier "Form" sends `application/x-www-form-urlencoded`; `req.json()` throws → 500.
+ * Supports JSON, urlencoded, multipart, and JSON bodies sent with a missing/wrong Content-Type.
+ */
+async function parseLeadBody(req: NextRequest): Promise<LeadPayload> {
+  const ct = (req.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+
+  if (ct.includes('multipart/form-data')) {
+    const fd = await req.formData()
+    const get = (key: string) => {
+      const v = fd.get(key)
+      return v == null ? undefined : String(v)
+    }
+    return leadPayloadFromFlat(get)
+  }
+
+  if (ct.includes('application/x-www-form-urlencoded')) {
+    const text = await req.text()
+    const params = new URLSearchParams(text)
+    const get = (key: string) => params.get(key) ?? undefined
+    return leadPayloadFromFlat(get)
+  }
+
+  const text = await req.text()
+  const trimmed = text.trim()
+  if (!trimmed) return {}
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return JSON.parse(trimmed) as LeadPayload
+  }
+  const params = new URLSearchParams(trimmed)
+  if ([...params.keys()].length > 0) {
+    const get = (key: string) => params.get(key) ?? undefined
+    return leadPayloadFromFlat(get)
+  }
+  return {}
 }
 
 function getBearerToken(authorizationHeader: string | null): string {
@@ -62,12 +112,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = (await req.json()) as LeadPayload
+  let body: LeadPayload
+  try {
+    body = await parseLeadBody(req)
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid body: use JSON or form fields shop_name, contact_name, email, phone, zip_code.' },
+      { status: 400 },
+    )
+  }
+
   const shopName = normalizeString(body.shop_name)
   const contactName = normalizeString(body.contact_name)
   const email = normalizeString(body.email).toLowerCase()
   const phone = normalizeString(body.phone)
-  const zipCode = normalizePostalCode(body.zip_code)
+  const zipCode = normalizePostalCode(body.zip_code ?? body.zip ?? body.postal_code)
 
   if (!shopName) {
     return NextResponse.json({ error: 'shop_name is required' }, { status: 400 })
