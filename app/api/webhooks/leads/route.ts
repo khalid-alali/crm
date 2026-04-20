@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { detectChain } from '@/lib/chain-detect'
-import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
+import { coerceUsZip5OrNull } from '@/lib/postal-code'
 import { secureTokenEquals } from '@/lib/secure-token'
 
 type LeadPayload = {
@@ -117,7 +117,10 @@ export async function POST(req: NextRequest) {
     body = await parseLeadBody(req)
   } catch {
     return NextResponse.json(
-      { error: 'Invalid body: use JSON or form fields shop_name, contact_name, email, phone, zip_code.' },
+      {
+        error:
+          'Invalid body: use JSON or form fields shop_name, contact_name, email, phone, and optional zip_code.',
+      },
       { status: 400 },
     )
   }
@@ -126,7 +129,7 @@ export async function POST(req: NextRequest) {
   const contactName = normalizeString(body.contact_name)
   const email = normalizeString(body.email).toLowerCase()
   const phone = normalizeString(body.phone)
-  const zipCode = normalizePostalCode(body.zip_code ?? body.zip ?? body.postal_code)
+  const postalCode = coerceUsZip5OrNull(body.zip_code ?? body.zip ?? body.postal_code)
 
   if (!shopName) {
     return NextResponse.json({ error: 'shop_name is required' }, { status: 400 })
@@ -145,14 +148,6 @@ export async function POST(req: NextRequest) {
   }
   if (!isValidPhone(phone)) {
     return NextResponse.json({ error: 'phone is invalid' }, { status: 400 })
-  }
-  if (!zipCode) {
-    return NextResponse.json({ error: 'zip_code is required' }, { status: 400 })
-  }
-
-  const zipError = getPostalCodeError(zipCode)
-  if (zipError) {
-    return NextResponse.json({ error: zipError }, { status: 400 })
   }
 
   const { data: account, error: accountError } = await supabaseAdmin
@@ -173,7 +168,7 @@ export async function POST(req: NextRequest) {
       name: shopName,
       account_id: account.id,
       chain_name: detectChain(shopName),
-      postal_code: zipCode,
+      postal_code: postalCode,
       status: 'lead',
       source: 'lead_api',
     })
@@ -204,8 +199,8 @@ export async function POST(req: NextRequest) {
   const { error: activityError } = await supabaseAdmin.from('activity_log').insert({
     location_id: location.id,
     type: 'shop_created',
-    subject: 'Lead received via API',
-    body: 'Lead intake endpoint created account, shop, and contact.',
+    subject: 'New lead from form',
+    body: 'Account, shop, and contact created automatically.',
     sent_by: 'system',
   })
   if (activityError) {
