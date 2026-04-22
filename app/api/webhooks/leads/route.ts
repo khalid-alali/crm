@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { enrichLeadLocation } from '@/lib/google-places-enrichment'
 import { detectChain } from '@/lib/chain-detect'
 import { coerceUsZip5OrNull } from '@/lib/postal-code'
 import { secureTokenEquals } from '@/lib/secure-token'
@@ -178,6 +179,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: locationError.message }, { status: 500 })
   }
 
+  const { contactPhone } = await enrichLeadLocation(supabaseAdmin, {
+    locationId: location.id,
+    shopName: shopName,
+    postalCode: postalCode,
+    submittedPhone: phone,
+  })
+
   const { data: contact, error: contactError } = await supabaseAdmin
     .from('contacts')
     .insert({
@@ -185,7 +193,7 @@ export async function POST(req: NextRequest) {
       location_id: location.id,
       name: contactName,
       email,
-      phone,
+      phone: contactPhone,
       role: 'owner',
       is_primary: true,
       notes: 'Auto-created from lead intake endpoint',

@@ -5,6 +5,7 @@ import { canDeleteContracts } from '@/lib/contract-permissions'
 import ShopDetailTabs from './ShopDetailTabs'
 import { getSignedContractDocUrl } from '@/lib/contract-documents'
 import { resolvePrimaryContact } from '@/lib/primary-contact'
+import TrackRecentShopVisit from '@/components/TrackRecentShopVisit'
 
 export default async function ShopDetailPage({
   params,
@@ -24,6 +25,7 @@ export default async function ShopDetailPage({
       accounts(*),
       program_enrollments(*),
       activity_log(*),
+      location_enrichment(google_rating, google_review_count),
       contract_locations(
         contracts(*)
       )
@@ -77,6 +79,15 @@ export default async function ShopDetailPage({
 
   return (
     <div className="p-6">
+      <TrackRecentShopVisit
+        shop={{
+          id: shop.id,
+          name: shop.name,
+          status: shop.status,
+          city: shop.city,
+          state: shop.state,
+        }}
+      />
       <ShopDetailTabs
         shop={shop as any}
         siblingLocations={siblingLocations}

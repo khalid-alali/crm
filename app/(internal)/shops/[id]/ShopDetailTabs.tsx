@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Ban, Check, FileText, Loader2, Mail, Pencil, Trash2, X } from 'lucide-react'
+import { Ban, Check, FileText, Link2, Loader2, Mail, Pencil, Sparkles, Trash2, X } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import DeleteShopButton from '@/components/DeleteShopButton'
 import EmailModal from '@/components/EmailModal'
@@ -111,6 +111,25 @@ function activityBadge(value: string | null | undefined): string {
   return `${days}d ago`
 }
 
+/** `location_enrichment` from shop detail query (array or single row). */
+function formatGoogleRatingFromEnrichment(shop: { location_enrichment?: unknown }): string {
+  const raw = shop.location_enrichment
+  const row = Array.isArray(raw) ? raw[0] : raw
+  if (!row || typeof row !== 'object') return '—'
+  const rating = (row as { google_rating?: unknown }).google_rating
+  const count = (row as { google_review_count?: unknown }).google_review_count
+  const ratingNum = rating != null && rating !== '' ? Number(rating) : NaN
+  const countNum = count != null && count !== '' ? Number(count) : NaN
+  const hasRating = Number.isFinite(ratingNum)
+  const hasCount = Number.isFinite(countNum) && countNum >= 0
+  if (!hasRating && !hasCount) return '—'
+  if (hasRating && hasCount) {
+    return `${ratingNum.toFixed(1)} ★ ${Math.trunc(countNum).toLocaleString('en-US')} reviews`
+  }
+  if (hasRating) return `${ratingNum.toFixed(1)} ★`
+  return `${Math.trunc(countNum).toLocaleString('en-US')} reviews`
+}
+
 /** Calendar-day distance from `iso` to today (0 = same local day). */
 export default function ShopDetailTabs({
   shop,
@@ -124,8 +143,8 @@ export default function ShopDetailTabs({
   const router = useRouter()
   const [tab, setTab] = useState<TabKey>(() => {
     const d = (defaultTab ?? 'activity').trim().toLowerCase()
-    const hasAdmin = Boolean((shop.motherduck_shop_id ?? '').trim())
-    if (d === 'admin' && hasAdmin) return 'admin'
+    if (d === 'admin') return 'admin'
+    if (d === 'activity') return 'activity'
     if (d === 'contracts' || d === 'programs' || d === 'capabilities') return d
     return 'activity'
   })
@@ -168,6 +187,8 @@ export default function ShopDetailTabs({
   const [shopCacheLoading, setShopCacheLoading] = useState(false)
   const [shopCacheError, setShopCacheError] = useState<string | null>(null)
   const [shopCacheRow, setShopCacheRow] = useState<ShopStatusCachePayload | null>(null)
+  const [enrichLoading, setEnrichLoading] = useState(false)
+  const [enrichFeedback, setEnrichFeedback] = useState<string | null>(null)
   const [inlineDraft, setInlineDraft] = useState({
     name: shop.name ?? '',
     account_id: shop.account_id ?? null,
@@ -218,7 +239,9 @@ export default function ShopDetailTabs({
     })
     setInlineEdit(null)
     setInlineError(null)
+    setEnrichFeedback(null)
   }, [
+    shop.id,
     shop.assigned_to,
     shop.status,
     shop.motherduck_shop_id,
@@ -300,18 +323,16 @@ export default function ShopDetailTabs({
     [currentAdminShopId, shop.motherduck_shop_id],
   )
 
-  const visibleTabs = useMemo((): TabKey[] => {
-    const out: TabKey[] = [...BASE_TABS]
-    if (hasAdminShopLink) out.push('admin')
-    return out
-  }, [hasAdminShopLink])
+  const visibleTabs = useMemo((): TabKey[] => [...BASE_TABS, 'admin'], [])
 
   useEffect(() => {
-    if (tab === 'admin' && !hasAdminShopLink) setTab('activity')
-  }, [tab, hasAdminShopLink])
-
-  useEffect(() => {
-    if (tab !== 'admin' || !hasAdminShopLink) return
+    if (tab !== 'admin') return
+    if (!hasAdminShopLink) {
+      setShopCacheLoading(false)
+      setShopCacheError(null)
+      setShopCacheRow(null)
+      return
+    }
     let cancelled = false
     async function loadShopCache() {
       setShopCacheLoading(true)
@@ -704,6 +725,23 @@ export default function ShopDetailTabs({
     )
   }
 
+  async function runLocationEnrich() {
+    setEnrichLoading(true)
+    setEnrichFeedback(null)
+    setInlineError(null)
+    try {
+      const res = await fetch(`/api/locations/${shop.id}/enrich`, { method: 'POST' })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Enrichment failed')
+      setEnrichFeedback(data.message ?? 'Done.')
+      router.refresh()
+    } catch (e: unknown) {
+      setEnrichFeedback(e instanceof Error ? e.message : 'Enrichment failed')
+    } finally {
+      setEnrichLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="mb-2 flex items-center gap-2 text-sm text-onix-500">
@@ -1092,6 +1130,10 @@ export default function ShopDetailTabs({
                   </dd>
                 </div>
                 <div className="flex justify-between gap-2">
+                  <dt className="text-onix-500">Google rating</dt>
+                  <dd className="min-w-0 text-right">{formatGoogleRatingFromEnrichment(shop)}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
                   <dt className="text-onix-500">Std labor</dt>
                   <dd>
                     {shop.standard_labor_rate != null && Number.isFinite(Number(shop.standard_labor_rate))
@@ -1123,6 +1165,20 @@ export default function ShopDetailTabs({
 
           <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-onix-400">
             Location
+            <button
+              type="button"
+              onClick={() => void runLocationEnrich()}
+              disabled={enrichLoading || inlineEdit === 'location'}
+              title="Enrich address and metadata from Google Places"
+              className="inline-flex h-5 w-5 items-center justify-center rounded text-onix-400 hover:bg-arctic-100 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {enrichLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              )}
+              <span className="sr-only">Enrich from Google Places</span>
+            </button>
             {editIcon('location')}
           </div>
           {inlineEdit === 'location' ? (
@@ -1184,6 +1240,19 @@ export default function ShopDetailTabs({
               {shop.county ? (
                 <div className="mt-0.5 text-xs text-onix-500">{shop.county}</div>
               ) : null}
+              {enrichFeedback ? (
+                <div
+                  className={`mt-1 text-xs ${
+                    enrichFeedback.startsWith('Location updated')
+                      ? 'text-emerald-700'
+                      : enrichFeedback.includes('review') || enrichFeedback.includes('Supabase')
+                        ? 'text-amber-700'
+                        : 'text-red-600'
+                  }`}
+                >
+                  {enrichFeedback}
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -1220,42 +1289,6 @@ export default function ShopDetailTabs({
             <div className="text-sm text-onix-800 whitespace-pre-wrap">{shop.notes || '—'}</div>
           )}
           {inlineError && inlineEdit !== 'account' && <p className="text-xs text-red-600">{inlineError}</p>}
-          <div className="border-t border-arctic-200 pt-3 space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div className="text-xs uppercase tracking-wide text-onix-400">Admin Shop Match</div>
-              {currentAdminShopId && (
-                <a
-                  href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-brand-700 hover:underline"
-                >
-                  Open admin
-                </a>
-              )}
-            </div>
-            <div className="rounded border border-arctic-200 bg-arctic-50 p-2 text-xs text-onix-700">
-              {currentAdminShopId ? 'Linked to RepairWise admin.' : 'No admin shop linked yet.'}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={openAdminMatchModal}
-                className="rounded border border-arctic-300 px-2 py-1 text-xs text-onix-700 hover:bg-arctic-50"
-              >
-                Change Admin shop link
-              </button>
-              <button
-                type="button"
-                disabled={adminSaving || !currentAdminShopId}
-                onClick={clearAdminShopId}
-                className="rounded border border-arctic-300 px-2 py-1 text-xs text-onix-700 hover:bg-arctic-50 disabled:opacity-50"
-              >
-                Clear
-              </button>
-            </div>
-            {adminFeedback && <div className="text-xs text-onix-600">{adminFeedback}</div>}
-          </div>
           <div className="border-t border-arctic-200 pt-3">
             <div className="mb-2 text-xs uppercase tracking-wide text-onix-400">Locations for this account</div>
             <div className="space-y-1">
@@ -1467,54 +1500,129 @@ export default function ShopDetailTabs({
             </div>
           )}
 
-          {tab === 'admin' && hasAdminShopLink && (
-            <div className="max-w-md space-y-4 rounded-lg border border-arctic-200 bg-white p-4">
-              {shopCacheLoading && (
-                <div className="flex items-center gap-2 text-sm text-onix-600">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Loading RepairWise admin data…
-                </div>
-              )}
-              {!shopCacheLoading && shopCacheError && (
-                <p className="text-sm text-red-600" role="alert">
-                  {shopCacheError}
-                </p>
-              )}
-              {!shopCacheLoading && !shopCacheError && shopCacheRow === null && (
-                <p className="text-sm text-onix-500">
-                  No cached admin shop row yet. It will appear after the next sync into{' '}
-                  <code className="rounded bg-arctic-100 px-1 text-xs">shop_status_cache</code>.
-                </p>
-              )}
-              {!shopCacheLoading && !shopCacheError && shopCacheRow && (
-                <dl className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between gap-4">
-                    <dt className="text-onix-600">Max jobs per day</dt>
-                    <dd className="font-medium text-onix-900">
-                      {shopCacheRow.max_jobs_per_day != null ? shopCacheRow.max_jobs_per_day : '—'}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <dt className="text-onix-600">Max jobs per week</dt>
-                    <dd className="font-medium text-onix-900">
-                      {shopCacheRow.max_jobs_per_week != null ? shopCacheRow.max_jobs_per_week : '—'}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <dt className="text-onix-600">Active</dt>
-                    <dd className="font-medium text-onix-900">
-                      {shopCacheRow.is_active === true ? (
-                        <span className="inline-flex items-center gap-1.5 text-emerald-700">
-                          <Check className="h-4 w-4" aria-hidden />
-                          <span className="sr-only">Yes</span>
+          {tab === 'admin' && (
+            <div className="max-w-2xl space-y-4">
+              <div className="space-y-1">
+                <div className="text-xs font-medium uppercase tracking-[0.06em] text-onix-500">Admin Link</div>
+                <div className="rounded-xl border border-arctic-200 bg-white p-3">
+                  {hasAdminShopLink ? (
+                    <>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-onix-900">RepairWise admin</div>
+                          <div className="mt-0.5 text-xs text-onix-500">shop_id · {currentAdminShopId}</div>
+                        </div>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                            shopCacheRow?.is_active === false
+                              ? 'bg-arctic-100 text-onix-600'
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+                          Linked
                         </span>
-                      ) : (
-                        '—'
-                      )}
-                    </dd>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={openAdminMatchModal}
+                          className="rounded-lg border border-arctic-300 px-3 py-1.5 text-sm text-onix-800 hover:bg-arctic-50"
+                        >
+                          Change link
+                        </button>
+                        <a
+                          href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg border border-arctic-300 px-3 py-1.5 text-sm text-onix-800 hover:bg-arctic-50"
+                        >
+                          Open admin ↗
+                        </a>
+                        <button
+                          type="button"
+                          disabled={adminSaving}
+                          onClick={clearAdminShopId}
+                          className="rounded-lg border border-arctic-300 px-3 py-1.5 text-sm text-onix-800 hover:bg-arctic-50 disabled:opacity-50"
+                        >
+                          Unlink
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 px-2 py-5 text-center">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-arctic-100 text-onix-500">
+                        <Link2 className="h-4 w-4" aria-hidden />
+                      </span>
+                      <div className="text-sm font-medium text-onix-900">No admin link</div>
+                      <p className="max-w-sm text-sm text-onix-500">
+                        This shop isn&apos;t linked to a RepairWise admin account. Jobs can&apos;t be dispatched until a link is set.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openAdminMatchModal}
+                        className="rounded-lg border border-arctic-300 px-3 py-1.5 text-sm text-onix-800 hover:bg-arctic-50"
+                      >
+                        + Link admin account
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {hasAdminShopLink && (
+                <>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium uppercase tracking-[0.06em] text-onix-500">Availability</div>
+                    <div className="rounded-xl border border-arctic-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-onix-700">Shop status</span>
+                        {shopCacheLoading ? (
+                          <span className="inline-flex items-center gap-1 text-onix-500">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            Loading…
+                          </span>
+                        ) : shopCacheRow?.is_active === true ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+                            Active
+                          </span>
+                        ) : shopCacheRow?.is_active === false ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+                            Inactive
+                          </span>
+                        ) : (
+                          <span className="text-onix-500">—</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </dl>
+
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium uppercase tracking-[0.06em] text-onix-500">Job Limits</div>
+                    <div className="rounded-xl border border-arctic-200 bg-white p-3">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="rounded-lg bg-arctic-100 px-3 py-2">
+                          <div className="text-xs text-onix-500">Max per day</div>
+                          <div className="mt-1 text-3xl font-medium text-onix-900">
+                            {shopCacheLoading ? '…' : shopCacheRow?.max_jobs_per_day ?? '—'}
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-arctic-100 px-3 py-2">
+                          <div className="text-xs text-onix-500">Max per week</div>
+                          <div className="mt-1 text-3xl font-medium text-onix-900">
+                            {shopCacheLoading ? '…' : shopCacheRow?.max_jobs_per_week ?? '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
+
+              {adminFeedback && <p className="text-sm text-onix-600">{adminFeedback}</p>}
+              {shopCacheError && <p className="text-sm text-red-600">{shopCacheError}</p>}
             </div>
           )}
         </section>
