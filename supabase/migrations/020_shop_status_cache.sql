@@ -1,0 +1,21 @@
+create table if not exists public.shop_status_cache (
+  shop_id uuid primary key,
+  shop_name text,
+  max_jobs_per_day integer,
+  max_jobs_per_week integer,
+  is_vinfast_shop boolean,
+  vinfast_store_code text,
+  dealer_code text,
+  is_active boolean,
+  routable_id text,
+  labor_rate_dollars numeric(10,2),
+  warranty_labor_rate_dollars numeric(10,2),
+  owner_name text,
+  owner_email text,
+  owner_phone text,
+  full_address text,
+  city text,
+  state text,
+  zip text,
+  synced_at timestamptz not null default now()
+);

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Ban, Check, FileText, Loader2, Mail, Pencil, Trash2, X } from 'lucide-react'
@@ -27,8 +27,9 @@ const PROGRAMS = [
 ]
 const PROGRAM_STATUSES = ['not_enrolled', 'pending_activation', 'active', 'suspended', 'terminated']
 const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
-const TABS = ['activity', 'contracts', 'programs', 'capabilities'] as const
-type TabKey = (typeof TABS)[number]
+const BASE_TABS = ['activity', 'contracts', 'programs', 'capabilities'] as const
+type BaseTabKey = (typeof BASE_TABS)[number]
+type TabKey = BaseTabKey | 'admin'
 type EditField = 'name' | 'account' | 'location' | 'source' | 'notes' | 'commercial'
 
 type SiblingLocation = {
@@ -60,6 +61,13 @@ type AdminSearchResult = {
   primary_contact_email: string | null
   account_primary_name: string | null
   account_primary_email: string | null
+}
+
+type ShopStatusCachePayload = {
+  max_jobs_per_day: number | null
+  max_jobs_per_week: number | null
+  is_active: boolean | null
+  synced_at: string | null
 }
 
 function fmtDate(value: string | null | undefined): string {
@@ -114,11 +122,13 @@ export default function ShopDetailTabs({
   allowContractDelete = false,
 }: Props) {
   const router = useRouter()
-  const [tab, setTab] = useState<TabKey>(
-    defaultTab === 'contracts' || defaultTab === 'programs' || defaultTab === 'capabilities'
-      ? defaultTab
-      : 'activity',
-  )
+  const [tab, setTab] = useState<TabKey>(() => {
+    const d = (defaultTab ?? 'activity').trim().toLowerCase()
+    const hasAdmin = Boolean((shop.motherduck_shop_id ?? '').trim())
+    if (d === 'admin' && hasAdmin) return 'admin'
+    if (d === 'contracts' || d === 'programs' || d === 'capabilities') return d
+    return 'activity'
+  })
   const [status, setStatus] = useState(shop.status)
   const [operationalStatus, setOperationalStatus] = useState<string | null>(null)
   const [operationalStatusLoading, setOperationalStatusLoading] = useState(false)
@@ -155,6 +165,9 @@ export default function ShopDetailTabs({
   const [inlineSaving, setInlineSaving] = useState(false)
   const [inlineError, setInlineError] = useState<string | null>(null)
   const [capabilitiesLinkFeedback, setCapabilitiesLinkFeedback] = useState<string | null>(null)
+  const [shopCacheLoading, setShopCacheLoading] = useState(false)
+  const [shopCacheError, setShopCacheError] = useState<string | null>(null)
+  const [shopCacheRow, setShopCacheRow] = useState<ShopStatusCachePayload | null>(null)
   const [inlineDraft, setInlineDraft] = useState({
     name: shop.name ?? '',
     account_id: shop.account_id ?? null,
@@ -281,6 +294,53 @@ export default function ShopDetailTabs({
       isCancelled = true
     }
   }, [tab, shop.id, shop.motherduck_shop_id])
+
+  const hasAdminShopLink = useMemo(
+    () => Boolean((currentAdminShopId || shop.motherduck_shop_id || '').trim()),
+    [currentAdminShopId, shop.motherduck_shop_id],
+  )
+
+  const visibleTabs = useMemo((): TabKey[] => {
+    const out: TabKey[] = [...BASE_TABS]
+    if (hasAdminShopLink) out.push('admin')
+    return out
+  }, [hasAdminShopLink])
+
+  useEffect(() => {
+    if (tab === 'admin' && !hasAdminShopLink) setTab('activity')
+  }, [tab, hasAdminShopLink])
+
+  useEffect(() => {
+    if (tab !== 'admin' || !hasAdminShopLink) return
+    let cancelled = false
+    async function loadShopCache() {
+      setShopCacheLoading(true)
+      setShopCacheError(null)
+      try {
+        const res = await fetch(`/api/locations/${shop.id}/shop-status-cache`, { cache: 'no-store' })
+        const data = (await res.json().catch(() => ({}))) as { error?: string; row?: ShopStatusCachePayload | null }
+        if (cancelled) return
+        if (!res.ok) {
+          setShopCacheRow(null)
+          setShopCacheError(typeof data.error === 'string' ? data.error : 'Could not load admin shop data')
+          return
+        }
+        setShopCacheError(null)
+        setShopCacheRow(data.row ?? null)
+      } catch {
+        if (!cancelled) {
+          setShopCacheRow(null)
+          setShopCacheError('Could not load admin shop data')
+        }
+      } finally {
+        if (!cancelled) setShopCacheLoading(false)
+      }
+    }
+    void loadShopCache()
+    return () => {
+      cancelled = true
+    }
+  }, [tab, hasAdminShopLink, shop.id])
 
   useEffect(() => {
     return () => {
@@ -1212,9 +1272,10 @@ export default function ShopDetailTabs({
         <section className="space-y-4">
           <div className="overflow-hidden rounded-lg border border-arctic-200 bg-white">
             <div className="flex bg-arctic-50">
-              {TABS.map(t => (
+              {visibleTabs.map(t => (
                 <button
                   key={t}
+                  type="button"
                   onClick={() => setTab(t)}
                   className={`border-r border-arctic-200 px-5 py-2 text-sm font-medium capitalize last:border-r-0 ${
                     tab === t
@@ -1402,6 +1463,57 @@ export default function ShopDetailTabs({
                 <p className="text-sm text-onix-600" role="status">
                   {capabilitiesLinkFeedback}
                 </p>
+              )}
+            </div>
+          )}
+
+          {tab === 'admin' && hasAdminShopLink && (
+            <div className="max-w-md space-y-4 rounded-lg border border-arctic-200 bg-white p-4">
+              {shopCacheLoading && (
+                <div className="flex items-center gap-2 text-sm text-onix-600">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Loading RepairWise admin data…
+                </div>
+              )}
+              {!shopCacheLoading && shopCacheError && (
+                <p className="text-sm text-red-600" role="alert">
+                  {shopCacheError}
+                </p>
+              )}
+              {!shopCacheLoading && !shopCacheError && shopCacheRow === null && (
+                <p className="text-sm text-onix-500">
+                  No cached admin shop row yet. It will appear after the next sync into{' '}
+                  <code className="rounded bg-arctic-100 px-1 text-xs">shop_status_cache</code>.
+                </p>
+              )}
+              {!shopCacheLoading && !shopCacheError && shopCacheRow && (
+                <dl className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-onix-600">Max jobs per day</dt>
+                    <dd className="font-medium text-onix-900">
+                      {shopCacheRow.max_jobs_per_day != null ? shopCacheRow.max_jobs_per_day : '—'}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-onix-600">Max jobs per week</dt>
+                    <dd className="font-medium text-onix-900">
+                      {shopCacheRow.max_jobs_per_week != null ? shopCacheRow.max_jobs_per_week : '—'}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-onix-600">Active</dt>
+                    <dd className="font-medium text-onix-900">
+                      {shopCacheRow.is_active === true ? (
+                        <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                          <Check className="h-4 w-4" aria-hidden />
+                          <span className="sr-only">Yes</span>
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </dd>
+                  </div>
+                </dl>
               )}
             </div>
           )}
