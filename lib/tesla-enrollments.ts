@@ -50,6 +50,7 @@ type ShopStatusCacheRow = {
   is_active: boolean | null
   max_jobs_per_day: number | null
   max_jobs_per_week: number | null
+  tesla_jobs_completed: number | null
 }
 
 export type TeslaEnrollmentView = {
@@ -68,6 +69,8 @@ export type TeslaEnrollmentView = {
   hasShopSurvey: boolean
   hasTechSurvey: boolean
   vinfastActive: boolean
+  /** From shop_status_cache.tesla_jobs_completed when > 0 for display. */
+  teslaJobsCompleted: number
   highSignalName: boolean
   checklist: {
     itemKey: string
@@ -199,7 +202,9 @@ export async function listTeslaEnrollments(
         .in('enrollment_id', enrollmentIds),
       supabaseAdmin
         .from('shop_status_cache')
-        .select('shop_id, is_vinfast_shop, is_active, max_jobs_per_day, max_jobs_per_week')
+        .select(
+          'shop_id, is_vinfast_shop, is_active, max_jobs_per_day, max_jobs_per_week, tesla_jobs_completed',
+        )
         .in('shop_id', cacheKeys),
     ])
 
@@ -272,7 +277,12 @@ export async function listTeslaEnrollments(
 
     const account = location.account_id ? accountById.get(location.account_id) ?? null : null
     const cacheLookupKey = location?.motherduck_shop_id ?? enrollment.location_id
-    const vinfast = cacheByLocation.get(cacheLookupKey)
+    const cacheRow = cacheByLocation.get(cacheLookupKey)
+    const teslaJobsRaw = cacheRow?.tesla_jobs_completed
+    const teslaJobsCompleted =
+      typeof teslaJobsRaw === 'number' && !Number.isNaN(teslaJobsRaw)
+        ? teslaJobsRaw
+        : Number(teslaJobsRaw) || 0
 
     const stage = location.status === 'inactive' ? 'disqualified' : derivedStage
 
@@ -295,11 +305,12 @@ export async function listTeslaEnrollments(
       hasShopSurvey: Boolean(location?.capabilities_submitted_at),
       hasTechSurvey: (surveyCountByLocation.get(enrollment.location_id) ?? 0) > 0,
       vinfastActive: Boolean(
-        vinfast?.is_vinfast_shop &&
-          vinfast?.is_active &&
-          (vinfast?.max_jobs_per_day ?? 0) > 0 &&
-          (vinfast?.max_jobs_per_week ?? 0) > 0,
+        cacheRow?.is_vinfast_shop &&
+          cacheRow?.is_active &&
+          (cacheRow?.max_jobs_per_day ?? 0) > 0 &&
+          (cacheRow?.max_jobs_per_week ?? 0) > 0,
       ),
+      teslaJobsCompleted,
       highSignalName: isHighSignalShopName(location?.name),
       checklist,
       missingChecklistKeys: getMissingChecklistKeys(enrollment.program_id, completedKeys),

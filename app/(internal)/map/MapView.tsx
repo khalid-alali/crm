@@ -23,7 +23,7 @@ const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'ina
 /** Statuses shown in the map filter (churned is toggled separately). */
 const MAP_FILTER_STATUSES = STATUSES.filter(s => s !== 'inactive')
 
-interface Location {
+export interface MapViewLocation {
   id: string
   name: string
   chain_name: string | null
@@ -37,6 +37,9 @@ interface Location {
   primary_owner_name: string | null
   primary_owner_email: string | null
 }
+
+/** @deprecated Use MapViewLocation */
+type Location = MapViewLocation
 
 function toLngLat(loc: Location): [number, number] | null {
   const lat = Number(loc.lat)
@@ -143,11 +146,103 @@ function featureCollection(
   return { type: 'FeatureCollection', features }
 }
 
-export default function MapView({ locations }: { locations: Location[] }) {
+const TESLA_STAGE_PIN_COLORS: Record<string, string> = {
+  not_ready: '#b91c1c',
+  getting_ready: '#d97706',
+  ready: '#3b82f6',
+  active: '#16a34a',
+  disqualified: '#71717a',
+}
+
+function teslaFeatureCollection(
+  locs: MapViewLocation[],
+  stages: Record<string, string>,
+): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = locs.flatMap(loc => {
+    const ll = toLngLat(loc)
+    if (!ll) return []
+    const stage = stages[loc.id] ?? 'not_ready'
+    return [
+      {
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: ll },
+        properties: { id: loc.id, tesla_stage: stage },
+      },
+    ]
+  })
+  return { type: 'FeatureCollection', features }
+}
+
+const TESLA_CIRCLE_PAINT: mapboxgl.CirclePaint = {
+  'circle-color': [
+    'match',
+    ['get', 'tesla_stage'],
+    'not_ready',
+    TESLA_STAGE_PIN_COLORS.not_ready,
+    'getting_ready',
+    TESLA_STAGE_PIN_COLORS.getting_ready,
+    'ready',
+    TESLA_STAGE_PIN_COLORS.ready,
+    'active',
+    TESLA_STAGE_PIN_COLORS.active,
+    'disqualified',
+    TESLA_STAGE_PIN_COLORS.disqualified,
+    '#888780',
+  ],
+  'circle-radius': 8,
+  'circle-stroke-width': 1.5,
+  'circle-stroke-color': '#fff',
+}
+
+const TESLA_STAGE_POPUP_LABEL: Record<string, string> = {
+  not_ready: 'Not Ready',
+  getting_ready: 'Getting Ready',
+  ready: 'Ready',
+  active: 'Active',
+  disqualified: 'Disqualified',
+}
+
+const CRM_CIRCLE_PAINT: mapboxgl.CirclePaint = {
+  'circle-color': [
+    'match',
+    ['get', 'status'],
+    'lead',
+    STATUS_COLORS.lead,
+    'contacted',
+    STATUS_COLORS.contacted,
+    'in_review',
+    STATUS_COLORS.in_review,
+    'contracted',
+    STATUS_COLORS.contracted,
+    'active',
+    STATUS_COLORS.active,
+    'inactive',
+    STATUS_COLORS.inactive,
+    '#888780',
+  ],
+  'circle-radius': 8,
+  'circle-stroke-width': 1.5,
+  'circle-stroke-color': '#fff',
+}
+
+export default function MapView({
+  locations,
+  teslaEmbed = false,
+  teslaStageByLocationId,
+}: {
+  locations: MapViewLocation[]
+  /** Tesla pipeline embed: hide CRM sidebar, color pins by Tesla stage, parent supplies filters. */
+  teslaEmbed?: boolean
+  teslaStageByLocationId?: Record<string, string>
+}) {
   const router = useRouter()
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const locationsRef = useRef(locations)
   locationsRef.current = locations
+  const teslaStagesRef = useRef<Record<string, string>>(teslaStageByLocationId ?? {})
+  teslaStagesRef.current = teslaStageByLocationId ?? {}
+  const teslaEmbedRef = useRef(teslaEmbed)
+  teslaEmbedRef.current = teslaEmbed
   const filterStatusRef = useRef('')
   const showChurnedRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -162,8 +257,8 @@ export default function MapView({ locations }: { locations: Location[] }) {
   const [geocodeResult, setGeocodeResult] = useState<string | null>(null)
 
   const scoped = useMemo(
-    () => getVisibleLocations(locations, filterStatus, showChurned),
-    [locations, filterStatus, showChurned],
+    () => (teslaEmbed ? locations : getVisibleLocations(locations, filterStatus, showChurned)),
+    [locations, filterStatus, showChurned, teslaEmbed],
   )
   const pinsShown = scoped.filter(l => toLngLat(l) != null).length
   const missingCoords = scoped.length - pinsShown
@@ -242,11 +337,14 @@ export default function MapView({ locations }: { locations: Location[] }) {
     mapRef.current = map
 
     map.on('load', () => {
-      const data = featureCollection(
-        locationsRef.current,
-        filterStatusRef.current,
-        showChurnedRef.current,
-      )
+      const embed = teslaEmbedRef.current
+      const data = embed
+        ? teslaFeatureCollection(locationsRef.current, teslaStagesRef.current)
+        : featureCollection(
+            locationsRef.current,
+            filterStatusRef.current,
+            showChurnedRef.current,
+          )
       map.addSource('locations', {
         type: 'geojson',
         data,
@@ -256,28 +354,7 @@ export default function MapView({ locations }: { locations: Location[] }) {
         id: 'locations',
         type: 'circle',
         source: 'locations',
-        paint: {
-          'circle-color': [
-            'match',
-            ['get', 'status'],
-            'lead',
-            STATUS_COLORS.lead,
-            'contacted',
-            STATUS_COLORS.contacted,
-            'in_review',
-            STATUS_COLORS.in_review,
-            'contracted',
-            STATUS_COLORS.contracted,
-            'active',
-            STATUS_COLORS.active,
-            'inactive',
-            STATUS_COLORS.inactive,
-            '#888780',
-          ],
-          'circle-radius': 8,
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#fff',
-        },
+        paint: embed ? TESLA_CIRCLE_PAINT : CRM_CIRCLE_PAINT,
       })
 
       map.on('click', 'locations', e => {
@@ -302,8 +379,12 @@ export default function MapView({ locations }: { locations: Location[] }) {
     if (!map?.isStyleLoaded()) return
     const source = map.getSource('locations') as mapboxgl.GeoJSONSource | undefined
     if (!source) return
-    source.setData(featureCollection(locations, filterStatus, showChurned))
-  }, [locations, filterStatus, showChurned])
+    source.setData(
+      teslaEmbed
+        ? teslaFeatureCollection(locations, teslaStageByLocationId ?? {})
+        : featureCollection(locations, filterStatus, showChurned),
+    )
+  }, [locations, filterStatus, showChurned, teslaEmbed, teslaStageByLocationId])
 
   function flyMapToArea(code: string) {
     const map = mapRef.current
@@ -399,8 +480,9 @@ export default function MapView({ locations }: { locations: Location[] }) {
   }
 
   return (
-    <div className="flex-1 flex relative">
-      {/* Sidebar */}
+    <div className={`flex-1 flex relative min-h-0 ${teslaEmbed ? 'w-full' : ''}`}>
+      {/* Sidebar — hidden in Tesla embed; Tesla page supplies filters */}
+      {!teslaEmbed && (
       <div className="w-56 bg-white border-r border-arctic-200 p-3 flex flex-col gap-3 z-10">
         <div>
           <label className="block text-xs font-medium text-onix-600 mb-1">Filter by status</label>
@@ -531,13 +613,18 @@ export default function MapView({ locations }: { locations: Location[] }) {
           {geocodeResult && <p className="text-xs text-onix-600 mt-1">{geocodeResult}</p>}
         </div>
       </div>
+      )}
 
       {/* Map */}
-      <div ref={containerRef} className="flex-1" />
+      <div ref={containerRef} className="flex-1 min-h-0" />
 
       {/* Popup */}
       {selected && (
-        <div className="absolute bottom-6 left-64 bg-white border border-arctic-200 rounded-lg shadow-lg p-4 w-64 z-20">
+        <div
+          className={`absolute bottom-6 bg-white border border-arctic-200 rounded-lg shadow-lg p-4 w-64 z-20 ${
+            teslaEmbed ? 'left-6' : 'left-64'
+          }`}
+        >
           <button
             type="button"
             onClick={() => setSelected(null)}
@@ -550,6 +637,14 @@ export default function MapView({ locations }: { locations: Location[] }) {
             <ChainBadge chain={selected.chain_name} />
           </div>
           <div className="text-xs text-onix-600 mb-2">{[selected.city, selected.state].filter(Boolean).join(', ')}</div>
+          {teslaEmbed ? (
+            <div className="mb-2 text-xs font-medium text-onix-800">
+              Tesla:{' '}
+              {TESLA_STAGE_POPUP_LABEL[teslaStageByLocationId?.[selected.id] ?? 'not_ready'] ??
+                teslaStageByLocationId?.[selected.id] ??
+                'Not Ready'}
+            </div>
+          ) : null}
           <StatusBadge status={selected.status} />
           <div className="mt-3">
             <a href={`/shops/${selected.id}`} className="text-xs text-brand-600 hover:underline">

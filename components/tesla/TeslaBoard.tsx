@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import MapView, { type MapViewLocation } from '@/app/(internal)/map/MapView'
+import TeslaCountyTable from '@/components/tesla/TeslaCountyTable'
 import type { TeslaEnrollmentView } from '@/lib/tesla-enrollments'
 import { TESLA_STAGES, type TeslaStage } from '@/lib/program-stage'
 
@@ -21,12 +23,16 @@ const STAGE_DOT: Record<TeslaStage, string> = {
   disqualified: 'bg-zinc-500',
 }
 
+type ViewMode = 'kanban' | 'map' | 'table'
+
 type Props = {
   initialEnrollments: TeslaEnrollmentView[]
+  mapLocations: MapViewLocation[]
 }
 
-export default function TeslaBoard({ initialEnrollments }: Props) {
+export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) {
   const router = useRouter()
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban')
   const [enrollments, setEnrollments] = useState<TeslaEnrollmentView[]>(initialEnrollments)
   const [search, setSearch] = useState('')
   const [county, setCounty] = useState('')
@@ -43,11 +49,21 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
     setEnrollments(initialEnrollments)
   }, [initialEnrollments])
 
-  const counties = useMemo(
-    () =>
-      Array.from(new Set(enrollments.map(r => r.county).filter((c): c is string => Boolean(c)))).sort(),
-    [enrollments],
-  )
+  /** Counties in dropdown: all enrollments when no state; only rows in selected state otherwise. */
+  const counties = useMemo(() => {
+    const rows = state
+      ? enrollments.filter(r => (r.state ?? '').trim() === state)
+      : enrollments
+    const counts = new Map<string, number>()
+    for (const row of rows) {
+      const c = (row.county ?? '').trim()
+      if (!c) continue
+      counts.set(c, (counts.get(c) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => (b[1] === a[1] ? a[0].localeCompare(b[0]) : b[1] - a[1]))
+      .map(([value, count]) => ({ value, count }))
+  }, [enrollments, state])
 
   const states = useMemo(() => {
     const counts = new Map<string, number>()
@@ -89,6 +105,18 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
     techSurveyOnly,
     vinfastOnly,
   ])
+
+  const filteredLocationIds = useMemo(() => new Set(filtered.map(e => e.locationId)), [filtered])
+
+  const mapLocationsForView = useMemo(
+    () => mapLocations.filter(l => filteredLocationIds.has(l.id)),
+    [mapLocations, filteredLocationIds],
+  )
+
+  const teslaStageByLocationId = useMemo(
+    () => Object.fromEntries(filtered.map(e => [e.locationId, e.stage])),
+    [filtered],
+  )
 
   const grouped = useMemo(() => {
     const byStage: Record<TeslaStage, TeslaEnrollmentView[]> = {
@@ -166,12 +194,69 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-4xl font-semibold tracking-tight text-onix-950">Tesla pipeline</h1>
-        <p className="mt-1 text-sm text-onix-500">Can this shop take a job today?</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-4xl font-semibold tracking-tight text-onix-950">Tesla pipeline</h1>
+          <p className="mt-1 text-sm text-onix-500">Can this shop take a job today?</p>
+        </div>
+        <div
+          className="inline-flex shrink-0 rounded-lg border border-arctic-300 bg-arctic-50 p-1"
+          role="group"
+          aria-label="View mode"
+        >
+          {(
+            [
+              { id: 'kanban' as const, label: 'Kanban' },
+              { id: 'map' as const, label: 'Map' },
+              { id: 'table' as const, label: 'Table' },
+            ] as const
+          ).map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setViewMode(id)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === id
+                  ? 'bg-white text-onix-950 shadow-sm'
+                  : 'text-onix-600 hover:text-onix-900'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm text-onix-600" htmlFor="tesla-state">
+          State:
+        </label>
+        <select
+          id="tesla-state"
+          value={state}
+          onChange={e => {
+            const next = e.target.value
+            setState(next)
+            setCounty(prev => {
+              if (!next) return prev
+              const stillValid = enrollments.some(
+                r =>
+                  (r.state ?? '').trim() === next &&
+                  (r.county ?? '').trim() === prev,
+              )
+              return stillValid ? prev : ''
+            })
+          }}
+          className="min-w-44 rounded-xl border border-arctic-300 bg-white px-3 py-2 text-sm text-onix-900"
+        >
+          <option value="">All states</option>
+          {states.map(s => (
+            <option key={s.value} value={s.value}>
+              {s.value} ({s.count})
+            </option>
+          ))}
+        </select>
+
         <label className="text-sm text-onix-600" htmlFor="tesla-county">
           County:
         </label>
@@ -181,27 +266,10 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
           onChange={e => setCounty(e.target.value)}
           className="min-w-44 rounded-xl border border-arctic-300 bg-white px-3 py-2 text-sm text-onix-900"
         >
-          <option value="">All counties</option>
+          <option value="">{state ? 'All counties in state' : 'All counties'}</option>
           {counties.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <label className="text-sm text-onix-600" htmlFor="tesla-state">
-          State:
-        </label>
-        <select
-          id="tesla-state"
-          value={state}
-          onChange={e => setState(e.target.value)}
-          className="min-w-44 rounded-xl border border-arctic-300 bg-white px-3 py-2 text-sm text-onix-900"
-        >
-          <option value="">All states</option>
-          {states.map(s => (
-            <option key={s.value} value={s.value}>
-              {s.value} ({s.count})
+            <option key={c.value} value={c.value}>
+              {c.value} ({c.count})
             </option>
           ))}
         </select>
@@ -225,6 +293,21 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
+      {viewMode === 'map' && (
+        <div className="overflow-hidden rounded-xl border border-arctic-200 bg-white">
+          <div className="flex h-[min(720px,calc(100vh-280px))] min-h-[420px] w-full flex-col">
+            <MapView
+              locations={mapLocationsForView}
+              teslaEmbed
+              teslaStageByLocationId={teslaStageByLocationId}
+            />
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'table' && <TeslaCountyTable rows={filtered} />}
+
+      {viewMode === 'kanban' && (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         {TESLA_STAGES.map(stage => (
           <section key={stage} className="rounded-2xl border border-arctic-200 bg-[#f6f4f0] p-3">
@@ -316,6 +399,11 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
                           1st job complete
                         </span>
                       )}
+                      {card.teslaJobsCompleted > 0 && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
+                          {card.teslaJobsCompleted} Tesla job{card.teslaJobsCompleted === 1 ? '' : 's'}
+                        </span>
+                      )}
                     </div>
 
                     {stage === 'getting_ready' && (
@@ -368,6 +456,7 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
           </section>
         ))}
       </div>
+      )}
     </div>
   )
 }
