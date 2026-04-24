@@ -5,7 +5,8 @@ export async function upsertLocationShopContact(
   supabase: SupabaseClient,
   params: {
     locationId: string
-    accountId: string
+    /** Nullable when the location has no account yet; `location_id` still scopes the row. */
+    accountId: string | null | undefined
     name: string | null | undefined
     email: string | null | undefined
     phone: string | null | undefined
@@ -24,8 +25,11 @@ export async function upsertLocationShopContact(
     .limit(1)
     .maybeSingle()
 
+  const accountId =
+    typeof params.accountId === 'string' && params.accountId.trim() !== '' ? params.accountId.trim() : null
+
   const payload = {
-    account_id: params.accountId,
+    account_id: accountId,
     location_id: params.locationId,
     name: name || null,
     email: email || null,

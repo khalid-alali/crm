@@ -1489,7 +1489,20 @@ export default function ShopDetailTabs({
                   weekly_appointment_capacity: shop.weekly_appointment_capacity ?? null,
                   capabilities_submitted_at: shop.capabilities_submitted_at ?? null,
                   state: shop.state ?? null,
+                  capabilities_parking_spots_rw: shop.capabilities_parking_spots_rw ?? null,
+                  capabilities_two_post_lifts: shop.capabilities_two_post_lifts ?? null,
+                  capabilities_afterhours_tow_ins: shop.capabilities_afterhours_tow_ins ?? null,
+                  capabilities_night_drops: shop.capabilities_night_drops ?? null,
+                  capabilities_tires: shop.capabilities_tires ?? null,
+                  capabilities_wheel_alignment: shop.capabilities_wheel_alignment ?? null,
+                  capabilities_body_work: shop.capabilities_body_work ?? null,
+                  capabilities_adas: shop.capabilities_adas ?? null,
+                  capabilities_ac_work: shop.capabilities_ac_work ?? null,
+                  capabilities_forklift: shop.capabilities_forklift ?? null,
+                  capabilities_hv_battery_table: shop.capabilities_hv_battery_table ?? null,
+                  capabilities_windshields: shop.capabilities_windshields ?? null,
                 }}
+                techSurveys={Array.isArray(shop.tech_competency_surveys) ? shop.tech_competency_surveys : []}
                 onSendForm={sendCapabilitiesPortalLink}
               />
               {capabilitiesLinkFeedback && (

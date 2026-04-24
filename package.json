@@ -22,7 +22,12 @@
     "match:motherduck-by-name": "npx tsx scripts/match-locations-motherduck-by-name.ts",
     "match:motherduck-by-name:apply": "npx tsx scripts/match-locations-motherduck-by-name.ts --apply",
     "import:crm-ready-csv": "npx tsx scripts/import-crm-import-ready-csv.ts",
-    "import:crm-ready-csv:apply": "npx tsx scripts/import-crm-import-ready-csv.ts --apply"
+    "import:crm-ready-csv:apply": "npx tsx scripts/import-crm-import-ready-csv.ts --apply",
+    "import:shop-survey-csv": "npx tsx scripts/import-shop-survey-capabilities-csv.ts",
+    "import:shop-survey-csv:apply": "npx tsx scripts/import-shop-survey-capabilities-csv.ts --apply",
+    "import:shop-survey-csv:apply:shell": "npx tsx scripts/import-shop-survey-capabilities-csv.ts --apply --create-shell-shops",
+    "import:tech-competency-csv": "npx tsx scripts/import-tech-competency-csv.ts",
+    "import:tech-competency-csv:apply": "npx tsx scripts/import-tech-competency-csv.ts --apply"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",

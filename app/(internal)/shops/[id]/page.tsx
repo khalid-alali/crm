@@ -25,6 +25,7 @@ export default async function ShopDetailPage({
       accounts(*),
       program_enrollments(*),
       activity_log(*),
+      tech_competency_surveys(*),
       location_enrichment(google_rating, google_review_count),
       contract_locations(
         contracts(*)
