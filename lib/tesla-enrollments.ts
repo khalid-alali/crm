@@ -18,6 +18,7 @@ type EnrollmentRow = {
 type LocationRow = {
   id: string
   name: string
+  status: string
   city: string | null
   state: string | null
   county: string | null
@@ -79,6 +80,13 @@ export type TeslaEnrollmentView = {
 
 function parseStage(value: string): TeslaStage {
   return isTeslaStage(value) ? value : 'not_ready'
+}
+
+const HIGH_SIGNAL_NAME_RE = /\b(ev|electric|hybrid|voltage|tesla)\b/i
+
+function isHighSignalShopName(name: string | null | undefined): boolean {
+  if (!name) return false
+  return HIGH_SIGNAL_NAME_RE.test(name)
 }
 
 async function ensureDefaultTeslaEnrollments(supabaseAdmin: SupabaseClient): Promise<void> {
@@ -158,7 +166,7 @@ export async function listTeslaEnrollments(
   const { data: locationsData, error: locationsError } = await supabaseAdmin
     .from('locations')
     .select(
-      'id, name, city, state, county, capabilities_submitted_at, high_priority_target, account_id, motherduck_shop_id',
+      'id, name, status, city, state, county, capabilities_submitted_at, high_priority_target, account_id, motherduck_shop_id',
     )
     .in('id', locationIds)
 
@@ -233,7 +241,7 @@ export async function listTeslaEnrollments(
     accountById.set(row.id, row)
   }
 
-  return enrollments.map(enrollment => {
+  return enrollments.flatMap(enrollment => {
     const config = getProgramConfig(enrollment.program_id)
     const checklistRows = checklistByEnrollment.get(enrollment.id) ?? []
     const completedKeys = checklistRows
@@ -260,11 +268,15 @@ export async function listTeslaEnrollments(
     })
 
     const location = locationById.get(enrollment.location_id) ?? null
-    const account = location?.account_id ? accountById.get(location.account_id) ?? null : null
+    if (!location) return []
+
+    const account = location.account_id ? accountById.get(location.account_id) ?? null : null
     const cacheLookupKey = location?.motherduck_shop_id ?? enrollment.location_id
     const vinfast = cacheByLocation.get(cacheLookupKey)
 
-    return {
+    const stage = location.status === 'inactive' ? 'disqualified' : derivedStage
+
+    return [{
       id: enrollment.id,
       locationId: enrollment.location_id,
       locationName: location?.name ?? 'Unknown shop',
@@ -272,7 +284,7 @@ export async function listTeslaEnrollments(
       state: location?.state ?? null,
       county: location?.county ?? null,
       accountName: account?.business_name ?? null,
-      stage: derivedStage,
+      stage,
       tier:
         enrollment.tier === 'generalist' || enrollment.tier === 'specialist'
           ? enrollment.tier
@@ -288,9 +300,9 @@ export async function listTeslaEnrollments(
           (vinfast?.max_jobs_per_day ?? 0) > 0 &&
           (vinfast?.max_jobs_per_week ?? 0) > 0,
       ),
-      highSignalName: Boolean(location?.high_priority_target),
+      highSignalName: isHighSignalShopName(location?.name),
       checklist,
       missingChecklistKeys: getMissingChecklistKeys(enrollment.program_id, completedKeys),
-    }
+    }]
   })
 }

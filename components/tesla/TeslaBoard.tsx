@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { TeslaEnrollmentView } from '@/lib/tesla-enrollments'
 import { TESLA_STAGES, type TeslaStage } from '@/lib/program-stage'
@@ -27,6 +27,7 @@ type Props = {
 
 export default function TeslaBoard({ initialEnrollments }: Props) {
   const router = useRouter()
+  const [enrollments, setEnrollments] = useState<TeslaEnrollmentView[]>(initialEnrollments)
   const [search, setSearch] = useState('')
   const [county, setCounty] = useState('')
   const [state, setState] = useState('')
@@ -38,15 +39,19 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
   const [openMenuCardId, setOpenMenuCardId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    setEnrollments(initialEnrollments)
+  }, [initialEnrollments])
+
   const counties = useMemo(
     () =>
-      Array.from(new Set(initialEnrollments.map(r => r.county).filter((c): c is string => Boolean(c)))).sort(),
-    [initialEnrollments],
+      Array.from(new Set(enrollments.map(r => r.county).filter((c): c is string => Boolean(c)))).sort(),
+    [enrollments],
   )
 
   const states = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const row of initialEnrollments) {
+    for (const row of enrollments) {
       const key = (row.state ?? '').trim()
       if (!key) continue
       counts.set(key, (counts.get(key) ?? 0) + 1)
@@ -55,11 +60,11 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
     return [...counts.entries()]
       .sort((a, b) => (b[1] === a[1] ? a[0].localeCompare(b[0]) : b[1] - a[1]))
       .map(([value, count]) => ({ value, count }))
-  }, [initialEnrollments])
+  }, [enrollments])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return initialEnrollments.filter(row => {
+    return enrollments.filter(row => {
       if (county && row.county !== county) return false
       if (state && row.state !== state) return false
       if (shopSurveyOnly && !row.hasShopSurvey) return false
@@ -77,7 +82,7 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
   }, [
     county,
     highSignalOnly,
-    initialEnrollments,
+    enrollments,
     search,
     shopSurveyOnly,
     state,
@@ -137,6 +142,26 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
     })
     const data = (await res.json().catch(() => ({}))) as { error?: string }
     if (!res.ok) throw new Error(data.error ?? 'Failed to update checklist item')
+  }
+
+  function applyOptimisticChecklist(enrollmentId: string, itemKey: string, completed: boolean) {
+    const now = new Date().toISOString()
+    setEnrollments(prev =>
+      prev.map(row => {
+        if (row.id !== enrollmentId) return row
+        return {
+          ...row,
+          checklist: row.checklist.map(item =>
+            item.itemKey === itemKey ? { ...item, completedAt: completed ? now : null } : item,
+          ),
+          missingChecklistKeys: completed
+            ? row.missingChecklistKeys.filter(k => k !== itemKey)
+            : row.missingChecklistKeys.includes(itemKey)
+              ? row.missingChecklistKeys
+              : [...row.missingChecklistKeys, itemKey],
+        }
+      }),
+    )
   }
 
   return (
@@ -239,13 +264,18 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
                       </button>
 
                       {openMenuCardId === card.id && (
-                        <div className="absolute right-0 top-8 z-20 min-w-40 rounded-md border border-arctic-300 bg-white p-1 shadow-lg">
+                        <div
+                          className="absolute right-0 top-8 z-20 min-w-40 rounded-md border border-arctic-300 bg-white p-1 shadow-lg"
+                          onClick={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                        >
                           {TESLA_STAGES.map(nextStage => (
                             <button
                               key={nextStage}
                               type="button"
                               disabled={isBusy}
-                              onClick={() => {
+                              onClick={e => {
+                                e.stopPropagation()
                                 setOpenMenuCardId(null)
                                 void withRefresh(
                                   () => updateEnrollment(card.id, { stage: nextStage }),
@@ -286,34 +316,40 @@ export default function TeslaBoard({ initialEnrollments }: Props) {
                           1st job complete
                         </span>
                       )}
-                      {card.manualStageOverride && (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
-                          manual override
-                        </span>
-                      )}
                     </div>
 
-                    <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
-                      {card.checklist.map(item => {
-                        const checked = Boolean(item.completedAt)
-                        return (
-                          <label key={item.itemKey} className="flex items-center gap-2 text-xs text-onix-700">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={isBusy}
-                              onChange={e =>
-                                void withRefresh(
-                                  () => toggleChecklist(card.id, item.itemKey, e.target.checked, item.notes),
-                                  card.id,
-                                )
-                              }
-                            />
-                            {item.label}
-                          </label>
-                        )
-                      })}
-                    </div>
+                    {stage === 'getting_ready' && (
+                      <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
+                        {card.checklist.map(item => {
+                          const checked = Boolean(item.completedAt)
+                          return (
+                            <label key={item.itemKey} className="flex items-center gap-2 text-xs text-onix-700">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={isBusy}
+                                onChange={e => {
+                                  const next = e.target.checked
+                                  applyOptimisticChecklist(card.id, item.itemKey, next)
+                                  void withRefresh(
+                                    async () => {
+                                      try {
+                                        await toggleChecklist(card.id, item.itemKey, next, item.notes)
+                                      } catch (err) {
+                                        applyOptimisticChecklist(card.id, item.itemKey, !next)
+                                        throw err
+                                      }
+                                    },
+                                    card.id,
+                                  )
+                                }}
+                              />
+                              {item.label}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
 
                     {stage === 'getting_ready' && missingKeys.length > 0 && (
                       <div className="text-xs text-red-700">Missing: {missingKeys.join(', ')}</div>
