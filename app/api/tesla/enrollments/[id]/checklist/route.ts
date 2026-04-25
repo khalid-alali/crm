@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { getAppSession } from '@/lib/app-auth'
-import { TESLA_PROGRAM_ID, requiredChecklistKeys } from '@/lib/program-config'
+import { TESLA_PROGRAM_ID, programChecklistKeys } from '@/lib/program-config'
 import { deriveProgramStage, isTeslaStage } from '@/lib/program-stage'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Only Tesla enrollments are editable here' }, { status: 400 })
   }
 
-  if (!requiredChecklistKeys(enrollment.program_id).includes(itemKey)) {
+  if (!programChecklistKeys(enrollment.program_id).includes(itemKey)) {
     return NextResponse.json({ error: 'Unknown checklist item for this program' }, { status: 400 })
   }
 

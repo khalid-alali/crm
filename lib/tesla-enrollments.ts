@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { TESLA_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
+import {
+  TESLA_PROGRAM_ID,
+  TESLA_PORTAL_WALKTHROUGH_KEY,
+  getProgramConfig,
+} from '@/lib/program-config'
 import { deriveProgramStage, getMissingChecklistKeys, isTeslaStage, type TeslaStage } from '@/lib/program-stage'
 
 type EnrollmentRow = {
@@ -69,6 +73,8 @@ export type TeslaEnrollmentView = {
   hasShopSurvey: boolean
   hasTechSurvey: boolean
   vinfastActive: boolean
+  /** True when shop_status_cache marks this shop as a VinFast shop (portal walkthrough auto-complete). */
+  vinfastShop: boolean
   /** From shop_status_cache.tesla_jobs_completed when > 0 for display. */
   teslaJobsCompleted: number
   highSignalName: boolean
@@ -241,6 +247,50 @@ export async function listTeslaEnrollments(
     locationById.set(row.id, row)
   }
 
+  const enrollmentIdsForAutoPortal: string[] = []
+  for (const enrollment of enrollments) {
+    const location = locationById.get(enrollment.location_id)
+    if (!location) continue
+    const cacheLookupKey = location.motherduck_shop_id ?? enrollment.location_id
+    const cacheRow = cacheByLocation.get(cacheLookupKey)
+    if (!cacheRow?.is_vinfast_shop) continue
+    const rows = checklistByEnrollment.get(enrollment.id) ?? []
+    const portalDone = rows.some(
+      r => r.item_key === TESLA_PORTAL_WALKTHROUGH_KEY && Boolean(r.completed_at),
+    )
+    if (!portalDone) enrollmentIdsForAutoPortal.push(enrollment.id)
+  }
+
+  if (enrollmentIdsForAutoPortal.length > 0) {
+    const portalCompletedAt = new Date().toISOString()
+    const { error: autoPortalError } = await supabaseAdmin.from('program_enrollment_checklist').upsert(
+      enrollmentIdsForAutoPortal.map(enrollment_id => ({
+        enrollment_id,
+        item_key: TESLA_PORTAL_WALKTHROUGH_KEY,
+        completed_at: portalCompletedAt,
+        completed_by_user_id: null,
+        notes: null,
+        updated_at: portalCompletedAt,
+      })),
+      { onConflict: 'enrollment_id,item_key' },
+    )
+    if (autoPortalError) throw new Error(autoPortalError.message)
+
+    for (const enrollment_id of enrollmentIdsForAutoPortal) {
+      const rows = [...(checklistByEnrollment.get(enrollment_id) ?? [])]
+      const idx = rows.findIndex(r => r.item_key === TESLA_PORTAL_WALKTHROUGH_KEY)
+      const row: ChecklistRow = {
+        enrollment_id,
+        item_key: TESLA_PORTAL_WALKTHROUGH_KEY,
+        completed_at: portalCompletedAt,
+        notes: null,
+      }
+      if (idx >= 0) rows[idx] = row
+      else rows.push(row)
+      checklistByEnrollment.set(enrollment_id, rows)
+    }
+  }
+
   const accountById = new Map<string, AccountRow>()
   for (const row of (accountsData ?? []) as AccountRow[]) {
     accountById.set(row.id, row)
@@ -310,6 +360,7 @@ export async function listTeslaEnrollments(
           (cacheRow?.max_jobs_per_day ?? 0) > 0 &&
           (cacheRow?.max_jobs_per_week ?? 0) > 0,
       ),
+      vinfastShop: Boolean(cacheRow?.is_vinfast_shop),
       teslaJobsCompleted,
       highSignalName: isHighSignalShopName(location?.name),
       checklist,

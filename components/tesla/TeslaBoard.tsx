@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import MapView, { type MapViewLocation } from '@/app/(internal)/map/MapView'
 import TeslaCountyTable from '@/components/tesla/TeslaCountyTable'
 import type { TeslaEnrollmentView } from '@/lib/tesla-enrollments'
+import { TESLA_PORTAL_WALKTHROUGH_KEY } from '@/lib/program-config'
 import { TESLA_STAGES, type TeslaStage } from '@/lib/program-stage'
 
 const STAGE_LABELS: Record<TeslaStage, string> = {
@@ -22,6 +23,9 @@ const STAGE_DOT: Record<TeslaStage, string> = {
   active: 'bg-green-600',
   disqualified: 'bg-zinc-500',
 }
+
+/** Kanban shows Disqualified in a collapsed rail + slide-over panel. */
+const MAIN_KANBAN_STAGES: TeslaStage[] = ['not_ready', 'getting_ready', 'ready', 'active']
 
 type ViewMode = 'kanban' | 'map' | 'table'
 
@@ -43,11 +47,25 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
   const [highSignalOnly, setHighSignalOnly] = useState(false)
   const [busyCardId, setBusyCardId] = useState<string | null>(null)
   const [openMenuCardId, setOpenMenuCardId] = useState<string | null>(null)
+  const [dqPanelOpen, setDqPanelOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setEnrollments(initialEnrollments)
   }, [initialEnrollments])
+
+  useEffect(() => {
+    if (!dqPanelOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDqPanelOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dqPanelOpen])
+
+  useEffect(() => {
+    if (viewMode !== 'kanban') setDqPanelOpen(false)
+  }, [viewMode])
 
   /** Counties in dropdown: all enrollments when no state; only rows in selected state otherwise. */
   const counties = useMemo(() => {
@@ -177,11 +195,15 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
     setEnrollments(prev =>
       prev.map(row => {
         if (row.id !== enrollmentId) return row
+        const checklist = row.checklist.map(item =>
+          item.itemKey === itemKey ? { ...item, completedAt: completed ? now : null } : item,
+        )
+        if (itemKey === TESLA_PORTAL_WALKTHROUGH_KEY) {
+          return { ...row, checklist }
+        }
         return {
           ...row,
-          checklist: row.checklist.map(item =>
-            item.itemKey === itemKey ? { ...item, completedAt: completed ? now : null } : item,
-          ),
+          checklist,
           missingChecklistKeys: completed
             ? row.missingChecklistKeys.filter(k => k !== itemKey)
             : row.missingChecklistKeys.includes(itemKey)
@@ -189,6 +211,206 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
               : [...row.missingChecklistKeys, itemKey],
         }
       }),
+    )
+  }
+
+  function renderKanbanColumn(stage: TeslaStage, opts?: { hideHeader?: boolean }) {
+    const cards = grouped[stage]
+    const hideHeader = opts?.hideHeader ?? false
+    return (
+      <section key={stage} className="rounded-2xl border border-arctic-200 bg-[#f6f4f0] p-3">
+        {!hideHeader && (
+          <header className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-xl font-semibold text-onix-900">
+              <span className={`inline-block h-2 w-2 rounded-full ${STAGE_DOT[stage]}`} />
+              {STAGE_LABELS[stage]}
+            </h2>
+            <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-onix-500">
+              {cards.length}
+            </span>
+          </header>
+        )}
+
+        <div className="space-y-3">
+          {cards.map(card => {
+            const isBusy = busyCardId === card.id
+            const locationLine = [card.city, card.state].filter(Boolean).join(', ')
+            const missingKeys = card.missingChecklistKeys
+            return (
+              <article
+                key={card.id}
+                className="space-y-2 rounded-xl border border-arctic-300 bg-white p-3 cursor-pointer"
+                onClick={() => router.push(`/shops/${card.locationId}`)}
+              >
+                <div className="relative">
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={e => {
+                      e.stopPropagation()
+                      setOpenMenuCardId(prev => (prev === card.id ? null : card.id))
+                    }}
+                    className="absolute right-0 top-0 inline-flex h-7 w-7 items-center justify-center rounded-md text-onix-600 hover:bg-arctic-50 disabled:opacity-50"
+                    aria-label="Card actions"
+                  >
+                    ...
+                  </button>
+
+                  {openMenuCardId === card.id && (
+                    <div
+                      className="absolute right-0 top-8 z-20 min-w-40 rounded-md border border-arctic-300 bg-white p-1 shadow-lg"
+                      onClick={e => e.stopPropagation()}
+                      onMouseDown={e => e.stopPropagation()}
+                    >
+                      {TESLA_STAGES.map(nextStage => (
+                        <button
+                          key={nextStage}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={e => {
+                            e.stopPropagation()
+                            setOpenMenuCardId(null)
+                            void withRefresh(
+                              () => updateEnrollment(card.id, { stage: nextStage }),
+                              card.id,
+                            )
+                          }}
+                          className={`block w-full rounded px-2 py-1 text-left text-xs ${
+                            card.stage === nextStage
+                              ? 'bg-arctic-100 font-semibold text-onix-900'
+                              : 'text-onix-700 hover:bg-arctic-50'
+                          }`}
+                        >
+                          {STAGE_LABELS[nextStage]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="pr-8 text-[18px] font-semibold leading-tight text-onix-950">
+                    {card.locationName}
+                  </div>
+                  <div className="text-sm text-onix-600">{locationLine || 'Location unknown'}</div>
+                  {card.county && (
+                    <div className="mt-1 inline-flex rounded-md bg-arctic-100 px-1.5 py-0.5 text-xs text-onix-600">
+                      {card.county}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  {card.tier && (
+                    <span className="rounded-full bg-violet-50 px-2 py-0.5 font-medium text-violet-700">
+                      {card.tier}
+                    </span>
+                  )}
+                  {card.firstJobCompletedAt && (
+                    <span className="rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700">
+                      1st job complete
+                    </span>
+                  )}
+                  {card.teslaJobsCompleted > 0 && (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
+                      {card.teslaJobsCompleted} Tesla job{card.teslaJobsCompleted === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+
+                {stage === 'getting_ready' && (
+                  <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
+                    {card.checklist
+                      .filter(item => item.itemKey !== TESLA_PORTAL_WALKTHROUGH_KEY)
+                      .map(item => {
+                        const checked = Boolean(item.completedAt)
+                        return (
+                          <label key={item.itemKey} className="flex items-center gap-2 text-xs text-onix-700">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={isBusy}
+                              onChange={e => {
+                                const next = e.target.checked
+                                applyOptimisticChecklist(card.id, item.itemKey, next)
+                                void withRefresh(
+                                  async () => {
+                                    try {
+                                      await toggleChecklist(card.id, item.itemKey, next, item.notes)
+                                    } catch (err) {
+                                      applyOptimisticChecklist(card.id, item.itemKey, !next)
+                                      throw err
+                                    }
+                                  },
+                                  card.id,
+                                )
+                              }}
+                            />
+                            {item.label}
+                          </label>
+                        )
+                      })}
+                  </div>
+                )}
+
+                {(stage === 'getting_ready' || stage === 'ready') &&
+                  (() => {
+                    const portal = card.checklist.find(i => i.itemKey === TESLA_PORTAL_WALKTHROUGH_KEY)
+                    if (!portal) return null
+                    const lockedVinfast = card.vinfastShop
+                    const checked = lockedVinfast || Boolean(portal.completedAt)
+                    return (
+                      <div
+                        className="space-y-1.5 border-t border-arctic-100 pt-2"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <label className="flex flex-wrap items-center gap-2 text-xs text-onix-700">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={isBusy || lockedVinfast}
+                            title={
+                              lockedVinfast
+                                ? 'Marked complete automatically for VinFast shops'
+                                : undefined
+                            }
+                            onChange={e => {
+                              const next = e.target.checked
+                              applyOptimisticChecklist(card.id, portal.itemKey, next)
+                              void withRefresh(
+                                async () => {
+                                  try {
+                                    await toggleChecklist(card.id, portal.itemKey, next, portal.notes)
+                                  } catch (err) {
+                                    applyOptimisticChecklist(card.id, portal.itemKey, !next)
+                                    throw err
+                                  }
+                                },
+                                card.id,
+                              )
+                            }}
+                          />
+                          <span>{portal.label}</span>
+                          {lockedVinfast && (
+                            <span className="text-[10px] font-normal text-onix-500">(VinFast shop)</span>
+                          )}
+                        </label>
+                      </div>
+                    )
+                  })()}
+
+                {stage === 'getting_ready' && missingKeys.length > 0 && (
+                  <div className="text-xs text-red-700">Missing: {missingKeys.join(', ')}</div>
+                )}
+              </article>
+            )
+          })}
+
+          {cards.length === 0 && (
+            <div className="rounded-xl border border-dashed border-arctic-300 bg-white px-3 py-6 text-center text-xs text-onix-500">
+              No shops
+            </div>
+          )}
+        </div>
+      </section>
     )
   }
 
@@ -308,154 +530,72 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
       {viewMode === 'table' && <TeslaCountyTable rows={filtered} />}
 
       {viewMode === 'kanban' && (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        {TESLA_STAGES.map(stage => (
-          <section key={stage} className="rounded-2xl border border-arctic-200 bg-[#f6f4f0] p-3">
-            <header className="mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-xl font-semibold text-onix-900">
-                <span className={`inline-block h-2 w-2 rounded-full ${STAGE_DOT[stage]}`} />
-                {STAGE_LABELS[stage]}
-              </h2>
-              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-onix-500">
-                {grouped[stage].length}
-              </span>
-            </header>
-
-            <div className="space-y-3">
-              {grouped[stage].map(card => {
-                const isBusy = busyCardId === card.id
-                const locationLine = [card.city, card.state].filter(Boolean).join(', ')
-                const missingKeys = card.missingChecklistKeys
-                return (
-                  <article
-                    key={card.id}
-                    className="space-y-2 rounded-xl border border-arctic-300 bg-white p-3 cursor-pointer"
-                    onClick={() => router.push(`/shops/${card.locationId}`)}
-                  >
-                    <div className="relative">
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={e => {
-                          e.stopPropagation()
-                          setOpenMenuCardId(prev => (prev === card.id ? null : card.id))
-                        }}
-                        className="absolute right-0 top-0 inline-flex h-7 w-7 items-center justify-center rounded-md text-onix-600 hover:bg-arctic-50 disabled:opacity-50"
-                        aria-label="Card actions"
-                      >
-                        ...
-                      </button>
-
-                      {openMenuCardId === card.id && (
-                        <div
-                          className="absolute right-0 top-8 z-20 min-w-40 rounded-md border border-arctic-300 bg-white p-1 shadow-lg"
-                          onClick={e => e.stopPropagation()}
-                          onMouseDown={e => e.stopPropagation()}
-                        >
-                          {TESLA_STAGES.map(nextStage => (
-                            <button
-                              key={nextStage}
-                              type="button"
-                              disabled={isBusy}
-                              onClick={e => {
-                                e.stopPropagation()
-                                setOpenMenuCardId(null)
-                                void withRefresh(
-                                  () => updateEnrollment(card.id, { stage: nextStage }),
-                                  card.id,
-                                )
-                              }}
-                              className={`block w-full rounded px-2 py-1 text-left text-xs ${
-                                card.stage === nextStage
-                                  ? 'bg-arctic-100 font-semibold text-onix-900'
-                                  : 'text-onix-700 hover:bg-arctic-50'
-                              }`}
-                            >
-                              {STAGE_LABELS[nextStage]}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="pr-8 text-[18px] font-semibold leading-tight text-onix-950">
-                        {card.locationName}
-                      </div>
-                      <div className="text-sm text-onix-600">{locationLine || 'Location unknown'}</div>
-                      {card.county && (
-                        <div className="mt-1 inline-flex rounded-md bg-arctic-100 px-1.5 py-0.5 text-xs text-onix-600">
-                          {card.county}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                      {card.tier && (
-                        <span className="rounded-full bg-violet-50 px-2 py-0.5 font-medium text-violet-700">
-                          {card.tier}
-                        </span>
-                      )}
-                      {card.firstJobCompletedAt && (
-                        <span className="rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700">
-                          1st job complete
-                        </span>
-                      )}
-                      {card.teslaJobsCompleted > 0 && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
-                          {card.teslaJobsCompleted} Tesla job{card.teslaJobsCompleted === 1 ? '' : 's'}
-                        </span>
-                      )}
-                    </div>
-
-                    {stage === 'getting_ready' && (
-                      <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
-                        {card.checklist.map(item => {
-                          const checked = Boolean(item.completedAt)
-                          return (
-                            <label key={item.itemKey} className="flex items-center gap-2 text-xs text-onix-700">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={isBusy}
-                                onChange={e => {
-                                  const next = e.target.checked
-                                  applyOptimisticChecklist(card.id, item.itemKey, next)
-                                  void withRefresh(
-                                    async () => {
-                                      try {
-                                        await toggleChecklist(card.id, item.itemKey, next, item.notes)
-                                      } catch (err) {
-                                        applyOptimisticChecklist(card.id, item.itemKey, !next)
-                                        throw err
-                                      }
-                                    },
-                                    card.id,
-                                  )
-                                }}
-                              />
-                              {item.label}
-                            </label>
-                          )
-                        })}
-                      </div>
-                    )}
-
-                    {stage === 'getting_ready' && missingKeys.length > 0 && (
-                      <div className="text-xs text-red-700">Missing: {missingKeys.join(', ')}</div>
-                    )}
-
-                  </article>
-                )
-              })}
-
-              {grouped[stage].length === 0 && (
-                <div className="rounded-xl border border-dashed border-arctic-300 bg-white px-3 py-6 text-center text-xs text-onix-500">
-                  No shops
-                </div>
-              )}
+        <>
+          <div className="flex min-h-[min(520px,50vh)] flex-col gap-3 lg:flex-row lg:items-stretch">
+            <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {MAIN_KANBAN_STAGES.map(stage => renderKanbanColumn(stage))}
             </div>
-          </section>
-        ))}
-      </div>
+
+            <button
+              type="button"
+              id="tesla-dq-rail"
+              aria-expanded={dqPanelOpen}
+              aria-controls="tesla-dq-panel"
+              onClick={() => setDqPanelOpen(true)}
+              className="flex shrink-0 flex-row items-center justify-center gap-2 rounded-l-xl border border-arctic-300 border-r-0 bg-zinc-100 py-3 text-zinc-700 shadow-sm transition-colors hover:bg-zinc-200 lg:w-11 lg:flex-col lg:justify-start lg:gap-3 lg:py-6 lg:pl-1 lg:pr-0"
+              title="Disqualified — click to open"
+            >
+              <span className={`hidden rounded-full lg:inline-block h-2 w-2 shrink-0 ${STAGE_DOT.disqualified}`} />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-600 lg:[writing-mode:vertical-rl] lg:rotate-180">
+                DQ
+              </span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-zinc-600 ring-1 ring-zinc-300">
+                {grouped.disqualified.length}
+              </span>
+            </button>
+          </div>
+
+          {dqPanelOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Close disqualified panel"
+                className="fixed inset-0 z-40 cursor-default bg-black/35"
+                onClick={() => setDqPanelOpen(false)}
+              />
+              <aside
+                id="tesla-dq-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="tesla-dq-panel-title"
+                className="fixed right-0 top-0 z-50 flex h-full w-[min(440px,100vw)] flex-col border-l border-arctic-200 bg-[#f6f4f0] shadow-2xl"
+              >
+                <div className="flex items-center justify-between border-b border-arctic-200 bg-white px-4 py-3">
+                  <h2
+                    id="tesla-dq-panel-title"
+                    className="flex items-center gap-2 text-lg font-semibold text-onix-900"
+                  >
+                    <span className={`inline-block h-2 w-2 rounded-full ${STAGE_DOT.disqualified}`} />
+                    {STAGE_LABELS.disqualified}
+                    <span className="rounded-full bg-arctic-100 px-2 py-0.5 text-xs font-semibold text-onix-600">
+                      {grouped.disqualified.length}
+                    </span>
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setDqPanelOpen(false)}
+                    className="rounded-lg px-3 py-1.5 text-sm font-medium text-onix-600 hover:bg-arctic-100"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                  {renderKanbanColumn('disqualified', { hideHeader: true })}
+                </div>
+              </aside>
+            </>
+          )}
+        </>
       )}
     </div>
   )
