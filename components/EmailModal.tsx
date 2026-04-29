@@ -32,6 +32,13 @@ function buildIntroVars(shopName: string, contactName: string, senderName: strin
   }
 }
 
+function buildFreeformIntroBody(contactName: string) {
+  const cn = contactName || 'there'
+  return `<p>Hi ${escapeHtmlText(cn)},</p>
+<p>Please tell us about your capabilities here: <a href="{{portal_url}}">{Form Link}</a></p>
+<p>Best,<br>Leo Gomez</p>`
+}
+
 function escapeHtmlText(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
@@ -55,6 +62,7 @@ export default function EmailModal({
 
   const [subject, setSubject] = useState(() => {
     if (template === 'intro') {
+      if (introMode === 'freeform') return ''
       return applyIntroVariant('standard', buildIntroVars(shopName, contactName, senderName)).subject
     }
     return renderTemplate(template, {
@@ -67,6 +75,7 @@ export default function EmailModal({
 
   const [body, setBody] = useState(() => {
     if (template === 'intro') {
+      if (introMode === 'freeform') return buildFreeformIntroBody(contactName)
       return applyIntroVariant('standard', buildIntroVars(shopName, contactName, senderName)).body
     }
     return plainTextToSimpleHtml(
@@ -91,9 +100,9 @@ export default function EmailModal({
       setBody(next.body)
       return
     }
-    setSubject('')
-    setBody('')
-  }, [template, introVars, introMode])
+    setSubject('RepairWise Follow Up')
+    setBody(buildFreeformIntroBody(contactName))
+  }, [template, introVars, introMode, contactName])
 
   useEffect(() => {
     if (template === 'intro') return
@@ -116,7 +125,7 @@ export default function EmailModal({
     try {
       let subjectOut = subject
       let bodyOut = body
-      if (template === 'intro' && introMode === 'welcome') {
+      if (template === 'intro') {
         const hadPortalPlaceholder = body.includes('{{portal_url}}') || subject.includes('{{portal_url}}')
         const gen = await fetch('/api/portal/generate-token', {
           method: 'POST',
