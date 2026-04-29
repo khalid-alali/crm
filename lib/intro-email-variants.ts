@@ -1,101 +1,77 @@
-/** Intro email bodies (Multibrand vs VinFast). HTML. Placeholders: {{first_name}}, {{shop_name}}, {{portal_url}}, {{sender_name}} */
+/** Intro email body (single unified intro). HTML. Placeholders: {{contact_name}}, {{portal_url}}, {{sender_name}} */
 
-export type IntroVariantId = 'multibrand' | 'vinfast' | 'freeform'
+export type IntroVariantId = 'standard'
 
 export const INTRO_VARIANT_META: Record<IntroVariantId, { label: string; description: string }> = {
-  multibrand: {
-    label: 'Multibrand / general EV',
-    description: 'Standard partnership overview without VinFast OEM emphasis.',
-  },
-  vinfast: {
-    label: 'VinFast OEM',
-    description: 'Same story with VinFast OEM program and OEM repair positioning.',
-  },
-  freeform: {
-    label: 'Freeform',
-    description: 'Start from a short outline and write your own subject and body.',
+  standard: {
+    label: 'RepairWise partnership overview',
+    description: 'Unified intro covering multi-brand, EV, and OEM programs.',
   },
 }
 
 export const INTRO_VARIANTS: Record<IntroVariantId, { subject: string; body: string }> = {
-  multibrand: {
-    subject: 'Unlock New EV Repair Opportunities',
-    body: `<p>Hi {{first_name}},</p>
-<p>I hope you're doing well! It was great connecting with you, I wanted to follow up with more details about how partnering with RepairWise can benefit your shops.</p>
-<p>RepairWise specializes in connecting independent shops with Electric Vehicle customers ready for repairs. We provide a streamlined process that helps you expand into the EV market with confidence. Here's how it works:</p>
-<h2>How RepairWise Works</h2>
+  standard: {
+    subject: 'Overview: RepairWise Partnership Opportunities',
+    body: `<p>Hi {{contact_name}},</p>
+<p>I hope you&rsquo;re doing well. It was great connecting with you&mdash;I wanted to follow up with a more detailed overview of how partnering with RepairWise can support your shop&rsquo;s growth.</p>
+<p><strong>About RepairWise</strong><br>RepairWise is a technology platform that connects independent repair shops with customers ready for service, while providing diagnostics, repair planning, and ongoing support throughout the repair process. We act as a front-end for service&mdash;bringing you qualified, ready-to-book customers along with the tools and guidance needed to complete repairs efficiently and confidently.</p>
+<p><strong>How it works:</strong></p>
 <ul>
-<li><strong>Revenue Sharing:</strong> We take a 15% share of the repair order (RO) for every customer referral, ensuring a mutually beneficial partnership.</li>
-<li><strong>Comprehensive Support:</strong> You'll receive diagnosed customers, step-by-step repair plans, and ongoing technical guidance from our expert EV technicians.</li>
-<li><strong>Customer Assurance:</strong> We charge customers directly to confirm their commitment. Jobs are scheduled only after parts are in place, and we absorb the 3% credit card transaction fee.</li>
-<li><strong>Flexibility:</strong> You have complete freedom to accept or decline jobs based on your capacity and preferences.</li>
+<li>Revenue Share: 15% of the repair order (RO) for referred jobs</li>
+<li>Pre-Qualified Customers: Customers come in with identified issues and are ready to proceed</li>
+<li>Repair Planning: Step-by-step repair guidance and support</li>
+<li>Customer Commitment: We handle customer billing upfront and absorb credit card fees</li>
+<li>Flexibility: You choose which jobs to accept based on your capacity</li>
 </ul>
-<h2>Why Partner with RepairWise?</h2>
+<p><strong>Benefits:</strong></p>
 <ul>
-<li><strong>Qualified Customers:</strong> We bring you customers who know their vehicle's issues and are ready to proceed—no wasted time.</li>
-<li><strong>No Marketing Costs:</strong> We handle customer acquisition, saving you time and money.</li>
-<li><strong>Pre-Approved Repairs:</strong> You maintain control over the work with estimates reviewed and approved by your team.</li>
-<li><strong>Expand Your Services:</strong> Gain the ability to say, "Yes, we work on Electric Vehicles," and tap into the rapidly growing EV repair market.</li>
+<li>No marketing costs&mdash;we bring customers directly to you</li>
+<li>Increased car count with higher-quality jobs</li>
+<li>Pre-approved and structured repair workflows</li>
+<li>Ability to expand services across multiple vehicle types</li>
 </ul>
-<h2>Common Electric Vehicle Repairs We Handle</h2>
-<p>Our partner shops often manage jobs like:</p>
+<p>We offer several programs, and you can choose to participate in any or all of them. EV and OEM programs may require certain equipment, and we provide training at no cost.</p>
+<p><strong>I. Multi-Brand / General Repair (ICE and Hybrid)</strong><br>RepairWise supports both internal combustion engine (ICE) and hybrid vehicle repairs through our network, helping increase car count with qualified, ready-to-service customers.</p>
+<p>Support includes:</p>
 <ul>
-<li>AC system issues (refrigerant recharges, compressors, thermal expansion valves, condenser fans)</li>
-<li>Door handle replacements</li>
+<li>Diagnosed repair opportunities</li>
+<li>Technical guidance from specialists</li>
+<li>Repair workflows and documentation</li>
+<li>Support for more complex systems and components</li>
+</ul>
+<p><strong>II. Electric Vehicle (EV) Program</strong><br>RepairWise helps shops confidently expand into the growing EV repair market by providing the tools, guidance, and customer flow needed to succeed.</p>
+<p>Support includes:</p>
+<ul>
+<li>Diagnosed EV repair opportunities</li>
+<li>Technical guidance from EV specialists</li>
+<li>Repair workflows and documentation</li>
+<li>Support for more complex systems and components</li>
+</ul>
+<p>Common EV repairs include:</p>
+<ul>
+<li>AC system issues (compressors, refrigerant, condenser fans, etc.)</li>
 <li>Charge port and HV cable repairs</li>
+<li>Battery and powertrain work</li>
 <li>Pyro fuse replacements</li>
-<li>Battery and powertrain rebuilds</li>
-<li>Control arm replacements</li>
-<li>HV isolation issues (with proper training and PPE)</li>
+<li>Suspension and control arms</li>
+<li>HV isolation diagnostics (with proper training/PPE)</li>
 <li>Tires and alignments</li>
 </ul>
-<p>Let me know if you have any questions. — I'll send over an agreement under a separate email.</p>
-<p>Please <a href="{{portal_url}}">fill out this form</a> so we can better understand your shop's capabilities.</p>
-<p>Looking forward to hearing from you!</p>
-<p>Best,<br>{{sender_name}}</p>`,
-  },
-  vinfast: {
-    subject: 'Unlock New EV Repair Opportunities',
-    body: `<p>Hi {{first_name}},</p>
-<p>I hope you're doing well! It was great connecting with you. I am sending this detailed overview of how a partnership with RepairWise can benefit your shops.</p>
-<p>RepairWise specializes in connecting independent shops with Electric Vehicle customers ready for repairs. We provide a streamlined process that helps you confidently expand into the EV market, including access to our VinFast OEM program. This program connects partner shops with verified OEM training, certification, parts, and repair data for higher-quality, compliant repairs.</p>
-<h2>How RepairWise Works</h2>
+<p>This allows your shop to confidently say, &ldquo;Yes, we service EVs,&rdquo; while minimizing risk and uncertainty.</p>
+<p><strong>III. OEM Programs</strong><br>RepairWise also operates OEM-supported programs, including our current partnership with VinFast, where we are an authorized service provider for both warranty and customer-pay repairs.</p>
+<p>Through this program, partner shops gain access to:</p>
 <ul>
-<li><strong>Revenue Sharing:</strong> We take a 15% share of the repair order (RO) for every customer referral, ensuring a mutually beneficial partnership.</li>
-<li><strong>Comprehensive Support:</strong> You'll receive diagnosed customers, step-by-step repair plans, and ongoing technical guidance from our expert EV technicians.</li>
-<li><strong>Customer Assurance:</strong> We charge customers directly to confirm their commitment. Jobs are scheduled only after parts are secured, and we absorb the 3% credit card transaction fee.</li>
-<li><strong>Flexibility:</strong> You have complete freedom to accept or decline jobs based on your shop's capacity and preferences.</li>
+<li>OEM repair procedures and documentation</li>
+<li>Verified parts sourcing</li>
+<li>Structured warranty repair workflows</li>
+<li>Training and certification support</li>
+<li>Higher-value, manufacturer-aligned repair opportunities</li>
 </ul>
-<h2>Why Partner with RepairWise?</h2>
-<ul>
-<li><strong>Qualified Customers:</strong> We bring you customers who already know their vehicle's issues and are ready to proceed—no wasted time.</li>
-<li><strong>No Marketing Costs:</strong> We handle customer acquisition, saving you both time and money.</li>
-<li><strong>Pre-Approved Repairs:</strong> You maintain full control over estimates and approvals.</li>
-<li><strong>Expand Your Services:</strong> Confidently say, "Yes, we work on EVs," and tap into the rapidly growing EV repair market.</li>
-<li><strong>VinFast OEM Program Access:</strong> Gain direct support for OEM repair procedures, verified parts sourcing, and repair documentation to meet manufacturer-level standards.</li>
-</ul>
-<h2>Common EV Repairs Our Partner Shops Handle</h2>
-<ul>
-<li>AC system issues (refrigerant recharges, compressors, thermal expansion valves, condenser fans)</li>
-<li>Door handle replacements</li>
-<li>Charge port and HV cable repairs</li>
-<li>Pyro fuse replacements</li>
-<li>Battery and powertrain rebuilds</li>
-<li>Control arm replacements</li>
-<li>HV isolation repairs (with proper training and PPE)</li>
-<li>Tires and alignments</li>
-</ul>
-<p>Let me know if you have any questions—I'll send the agreement over in a separate email.</p>
-<p>Please <a href="{{portal_url}}">fill out this form</a> so we can better understand your shop's capabilities.</p>
-<p>Looking forward to hearing from you!</p>
-<p>Best,<br>{{sender_name}}</p>`,
-  },
-  freeform: {
-    subject: 'RepairWise — {{shop_name}}',
-    body: `<p>Hi {{first_name}},</p>
-<p></p>
-<p>Please <a href="{{portal_url}}">fill out this form</a> so we can better understand your shop's capabilities.</p>
-<p>Best,<br>{{sender_name}}</p>`,
+<p>This creates an opportunity to perform repairs at a manufacturer standard while increasing revenue and technical capability within your shop.</p>
+<p><strong>Next Steps</strong><br>If this sounds like a fit, I&rsquo;d be happy to walk through the platform in more detail. I will also send an agreement under a separate email.</p>
+<p>In the meantime, please complete this form so we can better understand your shop&rsquo;s capabilities:<br><a href="{{portal_url}}">[Insert Form Link]</a></p>
+<p>Let me know if you have any questions&mdash;I look forward to continuing the conversation.</p>
+<p>Best,<br>Leo Gomez</p>`,
   },
 }
 
@@ -103,7 +79,7 @@ export function applyIntroVariant(
   variant: IntroVariantId,
   vars: Record<string, string>,
 ): { subject: string; body: string } {
-  const v = INTRO_VARIANTS[variant]
+  const v = INTRO_VARIANTS[variant] ?? INTRO_VARIANTS.standard
   let subject = v.subject
   let body = v.body
   for (const [key, value] of Object.entries(vars)) {

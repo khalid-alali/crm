@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { renderTemplate, type TemplateKey } from '@/lib/email-templates'
 import {
   applyIntroVariant,
-  INTRO_VARIANT_META,
-  type IntroVariantId,
 } from '@/lib/intro-email-variants'
 import { plainTextToSimpleHtml } from '@/lib/email-html'
 import { EmailBodyEditor } from '@/components/EmailBodyEditor'
@@ -49,8 +47,6 @@ export default function EmailModal({
   onClose,
   onSent,
 }: Props) {
-  const [introVariant, setIntroVariant] = useState<IntroVariantId>('multibrand')
-
   const introVars = useMemo(
     () => buildIntroVars(shopName, contactName, senderName),
     [shopName, contactName, senderName],
@@ -58,7 +54,7 @@ export default function EmailModal({
 
   const [subject, setSubject] = useState(() => {
     if (template === 'intro') {
-      return applyIntroVariant('multibrand', buildIntroVars(shopName, contactName, senderName)).subject
+      return applyIntroVariant('standard', buildIntroVars(shopName, contactName, senderName)).subject
     }
     return renderTemplate(template, {
       shop_name: shopName,
@@ -70,7 +66,7 @@ export default function EmailModal({
 
   const [body, setBody] = useState(() => {
     if (template === 'intro') {
-      return applyIntroVariant('multibrand', buildIntroVars(shopName, contactName, senderName)).body
+      return applyIntroVariant('standard', buildIntroVars(shopName, contactName, senderName)).body
     }
     return plainTextToSimpleHtml(
       renderTemplate(template, {
@@ -88,11 +84,10 @@ export default function EmailModal({
 
   useEffect(() => {
     if (template !== 'intro') return
-    if (introVariant === 'freeform') return
-    const next = applyIntroVariant(introVariant, introVars)
+    const next = applyIntroVariant('standard', introVars)
     setSubject(next.subject)
     setBody(next.body)
-  }, [template, introVariant, introVars])
+  }, [template, introVars])
 
   useEffect(() => {
     if (template === 'intro') return
@@ -155,8 +150,6 @@ export default function EmailModal({
     }
   }
 
-  const introIds = Object.keys(INTRO_VARIANT_META) as IntroVariantId[]
-
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -200,44 +193,6 @@ export default function EmailModal({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <div className="space-y-3 px-5 py-4">
               {error && <p className="text-sm text-red-600">{error}</p>}
-
-              {template === 'intro' && (
-                <div>
-                  <span className="mb-2 block text-xs font-medium text-onix-600">Choose intro</span>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    {introIds.map(id => {
-                      const meta = INTRO_VARIANT_META[id]
-                      const selected = introVariant === id
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => {
-                            if (id === 'freeform') {
-                              if (introVariant !== 'freeform') {
-                                setIntroVariant('freeform')
-                                const next = applyIntroVariant('freeform', introVars)
-                                setSubject(next.subject)
-                                setBody(next.body)
-                              }
-                              return
-                            }
-                            setIntroVariant(id)
-                          }}
-                          className={`rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
-                            selected
-                              ? 'border-brand-600 bg-brand-50 text-onix-900 ring-1 ring-brand-600'
-                              : 'border-arctic-300 bg-white text-onix-700 hover:bg-arctic-50'
-                          }`}
-                        >
-                          <span className="font-medium">{meta.label}</span>
-                          <span className="mt-0.5 block text-xs text-onix-500">{meta.description}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-onix-600">To</label>
