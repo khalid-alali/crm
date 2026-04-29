@@ -47,6 +47,7 @@ export default function EmailModal({
   onClose,
   onSent,
 }: Props) {
+  const [introMode, setIntroMode] = useState<'welcome' | 'freeform'>('welcome')
   const introVars = useMemo(
     () => buildIntroVars(shopName, contactName, senderName),
     [shopName, contactName, senderName],
@@ -84,10 +85,15 @@ export default function EmailModal({
 
   useEffect(() => {
     if (template !== 'intro') return
-    const next = applyIntroVariant('standard', introVars)
-    setSubject(next.subject)
-    setBody(next.body)
-  }, [template, introVars])
+    if (introMode === 'welcome') {
+      const next = applyIntroVariant('standard', introVars)
+      setSubject(next.subject)
+      setBody(next.body)
+      return
+    }
+    setSubject('')
+    setBody('')
+  }, [template, introVars, introMode])
 
   useEffect(() => {
     if (template === 'intro') return
@@ -110,7 +116,7 @@ export default function EmailModal({
     try {
       let subjectOut = subject
       let bodyOut = body
-      if (template === 'intro') {
+      if (template === 'intro' && introMode === 'welcome') {
         const hadPortalPlaceholder = body.includes('{{portal_url}}') || subject.includes('{{portal_url}}')
         const gen = await fetch('/api/portal/generate-token', {
           method: 'POST',
@@ -193,6 +199,40 @@ export default function EmailModal({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <div className="space-y-3 px-5 py-4">
               {error && <p className="text-sm text-red-600">{error}</p>}
+
+              {template === 'intro' && (
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-onix-600">Choose email type</label>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setIntroMode('welcome')}
+                      className={`rounded-lg border p-3 text-left transition ${
+                        introMode === 'welcome'
+                          ? 'border-brand-500 bg-brand-50'
+                          : 'border-arctic-300 bg-white hover:border-brand-300'
+                      }`}
+                    >
+                      <p className="text-sm font-medium text-onix-900">Welcome email</p>
+                      <p className="mt-1 text-xs text-onix-600">
+                        Pre-filled overview with the RepairWise partnership details.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIntroMode('freeform')}
+                      className={`rounded-lg border p-3 text-left transition ${
+                        introMode === 'freeform'
+                          ? 'border-brand-500 bg-brand-50'
+                          : 'border-arctic-300 bg-white hover:border-brand-300'
+                      }`}
+                    >
+                      <p className="text-sm font-medium text-onix-900">Freeform email</p>
+                      <p className="mt-1 text-xs text-onix-600">Write a custom subject and body from scratch.</p>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-onix-600">To</label>
