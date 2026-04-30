@@ -522,6 +522,8 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
               locations={mapLocationsForView}
               teslaEmbed
               teslaStageByLocationId={teslaStageByLocationId}
+              teslaSelectedState={state}
+              teslaSelectedCounty={county}
             />
           </div>
         </div>

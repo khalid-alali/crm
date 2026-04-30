@@ -61,7 +61,7 @@ function isTypingTarget(el: EventTarget | null): boolean {
   return el.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select'
 }
 
-export default function GlobalSearch() {
+export default function GlobalSearch({ className = '' }: { className?: string }) {
   const router = useRouter()
   const pathname = usePathname()
 
@@ -283,7 +283,7 @@ export default function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg border border-arctic-200 bg-white px-3 py-1.5 text-sm text-onix-700 shadow-sm hover:bg-arctic-50"
+        className={`inline-flex items-center gap-2 rounded-lg border border-arctic-200 bg-white px-3 py-1.5 text-sm text-onix-700 shadow-sm hover:bg-arctic-50 ${className}`}
         aria-label="Open global search"
       >
         <Search className="h-4 w-4" aria-hidden />

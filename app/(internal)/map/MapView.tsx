@@ -229,11 +229,17 @@ export default function MapView({
   locations,
   teslaEmbed = false,
   teslaStageByLocationId,
+  teslaSelectedState,
+  teslaSelectedCounty,
 }: {
   locations: MapViewLocation[]
   /** Tesla pipeline embed: hide CRM sidebar, color pins by Tesla stage, parent supplies filters. */
   teslaEmbed?: boolean
   teslaStageByLocationId?: Record<string, string>
+  /** Tesla filter state code (e.g. CA) to auto-focus map. */
+  teslaSelectedState?: string
+  /** Tesla filter county label (e.g. Orange County) to auto-focus map. */
+  teslaSelectedCounty?: string
 }) {
   const router = useRouter()
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -317,6 +323,28 @@ export default function MapView({
     if (!countyJump) return
     if (!countyPickerOptions.some(o => o.key === countyJump)) setCountyJump('')
   }, [countyJump, countyPickerOptions])
+
+  useEffect(() => {
+    if (!teslaEmbed) return
+    if (teslaSelectedCounty) {
+      const target = parseCountyField(teslaSelectedCounty).base.toLowerCase()
+      const matching = countyPickerOptionsAll.find(option => {
+        const [stateCode, rawCounty] = option.key.split(COUNTY_KEY_SEP)
+        const countyBase = parseCountyField(rawCounty ?? '').base.toLowerCase()
+        if (countyBase !== target) return false
+        if (!teslaSelectedState) return true
+        return stateCode === teslaSelectedState
+      })
+      if (matching) {
+        flyMapToCounty(matching.key)
+        return
+      }
+    }
+
+    if (teslaSelectedState) {
+      flyMapToArea(teslaSelectedState)
+    }
+  }, [teslaEmbed, teslaSelectedCounty, teslaSelectedState, countyPickerOptionsAll, scoped])
 
   useEffect(() => {
     if (selected && !scoped.some(l => l.id === selected.id)) setSelected(null)

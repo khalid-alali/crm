@@ -166,7 +166,6 @@ export default function ShopsPageClient({ title, shops, pipelineStatusFilter, ch
         <div className="mb-4 flex items-start justify-between gap-4 pt-0">
           <div>
             <h1 className="text-4xl font-semibold tracking-tight text-onix-950">{title}</h1>
-            <p className="mt-1 text-sm text-onix-500">{shops.length} shops total</p>
           </div>
           <Link
             href="/shops/new"

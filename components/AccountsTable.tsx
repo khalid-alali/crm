@@ -11,6 +11,7 @@ export type AccountListRow = {
   primary_owner_email: string | null
   primary_owner_phone: string | null
   location_count: number
+  has_non_churned_locations: boolean
 }
 
 type SortKey =
@@ -80,12 +81,17 @@ function sortedRows(rows: AccountListRow[], key: SortKey, dir: SortDir): Account
 
 export default function AccountsTable({ accounts }: { accounts: AccountListRow[] }) {
   const [query, setQuery] = useState('')
+  const [showChurnedShops, setShowChurnedShops] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('business_name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   const filtered = useMemo(
-    () => accounts.filter(a => accountMatchesQuery(a, query)),
-    [accounts, query],
+    () =>
+      accounts.filter(a => {
+        if (!showChurnedShops && a.location_count > 0 && !a.has_non_churned_locations) return false
+        return accountMatchesQuery(a, query)
+      }),
+    [accounts, query, showChurnedShops],
   )
 
   const rows = useMemo(() => sortedRows(filtered, sortKey, sortDir), [filtered, sortKey, sortDir])
@@ -121,16 +127,35 @@ export default function AccountsTable({ accounts }: { accounts: AccountListRow[]
           className="w-full rounded-xl border border-arctic-300 bg-white px-4 py-2.5 text-sm text-onix-950 placeholder:text-onix-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
       </div>
+      <label className="inline-flex items-center gap-2 text-sm text-onix-700">
+        <input
+          type="checkbox"
+          checked={showChurnedShops}
+          onChange={e => setShowChurnedShops(e.target.checked)}
+          className="h-4 w-4 rounded border-arctic-300 text-brand-600 focus:ring-brand-500"
+        />
+        Show churned shops
+      </label>
 
-      <div className="bg-white border border-arctic-200 rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-arctic-200 text-sm">
-          <thead className="bg-arctic-50">
+      <div className="rounded-lg border border-arctic-200 bg-white">
+        <table className="min-w-full table-fixed divide-y divide-arctic-200 text-sm">
+          <thead className="sticky top-0 z-20 bg-arctic-50">
             <tr>
               {SORTABLE_HEADERS.map(header => (
                 <th
                   key={header.key}
                   scope="col"
-                  className="cursor-pointer select-none px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-onix-600 transition-colors hover:text-onix-900"
+                  className={`sticky top-0 z-20 cursor-pointer select-none bg-arctic-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-onix-600 transition-colors hover:text-onix-900 ${
+                    header.key === 'primary_owner_email'
+                      ? 'w-[28%]'
+                      : header.key === 'primary_owner_phone'
+                        ? 'w-[16%]'
+                        : header.key === 'business_name'
+                          ? 'w-[30%]'
+                          : header.key === 'primary_owner_name'
+                            ? 'w-[18%]'
+                            : 'w-[8%]'
+                  }`}
                   onClick={() => toggleSort(header.key)}
                   aria-sort={
                     sortKey === header.key
@@ -164,11 +189,13 @@ export default function AccountsTable({ accounts }: { accounts: AccountListRow[]
                     </Link>
                   </td>
                   <td className="px-4 py-2.5 text-onix-600">{row.primary_owner_name ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-onix-600">{row.primary_owner_email?.trim() ? row.primary_owner_email : '—'}</td>
+                  <td className="truncate px-4 py-2.5 text-onix-600">
+                    {row.primary_owner_email?.trim() ? row.primary_owner_email : '—'}
+                  </td>
                   <td className="px-4 py-2.5 text-onix-600 tabular-nums">{row.location_count}</td>
-                  <td className="px-4 py-2.5 text-onix-600">
+                  <td className="px-4 py-2.5 text-onix-600 whitespace-nowrap">
                     {display && tel ? (
-                      <a href={tel} className="text-brand-600 hover:underline tabular-nums">
+                      <a href={tel} className="tabular-nums text-brand-600 hover:underline whitespace-nowrap">
                         {display}
                       </a>
                     ) : (

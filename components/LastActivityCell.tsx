@@ -31,16 +31,16 @@ export default function LastActivityCell({
     )
   }
 
-  const { label, dot } = computeLastActivityDisplay(createdAt, lastActivityAt)
+  const { label, fullTimestamp, dot } = computeLastActivityDisplay(createdAt, lastActivityAt)
 
   return (
     <div className="flex items-center gap-2 text-xs text-onix-800 tabular-nums">
       <span
         className={`h-2 w-2 shrink-0 rounded-full ${dotClass[dot]}`}
-        title={`Last activity: ${label}`}
+        title={fullTimestamp}
         aria-hidden
       />
-      <span>{label}</span>
+      <span title={fullTimestamp}>{label}</span>
     </div>
   )
 }

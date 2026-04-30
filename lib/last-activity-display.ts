@@ -18,7 +18,7 @@ export function computeLastActivityDisplay(
   createdAtIso: string,
   lastActivityAtIso: string | null,
   nowMs: number = Date.now(),
-): { label: string; dot: LastActivityDot; daysSince: number } {
+): { label: string; fullTimestamp: string; dot: LastActivityDot; daysSince: number } {
   const createdMs = Date.parse(createdAtIso)
   const lastMs = lastActivityAtIso ? Date.parse(lastActivityAtIso) : NaN
   const hasMeaningfulActivity = Number.isFinite(lastMs)
@@ -31,23 +31,38 @@ export function computeLastActivityDisplay(
 
   const display = new Date(displayMs)
   const now = new Date(nowMs)
-  const isToday =
-    display.getFullYear() === now.getFullYear() &&
-    display.getMonth() === now.getMonth() &&
-    display.getDate() === now.getDate()
+  const msSince = Math.max(0, nowMs - displayMs)
 
-  const label = isToday
-    ? 'Today'
-    : display.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
+  let label: string
+  if (msSince < 86_400_000) {
+    label = 'Today'
+  } else if (daysSince < 7) {
+    label = daysSince === 1 ? '1 day ago' : `${daysSince} days ago`
+  } else if (daysSince < 90) {
+    label = display.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    })
+  } else {
+    label = display.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  }
+
+  const fullTimestamp = display.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 
   let dot: LastActivityDot
   if (daysSince <= 7) dot = 'green'
   else if (daysSince <= 14) dot = 'amber'
   else dot = 'red'
 
-  return { label, dot, daysSince }
+  return { label, fullTimestamp, dot, daysSince }
 }

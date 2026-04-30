@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChartColumn, CarFront, House, MapPinned, Store, Users } from 'lucide-react'
+import GlobalSearch from '@/components/GlobalSearch'
 
 const navItems = [
   { href: '/home', label: 'Home', icon: House },
@@ -34,6 +35,9 @@ export default function InternalSidebarNav() {
           </Link>
         )
       })}
+      <div className="pt-2 mt-2 border-t border-arctic-200">
+        <GlobalSearch className="w-full justify-between px-3 py-2 shadow-none" />
+      </div>
     </nav>
   )
 }
