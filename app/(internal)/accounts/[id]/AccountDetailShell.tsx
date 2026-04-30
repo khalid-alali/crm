@@ -13,6 +13,7 @@ import AccountContactsPanel from '@/components/AccountContactsPanel'
 import { contractStatusBadgeClass, contractStatusLabel } from '@/lib/contract-status-display'
 import DeleteAccountButton from '@/components/DeleteAccountButton'
 import ActivityFeed from '@/components/ActivityFeed'
+import BulkLocationUploadModal from './BulkLocationUploadModal'
 
 const TABS = ['activity', 'contracts', 'programs'] as const
 type TabKey = (typeof TABS)[number]
@@ -92,6 +93,7 @@ export default function AccountDetailShell({
   const [addingLoc, setAddingLoc] = useState(false)
   const [locSaving, setLocSaving] = useState(false)
   const [locError, setLocError] = useState('')
+  const [showBulkUpload, setShowBulkUpload] = useState(false)
   const [newLoc, setNewLoc] = useState({
     name: '',
     address_line1: '',
@@ -314,16 +316,25 @@ export default function AccountDetailShell({
                   {locations.length}
                 </span>
               </h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setAddingLoc(a => !a)
-                  setLocError('')
-                }}
-                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700"
-              >
-                {addingLoc ? 'Cancel' : 'Add location'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkUpload(true)}
+                  className="rounded-lg border border-arctic-300 bg-white px-3 py-1.5 text-xs font-medium text-onix-700 hover:bg-arctic-50"
+                >
+                  Bulk upload
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingLoc(a => !a)
+                    setLocError('')
+                  }}
+                  className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700"
+                >
+                  {addingLoc ? 'Cancel' : 'Add location'}
+                </button>
+              </div>
             </div>
 
             {addingLoc && (
@@ -550,6 +561,9 @@ export default function AccountDetailShell({
           </div>
         </div>
       </div>
+      {showBulkUpload && (
+        <BulkLocationUploadModal accountId={account.id} onClose={() => setShowBulkUpload(false)} />
+      )}
     </div>
   )
 }

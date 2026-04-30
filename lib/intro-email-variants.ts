@@ -69,7 +69,7 @@ export const INTRO_VARIANTS: Record<IntroVariantId, { subject: string; body: str
 </ul>
 <p>This creates an opportunity to perform repairs at a manufacturer standard while increasing revenue and technical capability within your shop.</p>
 <p><strong>Next Steps</strong><br>If this sounds like a fit, I&rsquo;d be happy to walk through the platform in more detail. I will also send an agreement under a separate email.</p>
-<p>In the meantime, please complete this form so we can better understand your shop&rsquo;s capabilities:<br><a href="{{portal_url}}">[Insert Form Link]</a></p>
+<p>In the meantime, please complete this form so we can better understand your shop&rsquo;s capabilities:<br><a href="{{portal_url}}">{auto generated form link}</a></p>
 <p>Let me know if you have any questions&mdash;I look forward to continuing the conversation.</p>
 <p>Best,<br>Leo Gomez</p>`,
   },

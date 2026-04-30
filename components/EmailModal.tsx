@@ -35,7 +35,7 @@ function buildIntroVars(shopName: string, contactName: string, senderName: strin
 function buildFreeformIntroBody(contactName: string) {
   const cn = contactName || 'there'
   return `<p>Hi ${escapeHtmlText(cn)},</p>
-<p>Please tell us about your capabilities here: <a href="{{portal_url}}">{Form Link}</a></p>
+<p>Please tell us about your capabilities here: <a href="{{portal_url}}">{auto generated form link}</a></p>
 <p>Best,<br>Leo Gomez</p>`
 }
 
