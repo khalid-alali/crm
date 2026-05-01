@@ -96,6 +96,7 @@ export default async function ShopDetailPage({
         senderName={session?.user?.name ?? session?.user?.email ?? 'RepairWise'}
         primaryContactDisplayName={primaryContactDisplayName}
         primaryContactEmail={primaryContactEmail}
+        currentUserEmail={session?.user?.email ?? ''}
         allowContractDelete={canDeleteContracts(session?.user?.email)}
       />
     </div>

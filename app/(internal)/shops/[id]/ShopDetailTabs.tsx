@@ -19,6 +19,10 @@ import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { LOCATION_SOURCES, formatLocationSource } from '@/lib/location-source'
 import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 import { DISQUALIFIED_REASON_LABELS, DISQUALIFIED_REASON_VALUES } from '@/lib/location-outcome-reasons'
+import TaskFormModal from '@/components/tasks/TaskFormModal'
+import TaskRow from '@/components/tasks/TaskRow'
+import type { TaskWithLocation } from '@/lib/types/task'
+import { isTaskResolvedInLast30Days } from '@/lib/tasks/date-groups'
 
 const PROGRAMS = [
   { key: 'multi_drive', label: 'Multi-Drive' },
@@ -27,7 +31,7 @@ const PROGRAMS = [
 ]
 const PROGRAM_STATUSES = ['not_enrolled', 'pending_activation', 'active', 'suspended', 'terminated']
 const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
-const BASE_TABS = ['activity', 'contracts', 'programs', 'capabilities'] as const
+const BASE_TABS = ['activity', 'tasks', 'contracts', 'programs', 'capabilities'] as const
 type BaseTabKey = (typeof BASE_TABS)[number]
 type TabKey = BaseTabKey | 'admin'
 type EditField = 'name' | 'account' | 'location' | 'source' | 'notes' | 'commercial'
@@ -45,6 +49,7 @@ interface Props {
   senderName: string
   primaryContactDisplayName: string
   primaryContactEmail: string
+  currentUserEmail: string
   /** Server-derived: only khalid@repairwise.pro */
   allowContractDelete?: boolean
 }
@@ -138,6 +143,7 @@ export default function ShopDetailTabs({
   senderName,
   primaryContactDisplayName,
   primaryContactEmail,
+  currentUserEmail,
   allowContractDelete = false,
 }: Props) {
   const router = useRouter()
@@ -145,7 +151,7 @@ export default function ShopDetailTabs({
     const d = (defaultTab ?? 'activity').trim().toLowerCase()
     if (d === 'admin') return 'admin'
     if (d === 'activity') return 'activity'
-    if (d === 'contracts' || d === 'programs' || d === 'capabilities') return d
+    if (d === 'tasks' || d === 'contracts' || d === 'programs' || d === 'capabilities') return d
     return 'activity'
   })
   const [status, setStatus] = useState(shop.status)
@@ -189,6 +195,12 @@ export default function ShopDetailTabs({
   const [shopCacheRow, setShopCacheRow] = useState<ShopStatusCachePayload | null>(null)
   const [enrichLoading, setEnrichLoading] = useState(false)
   const [enrichFeedback, setEnrichFeedback] = useState<string | null>(null)
+  const [tasks, setTasks] = useState<TaskWithLocation[]>([])
+  const [tasksLoading, setTasksLoading] = useState(false)
+  const [tasksError, setTasksError] = useState<string | null>(null)
+  const [showTaskModal, setShowTaskModal] = useState(false)
+  const [editingTask, setEditingTask] = useState<TaskWithLocation | undefined>(undefined)
+  const [showDoneTasks, setShowDoneTasks] = useState(false)
   const [inlineDraft, setInlineDraft] = useState({
     name: shop.name ?? '',
     account_id: shop.account_id ?? null,
@@ -317,6 +329,37 @@ export default function ShopDetailTabs({
       isCancelled = true
     }
   }, [tab, shop.id, shop.motherduck_shop_id])
+
+  useEffect(() => {
+    if (tab !== 'tasks') return
+    let cancelled = false
+    async function loadTasks() {
+      setTasksLoading(true)
+      setTasksError(null)
+      try {
+        const res = await fetch(`/api/tasks?location_id=${encodeURIComponent(shop.id)}`, { cache: 'no-store' })
+        const data = (await res.json().catch(() => [])) as Array<TaskWithLocation> & { error?: string }
+        if (cancelled) return
+        if (!res.ok) {
+          setTasksError((data as { error?: string }).error ?? 'Could not load tasks')
+          setTasks([])
+          return
+        }
+        setTasks(Array.isArray(data) ? data : [])
+      } catch {
+        if (!cancelled) {
+          setTasksError('Could not load tasks')
+          setTasks([])
+        }
+      } finally {
+        if (!cancelled) setTasksLoading(false)
+      }
+    }
+    void loadTasks()
+    return () => {
+      cancelled = true
+    }
+  }, [tab, shop.id])
 
   const hasAdminShopLink = useMemo(
     () => Boolean((currentAdminShopId || shop.motherduck_shop_id || '').trim()),
@@ -467,6 +510,17 @@ export default function ShopDetailTabs({
   const activityLog = [...(shop.activity_log ?? [])].sort(
     (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   )
+  const openTasks = tasks
+    .filter(task => task.status === 'open')
+    .sort((a, b) => {
+      const aDue = a.due_date ?? '9999-12-31'
+      const bDue = b.due_date ?? '9999-12-31'
+      if (aDue !== bDue) return aDue.localeCompare(bDue)
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    })
+  const doneTasksRecent = tasks
+    .filter(task => task.status === 'done' && isTaskResolvedInLast30Days(task))
+    .sort((a, b) => new Date(b.resolved_at ?? b.updated_at).getTime() - new Date(a.resolved_at ?? a.updated_at).getTime())
 
   async function patchShopJson(payload: Record<string, unknown>) {
     const res = await fetch(`/api/locations/${shop.id}`, {
@@ -573,6 +627,18 @@ export default function ShopDetailTabs({
     setNoteText('')
     setSavingNote(false)
     router.refresh()
+  }
+
+  function upsertTask(nextTask: TaskWithLocation) {
+    setTasks(prev => {
+      const existing = prev.find(t => t.id === nextTask.id)
+      if (!existing) return [nextTask, ...prev]
+      return prev.map(t => (t.id === nextTask.id ? { ...t, ...nextTask } : t))
+    })
+  }
+
+  function removeTask(taskId: string) {
+    setTasks(prev => prev.filter(t => t.id !== taskId))
   }
 
   async function saveAdminShopId(shopId: string, motherduckStatus?: string | null) {
@@ -861,6 +927,16 @@ export default function ShopDetailTabs({
           </select>
           <button onClick={() => setShowIntroModal(true)} className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
             <Mail className="h-4 w-4" aria-hidden /> Email
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingTask(undefined)
+              setShowTaskModal(true)
+            }}
+            className="inline-flex items-center gap-1 rounded-lg border border-arctic-300 bg-white px-4 py-2 text-sm font-medium text-onix-900 hover:bg-arctic-50"
+          >
+            + New task
           </button>
           <button
             onClick={() => {
@@ -1335,6 +1411,86 @@ export default function ShopDetailTabs({
             </div>
           )}
 
+          {tab === 'tasks' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-onix-900">Open ({openTasks.length})</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingTask(undefined)
+                    setShowTaskModal(true)
+                  }}
+                  className="rounded-lg border border-arctic-300 bg-white px-3 py-1.5 text-sm text-onix-800 hover:bg-arctic-50"
+                >
+                  + New task
+                </button>
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-arctic-200 bg-white">
+                {tasksLoading ? (
+                  <p className="px-4 py-3 text-sm text-onix-500">Loading tasks...</p>
+                ) : tasksError ? (
+                  <p className="px-4 py-3 text-sm text-red-600">{tasksError}</p>
+                ) : openTasks.length === 0 && doneTasksRecent.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-onix-500">
+                    <p>No tasks for this shop yet. Create one to track follow-ups.</p>
+                  </div>
+                ) : openTasks.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-onix-500">No open tasks.</p>
+                ) : (
+                  openTasks.map(task => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      showLocation={false}
+                      currentUserEmail={currentUserEmail}
+                      onUpdate={updated => upsertTask({ ...(task as TaskWithLocation), ...updated })}
+                      onDelete={removeTask}
+                      onEdit={t => {
+                        setEditingTask(t)
+                        setShowTaskModal(true)
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-arctic-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setShowDoneTasks(v => !v)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left"
+                >
+                  <span className="text-sm font-semibold text-onix-900">Done — last 30 days</span>
+                  <span className="text-xs text-onix-500">{doneTasksRecent.length}</span>
+                </button>
+                {showDoneTasks && (
+                  <>
+                    {doneTasksRecent.length === 0 ? (
+                      <p className="border-t border-arctic-200 px-4 py-3 text-sm text-onix-500">No recently done tasks.</p>
+                    ) : (
+                      doneTasksRecent.map(task => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          showLocation={false}
+                          currentUserEmail={currentUserEmail}
+                          onUpdate={updated => upsertTask({ ...(task as TaskWithLocation), ...updated })}
+                          onDelete={removeTask}
+                          onEdit={t => {
+                            setEditingTask(t)
+                            setShowTaskModal(true)
+                          }}
+                        />
+                      ))
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {tab === 'contracts' && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1700,6 +1856,34 @@ export default function ShopDetailTabs({
             </div>
           </div>
         </div>
+      )}
+
+      {showTaskModal && (
+        <TaskFormModal
+          open={showTaskModal}
+          onClose={() => {
+            setShowTaskModal(false)
+            setEditingTask(undefined)
+          }}
+          onSuccess={task => {
+            upsertTask({
+              ...(editingTask ?? { location: { id: shop.id, name: shop.name, chain_name: shop.chain_name ?? null } }),
+              ...task,
+              location: {
+                id: shop.id,
+                name: shop.name,
+                chain_name: shop.chain_name ?? null,
+                city: shop.city ?? null,
+                state: shop.state ?? null,
+              },
+            })
+          }}
+          defaultLocationId={shop.id}
+          defaultLocationLabel={shop.name}
+          defaultLocationCity={shop.city ?? null}
+          defaultLocationState={shop.state ?? null}
+          taskToEdit={editingTask}
+        />
       )}
 
       {showIntroModal && (

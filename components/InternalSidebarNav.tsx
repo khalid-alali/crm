@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChartColumn, CarFront, House, Mail, MapPinned, Store, Users } from 'lucide-react'
+import { ChartColumn, CarFront, House, ListTodo, Mail, MapPinned, Store, Users } from 'lucide-react'
 import GlobalSearch from '@/components/GlobalSearch'
 
 const navItems = [
   { href: '/home', label: 'Home', icon: House },
+  { href: '/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/shops', label: 'Shops', icon: Store },
   { href: '/tesla', label: 'Tesla', icon: CarFront },
   { href: '/accounts', label: 'Accounts', icon: Users },
