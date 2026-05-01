@@ -1,19 +1,22 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { renderTemplate, type TemplateKey } from '@/lib/email-templates'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { EmailTemplateRow } from '@/components/email-templates/EmailTemplateForm'
+import { EmailBodyEditor, type EmailBodyEditorHandle } from '@/components/EmailBodyEditor'
+import { EMAIL_TEMPLATE_CATEGORIES, EMAIL_TEMPLATE_CATEGORY_LABELS } from '@/lib/email-template-categories'
+import { EMAIL_MERGE_PLACEHOLDER_TOKENS } from '@/lib/email-template-placeholder-tokens'
 import {
-  applyIntroVariant,
-} from '@/lib/intro-email-variants'
-import { plainTextToSimpleHtml } from '@/lib/email-html'
-import { EmailBodyEditor } from '@/components/EmailBodyEditor'
+  emailContentReferencesCapabilitiesLink,
+  replaceLegacyCapabilitiesPreviewUrls,
+} from '@/lib/email-template-placeholders'
+
+type Selection = 'unset' | 'blank' | { type: 'template'; id: string }
 
 interface Props {
   locationId: string
   shopName: string
   contactName: string
   contactEmail: string
-  template: TemplateKey
   senderName: string
   /** When true, activity_log stores a footer so the feed shows this send came from shop detail. */
   fromShopDetail?: boolean
@@ -21,100 +24,146 @@ interface Props {
   onSent: () => void
 }
 
-function buildIntroVars(shopName: string, contactName: string, senderName: string) {
-  const cn = contactName || 'there'
-  return {
-    shop_name: shopName,
-    contact_name: cn,
-    first_name: cn.trim().split(/\s+/)[0] || 'there',
-    sender_name: senderName,
-    portal_url: '{{portal_url}}',
-  }
-}
-
-function buildFreeformIntroBody(contactName: string) {
-  const cn = contactName || 'there'
-  return `<p>Hi ${escapeHtmlText(cn)},</p>
-<p>Please tell us about your capabilities here: <a href="{{portal_url}}">{auto generated form link}</a></p>
-<p>Best,<br>Leo Gomez</p>`
-}
-
-function escapeHtmlText(s: string) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
 export default function EmailModal({
   locationId,
   shopName,
   contactName,
   contactEmail,
-  template,
-  senderName,
+  senderName: _senderName,
   fromShopDetail,
   onClose,
   onSent,
 }: Props) {
-  const [introMode, setIntroMode] = useState<'welcome' | 'freeform'>('welcome')
-  const introVars = useMemo(
-    () => buildIntroVars(shopName, contactName, senderName),
-    [shopName, contactName, senderName],
-  )
+  const bodyEditorRef = useRef<EmailBodyEditorHandle>(null)
+  const placeholderPanelRef = useRef<HTMLDivElement>(null)
 
-  const [subject, setSubject] = useState(() => {
-    if (template === 'intro') {
-      if (introMode === 'freeform') return ''
-      return applyIntroVariant('standard', buildIntroVars(shopName, contactName, senderName)).subject
-    }
-    return renderTemplate(template, {
-      shop_name: shopName,
-      contact_name: contactName || 'there',
-      sender_name: senderName,
-      portal_url: '',
-    }).subject
-  })
-
-  const [body, setBody] = useState(() => {
-    if (template === 'intro') {
-      if (introMode === 'freeform') return buildFreeformIntroBody(contactName)
-      return applyIntroVariant('standard', buildIntroVars(shopName, contactName, senderName)).body
-    }
-    return plainTextToSimpleHtml(
-      renderTemplate(template, {
-        shop_name: shopName,
-        contact_name: contactName || 'there',
-        sender_name: senderName,
-        portal_url: '',
-      }).body,
-    )
-  })
-
+  const [step, setStep] = useState<1 | 2>(1)
+  const [templates, setTemplates] = useState<EmailTemplateRow[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(true)
+  const [templatesError, setTemplatesError] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [selection, setSelection] = useState<Selection>('unset')
+  const [emailTemplateId, setEmailTemplateId] = useState<string | null>(null)
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('<p></p>')
   const [to, setTo] = useState(contactEmail)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [continueLoading, setContinueLoading] = useState(false)
+  const [placeholderMenuOpen, setPlaceholderMenuOpen] = useState(false)
+  const [placeholderTarget, setPlaceholderTarget] = useState<'body' | 'subject'>('body')
+
+  const showCapabilitiesHint = useMemo(
+    () => (step === 2 ? emailContentReferencesCapabilitiesLink(subject, body) : false),
+    [step, subject, body],
+  )
+
+  const loadTemplates = useCallback(async () => {
+    setTemplatesLoading(true)
+    setTemplatesError('')
+    try {
+      const res = await fetch('/api/templates')
+      const data = (await res.json()) as { templates?: EmailTemplateRow[]; error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not load templates')
+      setTemplates(data.templates ?? [])
+    } catch (e: unknown) {
+      setTemplatesError(e instanceof Error ? e.message : 'Could not load templates')
+    } finally {
+      setTemplatesLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    if (template !== 'intro') return
-    if (introMode === 'welcome') {
-      const next = applyIntroVariant('standard', introVars)
-      setSubject(next.subject)
-      setBody(next.body)
+    void loadTemplates()
+  }, [loadTemplates])
+
+  useEffect(() => {
+    if (!placeholderMenuOpen) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = placeholderPanelRef.current
+      if (el && !el.contains(e.target as Node)) {
+        setPlaceholderMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [placeholderMenuOpen])
+
+  const filteredTemplates = useMemo(() => {
+    let rows = templates
+    if (categoryFilter) rows = rows.filter(t => t.category === categoryFilter)
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      rows = rows.filter(
+        t =>
+          t.name.toLowerCase().includes(q) ||
+          (t.description ?? '').toLowerCase().includes(q) ||
+          t.subject.toLowerCase().includes(q),
+      )
+    }
+    return rows
+  }, [templates, categoryFilter, search])
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, EmailTemplateRow[]>()
+    for (const c of EMAIL_TEMPLATE_CATEGORIES) {
+      map.set(c, [])
+    }
+    for (const t of filteredTemplates) {
+      const list = map.get(t.category) ?? []
+      list.push(t)
+      map.set(t.category, list)
+    }
+    return EMAIL_TEMPLATE_CATEGORIES.map(cat => ({ cat, items: map.get(cat) ?? [] })).filter(
+      g => g.items.length > 0,
+    )
+  }, [filteredTemplates])
+
+  const showSearch = templates.length > 15
+
+  function insertPlaceholderToken(token: string) {
+    if (placeholderTarget === 'subject') {
+      setSubject(prev => (prev ? `${prev}${prev.endsWith(' ') ? '' : ' '}` : '') + token)
+    } else {
+      bodyEditorRef.current?.insertText(token)
+    }
+    setPlaceholderMenuOpen(false)
+  }
+
+  async function handleContinue() {
+    setError('')
+    if (selection === 'unset') return
+    if (selection === 'blank') {
+      setEmailTemplateId(null)
+      setSubject('')
+      setBody('<p></p>')
+      setStep(2)
       return
     }
-    setSubject('RepairWise Follow Up')
-    setBody(buildFreeformIntroBody(contactName))
-  }, [template, introVars, introMode, contactName])
-
-  useEffect(() => {
-    if (template === 'intro') return
-    const r = renderTemplate(template, {
-      shop_name: shopName,
-      contact_name: contactName || 'there',
-      sender_name: senderName,
-      portal_url: '',
-    })
-    setSubject(r.subject)
-    setBody(plainTextToSimpleHtml(r.body))
-  }, [template, shopName, contactName, senderName])
+    setContinueLoading(true)
+    try {
+      const res = await fetch(`/api/templates/${selection.id}/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationId }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        subject?: string
+        bodyHtml?: string
+      }
+      if (!res.ok) throw new Error(data.error ?? 'Could not render template')
+      setEmailTemplateId(selection.id)
+      setSubject(replaceLegacyCapabilitiesPreviewUrls(data.subject ?? ''))
+      setBody(replaceLegacyCapabilitiesPreviewUrls(data.bodyHtml ?? '<p></p>'))
+      setStep(2)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Could not load template')
+    } finally {
+      setContinueLoading(false)
+    }
+  }
 
   async function handleSend() {
     if (!to) {
@@ -122,41 +171,24 @@ export default function EmailModal({
       return
     }
     setSending(true)
+    setError('')
     try {
-      let subjectOut = subject
-      let bodyOut = body
-      if (template === 'intro') {
-        const hadPortalPlaceholder = body.includes('{{portal_url}}') || subject.includes('{{portal_url}}')
-        const gen = await fetch('/api/portal/generate-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ locationId }),
-        })
-        const genData = (await gen.json().catch(() => ({}))) as { error?: string; portalUrl?: string }
-        if (!gen.ok) throw new Error(genData.error ?? 'Could not create portal link')
-        const portalUrl = genData.portalUrl
-        if (!portalUrl) throw new Error('Could not create portal link')
-        const safeUrl = escapeHtmlText(portalUrl)
-        subjectOut = subjectOut.split('{{portal_url}}').join(safeUrl)
-        bodyOut = bodyOut.split('{{portal_url}}').join(safeUrl)
-        if (!hadPortalPlaceholder) {
-          bodyOut = `${bodyOut}<p style="margin-top:1em">Please <a href="${safeUrl}">fill out this form</a> so we can better understand your shop's capabilities.</p>`
-        }
-      }
-
       const res = await fetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           locationId,
           to,
-          subject: subjectOut,
-          bodyHtml: bodyOut,
-          template,
+          subject,
+          bodyHtml: body,
+          emailTemplateId,
           fromShopDetail: Boolean(fromShopDetail),
         }),
       })
-      if (!res.ok) throw new Error((await res.json()).error)
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error((j as { error?: string }).error ?? 'Send failed')
+      }
       onSent()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Send failed')
@@ -169,14 +201,22 @@ export default function EmailModal({
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      if (placeholderMenuOpen) {
+        setPlaceholderMenuOpen(false)
+        return
+      }
+      onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => {
       document.body.style.overflow = prev
       window.removeEventListener('keydown', onKey)
     }
-  }, [onClose])
+  }, [onClose, placeholderMenuOpen])
+
+  const recipientLabel = `${contactName || 'Contact'} · ${shopName}`
+  const canContinue = selection !== 'unset' && !continueLoading
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 py-6 sm:py-10">
@@ -185,17 +225,23 @@ export default function EmailModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="email-modal-title"
-          className={`my-auto flex min-h-0 w-full flex-col overflow-hidden rounded-lg bg-white shadow-xl ${
-            template === 'intro'
-              ? 'max-h-[min(calc(100dvh-3rem),56rem)] max-w-4xl'
-              : 'max-h-[min(calc(100dvh-3rem),48rem)] max-w-lg'
-          }`}
+          className="my-auto flex min-h-0 w-full max-h-[min(calc(100dvh-3rem),56rem)] max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex shrink-0 items-center justify-between border-b border-arctic-200 px-5 py-4">
-            <h2 id="email-modal-title" className="text-sm font-semibold">
-              {template === 'intro' ? 'Send intro email' : 'Send Email'}
-            </h2>
+            <div>
+              <h2 id="email-modal-title" className="text-sm font-semibold text-onix-800">
+                {step === 1 ? 'Send email' : 'Review and send'}
+              </h2>
+              {step === 2 && emailTemplateId && (
+                <p className="mt-0.5 text-xs text-onix-500">
+                  Using template: {templates.find(t => t.id === emailTemplateId)?.name ?? '—'}
+                </p>
+              )}
+              {step === 2 && !emailTemplateId && (
+                <p className="mt-0.5 text-xs text-onix-500">Blank email</p>
+              )}
+            </div>
             <button
               type="button"
               onClick={onClose}
@@ -205,84 +251,265 @@ export default function EmailModal({
               &times;
             </button>
           </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <div className="space-y-3 px-5 py-4">
+            <div className="space-y-4 px-5 py-4">
               {error && <p className="text-sm text-red-600">{error}</p>}
 
-              {template === 'intro' && (
-                <div>
-                  <label className="mb-2 block text-xs font-medium text-onix-600">Choose email type</label>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={() => setIntroMode('welcome')}
-                      className={`rounded-lg border p-3 text-left transition ${
-                        introMode === 'welcome'
-                          ? 'border-brand-500 bg-brand-50'
-                          : 'border-arctic-300 bg-white hover:border-brand-300'
-                      }`}
-                    >
-                      <p className="text-sm font-medium text-onix-900">Welcome email</p>
-                      <p className="mt-1 text-xs text-onix-600">
-                        Pre-filled overview with the RepairWise partnership details.
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIntroMode('freeform')}
-                      className={`rounded-lg border p-3 text-left transition ${
-                        introMode === 'freeform'
-                          ? 'border-brand-500 bg-brand-50'
-                          : 'border-arctic-300 bg-white hover:border-brand-300'
-                      }`}
-                    >
-                      <p className="text-sm font-medium text-onix-900">Freeform email</p>
-                      <p className="mt-1 text-xs text-onix-600">Write a custom subject and body from scratch.</p>
-                    </button>
-                  </div>
-                </div>
+              {step === 1 && (
+                <>
+                  <p className="text-xs text-onix-600">
+                    To <span className="font-medium text-onix-800">{recipientLabel}</span>
+                  </p>
+                  <p className="text-xs font-medium text-onix-600">Choose a template</p>
+                  {templatesError && <p className="text-sm text-amber-700">{templatesError}</p>}
+                  {templatesLoading && <p className="text-sm text-onix-500">Loading templates…</p>}
+
+                  {!templatesLoading && (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        <select
+                          value={categoryFilter}
+                          onChange={e => setCategoryFilter(e.target.value)}
+                          className="min-w-[14rem] max-w-full rounded-lg border border-arctic-300 py-1.5 pl-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        >
+                          <option value="">All categories</option>
+                          {EMAIL_TEMPLATE_CATEGORIES.map(c => (
+                            <option key={c} value={c}>
+                              {EMAIL_TEMPLATE_CATEGORY_LABELS[c]}
+                            </option>
+                          ))}
+                        </select>
+                        {showSearch && (
+                          <input
+                            type="search"
+                            placeholder="Search templates…"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="min-w-[12rem] flex-1 rounded-lg border border-arctic-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          />
+                        )}
+                      </div>
+
+                      <ul className="space-y-2">
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => setSelection('blank')}
+                            className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition ${
+                              selection === 'blank'
+                                ? 'border-brand-500 bg-brand-50'
+                                : 'border-arctic-300 bg-white hover:border-brand-300'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-onix-800">Blank email</p>
+                              <p className="mt-1 text-xs text-onix-600">
+                                Write a custom subject and body from scratch.
+                              </p>
+                            </div>
+                            {selection === 'blank' && (
+                              <span className="text-xs font-medium text-brand-700">Selected</span>
+                            )}
+                          </button>
+                        </li>
+                        {grouped.map(({ cat, items }) => (
+                          <li key={cat} className="pt-2">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-onix-400">
+                              {EMAIL_TEMPLATE_CATEGORY_LABELS[cat]}
+                            </p>
+                            <ul className="space-y-2">
+                              {items.map(t => {
+                                const selected =
+                                  selection !== 'unset' &&
+                                  selection !== 'blank' &&
+                                  selection.type === 'template' &&
+                                  selection.id === t.id
+                                const desc =
+                                  (t.description && t.description.trim()) ||
+                                  (t.subject.length > 100 ? `${t.subject.slice(0, 100)}…` : t.subject)
+                                return (
+                                  <li key={t.id}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelection({ type: 'template', id: t.id })}
+                                      className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition ${
+                                        selected
+                                          ? 'border-brand-500 bg-brand-50'
+                                          : 'border-arctic-300 bg-white hover:border-brand-300'
+                                      }`}
+                                    >
+                                      <div className="min-w-0 pr-2">
+                                        <p className="text-sm font-medium text-onix-800">{t.name}</p>
+                                        <p className="mt-1 line-clamp-2 text-xs text-onix-600">{desc}</p>
+                                      </div>
+                                      {selected && (
+                                        <span className="shrink-0 text-xs font-medium text-brand-700">
+                                          Selected
+                                        </span>
+                                      )}
+                                    </button>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
               )}
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-onix-600">To</label>
-                <input
-                  type="email"
-                  value={to}
-                  onChange={e => setTo(e.target.value)}
-                  className="w-full rounded border border-arctic-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-onix-600">Subject</label>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={e => setSubject(e.target.value)}
-                  className="w-full rounded border border-arctic-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-onix-600">Body</label>
-                <EmailBodyEditor value={body} onChange={setBody} compact={template !== 'intro'} />
-              </div>
+              {step === 2 && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-onix-600">To</label>
+                    <input
+                      type="email"
+                      value={to}
+                      onChange={e => setTo(e.target.value)}
+                      className="w-full rounded border border-arctic-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-onix-600">Subject</label>
+                    <input
+                      type="text"
+                      value={subject}
+                      onChange={e => setSubject(e.target.value)}
+                      className="w-full rounded border border-arctic-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                      <label className="text-xs font-medium text-onix-600">Body</label>
+                      <div ref={placeholderPanelRef} className="relative shrink-0">
+                        <button
+                          type="button"
+                          aria-expanded={placeholderMenuOpen}
+                          aria-haspopup="true"
+                          onClick={() => setPlaceholderMenuOpen(o => !o)}
+                          className="rounded-md border border-arctic-300 bg-white px-2.5 py-1 font-mono text-xs font-medium text-onix-700 shadow-sm hover:bg-arctic-50"
+                        >
+                          {'{} '}Insert placeholder
+                        </button>
+                        {placeholderMenuOpen && (
+                          <div
+                            className="absolute right-0 z-30 mt-1 w-[min(20rem,calc(100vw-2.5rem))] rounded-lg border border-arctic-200 bg-white p-3 shadow-lg"
+                            role="menu"
+                          >
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-onix-400">
+                              Insert placeholder
+                            </p>
+                            <p className="mt-1 text-[11px] text-onix-500">
+                              Resolved on send. Choose where to insert:
+                            </p>
+                            <div className="mt-2 flex rounded-md border border-arctic-200 p-0.5 text-xs">
+                              <button
+                                type="button"
+                                className={`flex-1 rounded px-2 py-1 ${
+                                  placeholderTarget === 'body'
+                                    ? 'bg-arctic-100 font-medium text-onix-900'
+                                    : 'text-onix-600 hover:bg-arctic-50'
+                                }`}
+                                onClick={() => setPlaceholderTarget('body')}
+                              >
+                                Body (cursor)
+                              </button>
+                              <button
+                                type="button"
+                                className={`flex-1 rounded px-2 py-1 ${
+                                  placeholderTarget === 'subject'
+                                    ? 'bg-arctic-100 font-medium text-onix-900'
+                                    : 'text-onix-600 hover:bg-arctic-50'
+                                }`}
+                                onClick={() => setPlaceholderTarget('subject')}
+                              >
+                                Subject (append)
+                              </button>
+                            </div>
+                            <p className="mt-3 text-[10px] font-medium text-violet-800">Merge fields</p>
+                            <div className="mt-1.5 flex max-h-32 flex-wrap gap-1 overflow-y-auto">
+                              {EMAIL_MERGE_PLACEHOLDER_TOKENS.map(token => (
+                                <button
+                                  key={token}
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => insertPlaceholderToken(token)}
+                                  className="rounded-full bg-violet-50 px-2 py-0.5 font-mono text-[10px] text-violet-900 hover:bg-violet-100"
+                                >
+                                  {token}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-[10px] leading-snug text-onix-500">
+                              For <span className="font-mono text-onix-700">{'{{capabilities_link}}'}</span>, use
+                              the body toolbar <strong>Link</strong> button and pick the placeholder there.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <EmailBodyEditor ref={bodyEditorRef} value={body} onChange={setBody} compact={false} />
+                  </div>
+                  {showCapabilitiesHint && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle" />
+                      A fresh capabilities link will be generated when you send. Valid for 30 days, scoped
+                      to this shop.
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
-          <div className="flex shrink-0 justify-end gap-2 border-t border-arctic-200 bg-white px-5 py-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded px-4 py-1.5 text-sm text-onix-600 hover:bg-arctic-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={sending}
-              className="rounded bg-brand-600 px-4 py-1.5 text-sm text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              {sending ? 'Sending...' : 'Send'}
-            </button>
+
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-arctic-200 bg-white px-5 py-3">
+            <p className="text-xs text-onix-500">
+              {step === 1 ? 'Step 1 of 2 · Pick template' : 'Step 2 of 2 · Review and send'}
+            </p>
+            <div className="flex gap-2">
+              {step === 2 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(1)
+                    setError('')
+                    setPlaceholderMenuOpen(false)
+                  }}
+                  className="rounded px-4 py-1.5 text-sm text-onix-600 hover:bg-arctic-100"
+                >
+                  Back
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded px-4 py-1.5 text-sm text-onix-600 hover:bg-arctic-100"
+              >
+                Cancel
+              </button>
+              {step === 1 ? (
+                <button
+                  type="button"
+                  onClick={() => void handleContinue()}
+                  disabled={!canContinue}
+                  className="rounded bg-brand-600 px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-arctic-200 disabled:text-onix-600 disabled:shadow-none"
+                >
+                  {continueLoading ? 'Loading…' : 'Continue →'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleSend()}
+                  disabled={sending}
+                  className="rounded bg-brand-600 px-4 py-1.5 text-sm text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {sending ? 'Sending…' : 'Send'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

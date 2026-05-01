@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChartColumn, CarFront, House, MapPinned, Store, Users } from 'lucide-react'
+import { ChartColumn, CarFront, House, Mail, MapPinned, Store, Users } from 'lucide-react'
 import GlobalSearch from '@/components/GlobalSearch'
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { href: '/accounts', label: 'Accounts', icon: Users },
   { href: '/map', label: 'Map', icon: MapPinned },
   { href: '/analytics', label: 'Analytics', icon: ChartColumn },
+  { href: '/settings/email-templates', label: 'Email templates', icon: Mail },
 ]
 
 export default function InternalSidebarNav() {

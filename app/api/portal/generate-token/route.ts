@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAppSession } from '@/lib/app-auth'
 import { supabaseAdmin } from '@/lib/supabase'
+import { portalBaseUrl } from '@/lib/portal-base-url'
 import { signCapabilitiesPortalToken } from '@/lib/portal-token'
-
-function portalBaseUrl(req: NextRequest) {
-  const env = process.env.NEXTAUTH_URL?.replace(/\/$/, '')
-  if (env) return env
-  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
-  const proto = req.headers.get('x-forwarded-proto') ?? 'http'
-  if (host) return `${proto}://${host}`
-  return 'http://localhost:3000'
-}
 
 export async function POST(req: NextRequest) {
   const session = await getAppSession()

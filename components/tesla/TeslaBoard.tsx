@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import MapView, { type MapViewLocation } from '@/app/(internal)/map/MapView'
 import TeslaCountyTable from '@/components/tesla/TeslaCountyTable'
 import type { TeslaEnrollmentView } from '@/lib/tesla-enrollments'
-import { TESLA_PORTAL_WALKTHROUGH_KEY } from '@/lib/program-config'
+import { TESLA_FIXLANE_ACCOUNT_READY_KEY, TESLA_PORTAL_WALKTHROUGH_KEY } from '@/lib/program-config'
 import { TESLA_STAGES, type TeslaStage } from '@/lib/program-stage'
 
 const STAGE_LABELS: Record<TeslaStage, string> = {
@@ -28,6 +28,8 @@ const STAGE_DOT: Record<TeslaStage, string> = {
 const MAIN_KANBAN_STAGES: TeslaStage[] = ['not_ready', 'getting_ready', 'ready', 'active']
 
 type ViewMode = 'kanban' | 'map' | 'table'
+type CompletionFilter = 'all' | 'complete' | 'incomplete'
+type BooleanFilter = 'all' | 'true' | 'false'
 
 type Props = {
   initialEnrollments: TeslaEnrollmentView[]
@@ -41,9 +43,9 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
   const [search, setSearch] = useState('')
   const [county, setCounty] = useState('')
   const [state, setState] = useState('')
-  const [shopSurveyOnly, setShopSurveyOnly] = useState(false)
-  const [techSurveyOnly, setTechSurveyOnly] = useState(false)
-  const [vinfastOnly, setVinfastOnly] = useState(false)
+  const [shopSurveyFilter, setShopSurveyFilter] = useState<CompletionFilter>('all')
+  const [techSurveyFilter, setTechSurveyFilter] = useState<CompletionFilter>('all')
+  const [vinfastActiveFilter, setVinfastActiveFilter] = useState<BooleanFilter>('all')
   const [highSignalOnly, setHighSignalOnly] = useState(false)
   const [busyCardId, setBusyCardId] = useState<string | null>(null)
   const [openMenuCardId, setOpenMenuCardId] = useState<string | null>(null)
@@ -101,9 +103,12 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
     return enrollments.filter(row => {
       if (county && row.county !== county) return false
       if (state && row.state !== state) return false
-      if (shopSurveyOnly && !row.hasShopSurvey) return false
-      if (techSurveyOnly && !row.hasTechSurvey) return false
-      if (vinfastOnly && !row.vinfastActive) return false
+      if (shopSurveyFilter === 'complete' && !row.hasShopSurvey) return false
+      if (shopSurveyFilter === 'incomplete' && row.hasShopSurvey) return false
+      if (techSurveyFilter === 'complete' && !row.hasTechSurvey) return false
+      if (techSurveyFilter === 'incomplete' && row.hasTechSurvey) return false
+      if (vinfastActiveFilter === 'true' && !row.vinfastActive) return false
+      if (vinfastActiveFilter === 'false' && row.vinfastActive) return false
       if (highSignalOnly && !row.highSignalName) return false
       if (q) {
         const fields = [row.locationName, row.accountName, row.city, row.state, row.county]
@@ -118,10 +123,10 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
     highSignalOnly,
     enrollments,
     search,
-    shopSurveyOnly,
+    shopSurveyFilter,
     state,
-    techSurveyOnly,
-    vinfastOnly,
+    techSurveyFilter,
+    vinfastActiveFilter,
   ])
 
   const filteredLocationIds = useMemo(() => new Set(filtered.map(e => e.locationId)), [filtered])
@@ -198,7 +203,7 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
         const checklist = row.checklist.map(item =>
           item.itemKey === itemKey ? { ...item, completedAt: completed ? now : null } : item,
         )
-        if (itemKey === TESLA_PORTAL_WALKTHROUGH_KEY) {
+        if (itemKey === TESLA_FIXLANE_ACCOUNT_READY_KEY || itemKey === TESLA_PORTAL_WALKTHROUGH_KEY) {
           return { ...row, checklist }
         }
         return {
@@ -212,6 +217,13 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
         }
       }),
     )
+  }
+
+  function clearAllFilters() {
+    setShopSurveyFilter('all')
+    setTechSurveyFilter('all')
+    setVinfastActiveFilter('all')
+    setHighSignalOnly(false)
   }
 
   function renderKanbanColumn(stage: TeslaStage, opts?: { hideHeader?: boolean }) {
@@ -319,7 +331,11 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
                 {stage === 'getting_ready' && (
                   <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
                     {card.checklist
-                      .filter(item => item.itemKey !== TESLA_PORTAL_WALKTHROUGH_KEY)
+                      .filter(
+                        item =>
+                          item.itemKey !== TESLA_FIXLANE_ACCOUNT_READY_KEY &&
+                          item.itemKey !== TESLA_PORTAL_WALKTHROUGH_KEY,
+                      )
                       .map(item => {
                         const checked = Boolean(item.completedAt)
                         return (
@@ -353,46 +369,54 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
 
                 {(stage === 'getting_ready' || stage === 'ready') &&
                   (() => {
-                    const portal = card.checklist.find(i => i.itemKey === TESLA_PORTAL_WALKTHROUGH_KEY)
-                    if (!portal) return null
+                    const optionalItems = card.checklist.filter(
+                      i =>
+                        i.itemKey === TESLA_PORTAL_WALKTHROUGH_KEY ||
+                        i.itemKey === TESLA_FIXLANE_ACCOUNT_READY_KEY,
+                    )
+                    if (optionalItems.length === 0) return null
                     const lockedVinfast = card.vinfastShop
-                    const checked = lockedVinfast || Boolean(portal.completedAt)
                     return (
                       <div
                         className="space-y-1.5 border-t border-arctic-100 pt-2"
                         onClick={e => e.stopPropagation()}
                       >
-                        <label className="flex flex-wrap items-center gap-2 text-xs text-onix-700">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={isBusy || lockedVinfast}
-                            title={
-                              lockedVinfast
-                                ? 'Marked complete automatically for VinFast shops'
-                                : undefined
-                            }
-                            onChange={e => {
-                              const next = e.target.checked
-                              applyOptimisticChecklist(card.id, portal.itemKey, next)
-                              void withRefresh(
-                                async () => {
-                                  try {
-                                    await toggleChecklist(card.id, portal.itemKey, next, portal.notes)
-                                  } catch (err) {
-                                    applyOptimisticChecklist(card.id, portal.itemKey, !next)
-                                    throw err
-                                  }
-                                },
-                                card.id,
-                              )
-                            }}
-                          />
-                          <span>{portal.label}</span>
-                          {lockedVinfast && (
-                            <span className="text-[10px] font-normal text-onix-500">(VinFast shop)</span>
-                          )}
-                        </label>
+                        {optionalItems.map(item => {
+                          const checked = lockedVinfast || Boolean(item.completedAt)
+                          return (
+                            <label key={item.itemKey} className="flex flex-wrap items-center gap-2 text-xs text-onix-700">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={isBusy || lockedVinfast}
+                                title={
+                                  lockedVinfast
+                                    ? 'Marked complete automatically for VinFast shops'
+                                    : undefined
+                                }
+                                onChange={e => {
+                                  const next = e.target.checked
+                                  applyOptimisticChecklist(card.id, item.itemKey, next)
+                                  void withRefresh(
+                                    async () => {
+                                      try {
+                                        await toggleChecklist(card.id, item.itemKey, next, item.notes)
+                                      } catch (err) {
+                                        applyOptimisticChecklist(card.id, item.itemKey, !next)
+                                        throw err
+                                      }
+                                    },
+                                    card.id,
+                                  )
+                                }}
+                              />
+                              <span>{item.label}</span>
+                              {lockedVinfast && (
+                                <span className="text-[10px] font-normal text-onix-500">(VinFast shop)</span>
+                              )}
+                            </label>
+                          )
+                        })}
                       </div>
                     )
                   })()}
@@ -419,7 +443,6 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-4xl font-semibold tracking-tight text-onix-950">Tesla pipeline</h1>
-          <p className="mt-1 text-sm text-onix-500">Can this shop take a job today?</p>
         </div>
         <div
           className="inline-flex shrink-0 rounded-lg border border-arctic-300 bg-arctic-50 p-1"
@@ -499,10 +522,50 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-onix-500">Filters:</span>
-        <ToggleChip label="Shop survey" active={shopSurveyOnly} onClick={() => setShopSurveyOnly(v => !v)} />
-        <ToggleChip label="Tech survey" active={techSurveyOnly} onClick={() => setTechSurveyOnly(v => !v)} />
-        <ToggleChip label="VinFast active" active={vinfastOnly} onClick={() => setVinfastOnly(v => !v)} />
+        <FilterSelect
+          id="tesla-shop-survey-filter"
+          label="Shop survey"
+          value={shopSurveyFilter}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'complete', label: 'Complete' },
+            { value: 'incomplete', label: 'Incomplete' },
+          ]}
+          onChange={value => setShopSurveyFilter(value as CompletionFilter)}
+          onClear={() => setShopSurveyFilter('all')}
+        />
+        <FilterSelect
+          id="tesla-tech-survey-filter"
+          label="Tech survey"
+          value={techSurveyFilter}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'complete', label: 'Complete' },
+            { value: 'incomplete', label: 'Incomplete' },
+          ]}
+          onChange={value => setTechSurveyFilter(value as CompletionFilter)}
+          onClear={() => setTechSurveyFilter('all')}
+        />
+        <FilterSelect
+          id="tesla-vinfast-active-filter"
+          label="VinFast active"
+          value={vinfastActiveFilter}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'true', label: 'True' },
+            { value: 'false', label: 'False' },
+          ]}
+          onChange={value => setVinfastActiveFilter(value as BooleanFilter)}
+          onClear={() => setVinfastActiveFilter('all')}
+        />
         <ToggleChip label="High-signal name" active={highSignalOnly} onClick={() => setHighSignalOnly(v => !v)} />
+        <button
+          type="button"
+          onClick={clearAllFilters}
+          className="rounded-full border border-arctic-300 bg-white px-3 py-1 text-sm text-onix-700 hover:bg-arctic-50"
+        >
+          Clear filters
+        </button>
       </div>
 
       <input
@@ -616,5 +679,56 @@ function ToggleChip({ label, active, onClick }: { label: string; active: boolean
     >
       {label}
     </button>
+  )
+}
+
+function FilterSelect({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+  onClear,
+}: {
+  id: string
+  label: string
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+  onClear: () => void
+}) {
+  const isActive = value !== 'all'
+  return (
+    <div className="inline-flex items-center gap-2">
+      <span className="text-sm text-onix-700">{label}</span>
+      <select
+        id={id}
+        aria-label={label}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className={`min-w-[120px] rounded-full border px-3 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500 ${
+          isActive
+            ? 'border-slate-800 bg-slate-800 text-white'
+            : 'border-arctic-300 bg-white text-onix-700 hover:bg-arctic-50'
+        }`}
+      >
+        {options.map(option => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {value !== 'all' && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-800 bg-slate-800 text-xs text-white hover:bg-slate-700"
+          aria-label={`Clear ${label} filter`}
+          title={`Clear ${label} filter`}
+        >
+          ×
+        </button>
+      )}
+    </div>
   )
 }

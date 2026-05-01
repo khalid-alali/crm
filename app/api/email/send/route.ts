@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
-import { firstNameLocalFromSessionUser, notificationsFrom } from '@/lib/resend-notifications'
 import { htmlToPlainText } from '@/lib/email-html'
+import { SEED_ONBOARDING_TEMPLATE_ID } from '@/lib/email-template-ids'
+import { injectCapabilitiesIntoEmail } from '@/lib/inject-capabilities-email'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -18,8 +19,9 @@ export async function POST(req: NextRequest) {
     subject,
     bodyHtml,
     body: bodyPlainLegacy,
-    template,
     fromShopDetail,
+    emailTemplateId: emailTemplateIdRaw,
+    template,
   } = body as {
     locationId?: string
     to?: string
@@ -28,7 +30,13 @@ export async function POST(req: NextRequest) {
     body?: string
     template?: string
     fromShopDetail?: boolean
+    emailTemplateId?: string | null
   }
+
+  const emailTemplateId =
+    typeof emailTemplateIdRaw === 'string' && emailTemplateIdRaw.trim()
+      ? emailTemplateIdRaw.trim()
+      : null
 
   const htmlRaw = typeof bodyHtml === 'string' ? bodyHtml.trim() : ''
   const plainLegacy = typeof bodyPlainLegacy === 'string' ? bodyPlainLegacy.trim() : ''
@@ -38,53 +46,76 @@ export async function POST(req: NextRequest) {
   }
 
   const useHtml = htmlRaw.length > 0
-  const plainForSend = useHtml ? htmlToPlainText(htmlRaw) : plainLegacy
+  let subjectOut = typeof subject === 'string' ? subject.trim() : ''
+  let bodyOut = htmlRaw
+
+  if (useHtml) {
+    try {
+      const injected = injectCapabilitiesIntoEmail(req, locationId, subjectOut, bodyOut)
+      subjectOut = injected.subject
+      bodyOut = injected.bodyHtml
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Could not build portal link'
+      return NextResponse.json({ error: msg }, { status: 500 })
+    }
+  }
+
+  const plainForSend = useHtml ? htmlToPlainText(bodyOut) : plainLegacy
   if (!plainForSend) {
     return NextResponse.json({ error: 'Missing email body' }, { status: 400 })
   }
 
-  const replyTo = session.user?.email?.trim()
+  const sessionEmail = session.user?.email?.trim()
+  if (!sessionEmail) {
+    return NextResponse.json({ error: 'Session has no email' }, { status: 400 })
+  }
+
+  const replyTo = sessionEmail.replace(/@repairwise\.pro$/i, '@fixlane.com')
   if (!replyTo) {
     return NextResponse.json({ error: 'Session has no email' }, { status: 400 })
   }
 
-  const displayName = session.user?.name?.trim() || 'RepairWise'
-  const fromLocal = firstNameLocalFromSessionUser(session.user ?? {})
-  const from = notificationsFrom(displayName, fromLocal)
+  const from = 'khalid@notifications.fixlane.com'
 
   const { error: sendError } = await resend.emails.send({
     from,
     to,
     replyTo,
-    subject,
-    ...(useHtml ? { html: htmlRaw, text: plainForSend } : { text: plainForSend }),
+    subject: subjectOut,
+    ...(useHtml ? { html: bodyOut, text: plainForSend } : { text: plainForSend }),
   })
 
   if (sendError) {
     return NextResponse.json({ error: sendError.message }, { status: 500 })
   }
 
-  const activityBody =
-    fromShopDetail && template === 'intro'
-      ? `${plainForSend}\n\n— Sent from shop detail (Email)`
-      : plainForSend
+  const activityBody = fromShopDetail
+    ? `${plainForSend}\n\n— Sent from shop detail (Email)`
+    : plainForSend
 
   await supabaseAdmin.from('activity_log').insert({
     location_id: locationId,
     type: 'email',
-    subject,
+    subject: subjectOut,
     body: activityBody,
     to_email: to,
     sent_by: session.user?.email ?? 'unknown',
   })
 
-  if (template === 'intro') {
+  await supabaseAdmin
+    .from('locations')
+    .update({ status: 'contacted' })
+    .eq('id', locationId)
+    .eq('status', 'lead')
+
+  if (emailTemplateId === SEED_ONBOARDING_TEMPLATE_ID) {
     await supabaseAdmin
       .from('locations')
-      .update({ status: 'contacted' })
+      .update({ status: 'active' })
       .eq('id', locationId)
-      .eq('status', 'lead')
+      .eq('status', 'contracted')
   } else if (template === 'onboarding') {
+    // Legacy client payloads (e.g. older cached UI)
     await supabaseAdmin
       .from('locations')
       .update({ status: 'active' })

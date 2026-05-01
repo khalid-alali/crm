@@ -3,15 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import EmailModal from './EmailModal'
-import type { TemplateKey } from '@/lib/email-templates'
 
-const nextActionMap: Record<string, { label: string; action: string; template?: TemplateKey }> = {
-  lead: { label: 'Send intro', action: 'email', template: 'intro' },
-  contacted: { label: 'Send follow-up', action: 'email', template: 'followup' },
+const nextActionMap: Record<string, { label: string; action: string }> = {
+  lead: { label: 'Send intro', action: 'email' },
+  contacted: { label: 'Send follow-up', action: 'email' },
   in_review: { label: 'Send contract', action: 'contract' },
-  contracted: { label: 'Start onboarding', action: 'email', template: 'onboarding' },
+  contracted: { label: 'Start onboarding', action: 'email' },
   active: { label: 'View details', action: 'navigate' },
-  inactive: { label: 'Re-engage', action: 'email', template: 'reengage' },
+  inactive: { label: 'Re-engage', action: 'email' },
 }
 
 interface Props {
@@ -56,13 +55,12 @@ export default function NextActionButton({
       >
         {config.label}
       </button>
-      {showModal && config.template && (
+      {showModal && (
         <EmailModal
           locationId={locationId}
           shopName={shopName}
           contactName={contactName}
           contactEmail={contactEmail}
-          template={config.template}
           senderName={senderName}
           onClose={() => setShowModal(false)}
           onSent={() => {

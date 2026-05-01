@@ -52,6 +52,8 @@ GOOGLE_MAPS_API_KEY=
 
 # Portal
 PORTAL_JWT_SECRET=
+# Public base for capabilities/portal links in emails (production: https://shop.fixlane.com). When unset, falls back to NEXTAUTH_URL then the request host.
+PORTAL_PUBLIC_BASE_URL=
 ```
 
 ---

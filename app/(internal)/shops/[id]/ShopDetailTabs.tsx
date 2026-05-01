@@ -829,9 +829,12 @@ export default function ShopDetailTabs({
           ) : (
             <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-onix-800">
               {shop.accounts?.business_name ? (
-                <Link href={`/accounts/${shop.account_id}`} className="min-w-0 truncate text-brand-700 hover:underline">
-                  {shop.accounts.business_name}
-                </Link>
+                <>
+                  <Link2 className="h-3.5 w-3.5 shrink-0 text-onix-500" aria-hidden />
+                  <Link href={`/accounts/${shop.account_id}`} className="min-w-0 truncate text-brand-700 hover:underline">
+                    {shop.accounts.business_name}
+                  </Link>
+                </>
               ) : (
                 <span className="text-onix-600">No account linked</span>
               )}
@@ -1705,7 +1708,6 @@ export default function ShopDetailTabs({
           shopName={shop.name}
           contactName={primaryContactDisplayName}
           contactEmail={primaryContactEmail}
-          template="intro"
           senderName={senderName}
           fromShopDetail
           onClose={() => setShowIntroModal(false)}

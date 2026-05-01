@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { verifyWebhookToken, getDocumentFields } from '@/lib/zohosign'
-import { Resend } from 'resend'
-import { renderTemplate } from '@/lib/email-templates'
-import { notificationsFrom } from '@/lib/resend-notifications'
 import { laborRateFromSignedFields, warrantyRateFromSignedFields } from '@/lib/zoho-sign-contract-fields'
 import { syncContractPdfFromZoho } from '@/lib/contract-documents'
-import { resolvePrimaryContact } from '@/lib/primary-contact'
-
-const resend = new Resend(process.env.RESEND_API_KEY)
 
 type NormalizedZohoEvent = {
   key:
@@ -317,9 +311,6 @@ export async function POST(req: NextRequest) {
       .eq('id', contract.id)
 
     if (locationIds.length > 0) {
-      const automationLocal =
-        process.env.RESEND_AUTOMATION_LOCAL_PART?.trim() || 'team'
-
       await supabaseAdmin
         .from('locations')
         .update({ status: 'contracted' })
@@ -327,18 +318,6 @@ export async function POST(req: NextRequest) {
         .in('status', ['lead', 'contacted', 'in_review'])
 
       for (const locationId of locationIds) {
-        const { data: loc } = await supabaseAdmin
-          .from('locations')
-          .select('name, account_id')
-          .eq('id', locationId)
-          .single()
-
-        const primary = await resolvePrimaryContact(
-          supabaseAdmin,
-          loc?.account_id ?? null,
-          locationId,
-        )
-
         await supabaseAdmin.from('activity_log').insert({
           location_id: locationId,
           type: 'contract',
@@ -346,20 +325,6 @@ export async function POST(req: NextRequest) {
           body: `Request ID: ${requestId}. Signed as: ${legalEntity ?? 'unknown'}`,
           sent_by: 'system',
         })
-
-        if (primary?.email) {
-          const { subject, body } = renderTemplate('onboarding', {
-            shop_name: loc?.name ?? 'your shop',
-            contact_name: primary.name ?? 'there',
-            sender_name: 'The RepairWise Team',
-          })
-          await resend.emails.send({
-            from: notificationsFrom('RepairWise', automationLocal),
-            to: primary.email,
-            subject,
-            text: body,
-          })
-        }
       }
     }
   }

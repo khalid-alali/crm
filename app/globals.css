@@ -20,6 +20,11 @@
 }
 
 @layer base {
+  :root {
+    --color-text-tertiary: #9b9c9f;
+    --color-text-success: #1d9e75;
+  }
+
   html {
     @apply antialiased;
   }

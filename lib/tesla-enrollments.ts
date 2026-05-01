@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   TESLA_PROGRAM_ID,
+  TESLA_FIXLANE_ACCOUNT_READY_KEY,
   TESLA_PORTAL_WALKTHROUGH_KEY,
   getProgramConfig,
 } from '@/lib/program-config'
@@ -73,7 +74,7 @@ export type TeslaEnrollmentView = {
   hasShopSurvey: boolean
   hasTechSurvey: boolean
   vinfastActive: boolean
-  /** True when shop_status_cache marks this shop as a VinFast shop (portal walkthrough auto-complete). */
+  /** True when shop_status_cache marks this shop as a VinFast shop (Fixlane ready auto-complete). */
   vinfastShop: boolean
   /** From shop_status_cache.tesla_jobs_completed when > 0 for display. */
   teslaJobsCompleted: number
@@ -248,6 +249,7 @@ export async function listTeslaEnrollments(
   }
 
   const enrollmentIdsForAutoPortal: string[] = []
+  const enrollmentIdsForAutoFixlane: string[] = []
   for (const enrollment of enrollments) {
     const location = locationById.get(enrollment.location_id)
     if (!location) continue
@@ -258,7 +260,11 @@ export async function listTeslaEnrollments(
     const portalDone = rows.some(
       r => r.item_key === TESLA_PORTAL_WALKTHROUGH_KEY && Boolean(r.completed_at),
     )
+    const fixlaneDone = rows.some(
+      r => r.item_key === TESLA_FIXLANE_ACCOUNT_READY_KEY && Boolean(r.completed_at),
+    )
     if (!portalDone) enrollmentIdsForAutoPortal.push(enrollment.id)
+    if (!fixlaneDone) enrollmentIdsForAutoFixlane.push(enrollment.id)
   }
 
   if (enrollmentIdsForAutoPortal.length > 0) {
@@ -283,6 +289,36 @@ export async function listTeslaEnrollments(
         enrollment_id,
         item_key: TESLA_PORTAL_WALKTHROUGH_KEY,
         completed_at: portalCompletedAt,
+        notes: null,
+      }
+      if (idx >= 0) rows[idx] = row
+      else rows.push(row)
+      checklistByEnrollment.set(enrollment_id, rows)
+    }
+  }
+
+  if (enrollmentIdsForAutoFixlane.length > 0) {
+    const fixlaneCompletedAt = new Date().toISOString()
+    const { error: autoFixlaneError } = await supabaseAdmin.from('program_enrollment_checklist').upsert(
+      enrollmentIdsForAutoFixlane.map(enrollment_id => ({
+        enrollment_id,
+        item_key: TESLA_FIXLANE_ACCOUNT_READY_KEY,
+        completed_at: fixlaneCompletedAt,
+        completed_by_user_id: null,
+        notes: null,
+        updated_at: fixlaneCompletedAt,
+      })),
+      { onConflict: 'enrollment_id,item_key' },
+    )
+    if (autoFixlaneError) throw new Error(autoFixlaneError.message)
+
+    for (const enrollment_id of enrollmentIdsForAutoFixlane) {
+      const rows = [...(checklistByEnrollment.get(enrollment_id) ?? [])]
+      const idx = rows.findIndex(r => r.item_key === TESLA_FIXLANE_ACCOUNT_READY_KEY)
+      const row: ChecklistRow = {
+        enrollment_id,
+        item_key: TESLA_FIXLANE_ACCOUNT_READY_KEY,
+        completed_at: fixlaneCompletedAt,
         notes: null,
       }
       if (idx >= 0) rows[idx] = row
