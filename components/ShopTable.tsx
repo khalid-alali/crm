@@ -3,6 +3,7 @@
 import { useMemo, useRef, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import StatusBadge from './StatusBadge'
 import ProgramBadge from './ProgramBadge'
 import LastActivityCell from './LastActivityCell'
@@ -76,6 +77,7 @@ export default function ShopTable({ shops, selection, showDisqualifiedReasonColu
   const router = useRouter()
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const scrollRef = useRef<HTMLDivElement>(null)
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
 
   const sortableHeaders = useMemo(() => {
@@ -150,6 +152,17 @@ export default function ShopTable({ shops, selection, showDisqualifiedReasonColu
     return decorated.map(row => row.shop)
   }, [shops, sortColumn, sortDirection])
 
+  const rowVirtualizer = useVirtualizer({
+    count: sortedShops.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 45,
+    overscan: 8,
+  })
+
+  useEffect(() => {
+    rowVirtualizer.scrollToIndex(0)
+  }, [rowVirtualizer, shops, sortColumn, sortDirection])
+
   function toggleSort(column: SortColumn) {
     if (!showDisqualifiedReasonColumn && column === 'disqualified') return
     if (sortColumn === column) {
@@ -161,118 +174,137 @@ export default function ShopTable({ shops, selection, showDisqualifiedReasonColu
   }
 
   return (
-    <table className="min-w-full divide-y divide-arctic-200 text-sm">
-      <thead className="bg-arctic-50">
-        <tr>
-          {selection && (
-            <th
-              scope="col"
-              className="sticky z-10 w-10 border-b border-arctic-200 bg-arctic-50 px-2 py-2 text-left shadow-[0_1px_0_0_rgb(229_231_235)]"
-              style={{ top: 'var(--pipeline-toolbar-height, 12rem)' }}
-            >
-              <input
-                ref={headerCheckboxRef}
-                type="checkbox"
-                className="h-4 w-4 rounded border-arctic-300 text-brand-600 focus:ring-brand-500"
-                checked={selection.allVisibleSelected && shops.length > 0}
-                onChange={() => selection.onToggleAllVisible()}
-                aria-label="Select all shops in this list"
-              />
-            </th>
-          )}
-          {sortableHeaders.map(header => (
-            <th
-              key={header.key}
-              scope="col"
-              className="sticky z-10 cursor-pointer select-none border-b border-arctic-200 bg-arctic-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-onix-600 shadow-[0_1px_0_0_rgb(229_231_235)] transition-colors hover:text-onix-900"
-              style={{ top: 'var(--pipeline-toolbar-height, 12rem)' }}
-              onClick={() => toggleSort(header.key)}
-              aria-sort={
-                sortColumn === header.key
-                  ? sortDirection === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              }
-            >
-              {header.label}
-            </th>
+    <div ref={scrollRef} className="max-h-[calc(100vh-240px)] overflow-auto">
+      <table className="min-w-full table-fixed divide-y divide-arctic-200 text-sm">
+        <thead className="sticky top-0 z-10 block bg-arctic-50">
+          <tr className="table w-full table-fixed">
+            {selection && (
+              <th
+                scope="col"
+                className="w-10 border-b border-arctic-200 bg-arctic-50 px-2 py-2 text-left shadow-[0_1px_0_0_rgb(229_231_235)]"
+              >
+                <input
+                  ref={headerCheckboxRef}
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-arctic-300 text-brand-600 focus:ring-brand-500"
+                  checked={selection.allVisibleSelected && shops.length > 0}
+                  onChange={() => selection.onToggleAllVisible()}
+                  aria-label="Select all shops in this list"
+                />
+              </th>
+            )}
+            {sortableHeaders.map(header => (
+              <th
+                key={header.key}
+                scope="col"
+                className="cursor-pointer select-none border-b border-arctic-200 bg-arctic-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-onix-600 shadow-[0_1px_0_0_rgb(229_231_235)] transition-colors hover:text-onix-900"
+                onClick={() => toggleSort(header.key)}
+                aria-sort={
+                  sortColumn === header.key
+                    ? sortDirection === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                    : 'none'
+                }
+              >
+                {header.label}
+              </th>
             ))}
-          <th
-            scope="col"
-            className="sticky z-10 border-b border-arctic-200 bg-arctic-50 px-4 py-2 text-left text-xs font-medium text-onix-600 uppercase tracking-wide shadow-[0_1px_0_0_rgb(229_231_235)]"
-            style={{ top: 'var(--pipeline-toolbar-height, 12rem)' }}
-          >
-            Admin
-          </th>
-        </tr>
-      </thead>
-      <tbody className="bg-white divide-y divide-arctic-100">
-          {sortedShops.map(shop => (
-            <tr
-              key={shop.id}
-              className="hover:bg-arctic-50 cursor-pointer"
-              onClick={() => router.push(`/shops/${shop.id}`)}
+            <th
+              scope="col"
+              className="border-b border-arctic-200 bg-arctic-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-onix-600 shadow-[0_1px_0_0_rgb(229_231_235)]"
             >
-              {selection && (
-                <td
-                  className="px-2 py-2.5"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-arctic-300 text-brand-600 focus:ring-brand-500"
-                    checked={selection.selectedIds.has(shop.id)}
-                    onChange={() => selection.onToggleRow(shop.id)}
-                    aria-label={`Select ${shop.name}`}
-                  />
-                </td>
-              )}
-              <td className="px-4 py-2.5">
-                <Link
-                  href={`/shops/${shop.id}`}
-                  className="font-medium text-onix-950 hover:text-brand-700 hover:underline"
-                  onClick={e => e.stopPropagation()}
-                >
-                  {shop.name}
-                </Link>
-              </td>
-              <td className="px-4 py-2.5 text-onix-600">{shop.primary_owner_name ?? '—'}</td>
-              <td className="px-4 py-2.5 text-onix-600">
-                {[shop.city, shop.state].filter(Boolean).join(', ') || '—'}
-              </td>
-              <td className="px-4 py-2.5">
-                <StatusBadge status={shop.status} />
-              </td>
-              {showDisqualifiedReasonColumn && (
-                <td className="px-4 py-2.5 text-onix-600">
-                  {disqualifiedSortLabel(shop.disqualified_reason) || '—'}
-                </td>
-              )}
-              <td className="px-4 py-2.5">
-                <ProgramBadge enrollments={shop.program_enrollments} />
-              </td>
-              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
-                <LastActivityCell createdAt={shop.created_at} lastActivityAt={shop.last_activity_at} />
-              </td>
-              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
-                {shop.motherduck_shop_id ? (
-                  <a
-                    href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(shop.motherduck_shop_id)}/edit`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-brand-600 hover:underline whitespace-nowrap"
+              Admin
+            </th>
+          </tr>
+        </thead>
+        <tbody
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            position: 'relative',
+            display: 'block',
+          }}
+          className="bg-white"
+        >
+          {rowVirtualizer.getVirtualItems().map(virtualRow => {
+            const shop = sortedShops[virtualRow.index]
+            return (
+              <tr
+                key={shop.id}
+                data-index={virtualRow.index}
+                ref={rowVirtualizer.measureElement}
+                className="cursor-pointer border-b border-arctic-100 hover:bg-arctic-50"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                  display: 'table',
+                  tableLayout: 'fixed',
+                }}
+                onClick={() => router.push(`/shops/${shop.id}`)}
+              >
+                {selection && (
+                  <td
+                    className="w-10 px-2 py-2.5"
+                    onClick={e => e.stopPropagation()}
                   >
-                    Open
-                  </a>
-                ) : (
-                  <span className="text-onix-400">—</span>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-arctic-300 text-brand-600 focus:ring-brand-500"
+                      checked={selection.selectedIds.has(shop.id)}
+                      onChange={() => selection.onToggleRow(shop.id)}
+                      aria-label={`Select ${shop.name}`}
+                    />
+                  </td>
                 )}
-              </td>
-            </tr>
-          ))}
+                <td className="px-4 py-2.5">
+                  <Link
+                    href={`/shops/${shop.id}`}
+                    className="font-medium text-onix-950 hover:text-brand-700 hover:underline"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {shop.name}
+                  </Link>
+                </td>
+                <td className="px-4 py-2.5 text-onix-600">{shop.primary_owner_name ?? '—'}</td>
+                <td className="px-4 py-2.5 text-onix-600">
+                  {[shop.city, shop.state].filter(Boolean).join(', ') || '—'}
+                </td>
+                <td className="px-4 py-2.5">
+                  <StatusBadge status={shop.status} />
+                </td>
+                {showDisqualifiedReasonColumn && (
+                  <td className="px-4 py-2.5 text-onix-600">
+                    {disqualifiedSortLabel(shop.disqualified_reason) || '—'}
+                  </td>
+                )}
+                <td className="px-4 py-2.5">
+                  <ProgramBadge enrollments={shop.program_enrollments} />
+                </td>
+                <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                  <LastActivityCell createdAt={shop.created_at} lastActivityAt={shop.last_activity_at} />
+                </td>
+                <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                  {shop.motherduck_shop_id ? (
+                    <a
+                      href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(shop.motherduck_shop_id)}/edit`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="whitespace-nowrap text-brand-600 hover:underline"
+                    >
+                      Open
+                    </a>
+                  ) : (
+                    <span className="text-onix-400">—</span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
           {sortedShops.length === 0 && (
-            <tr>
+            <tr className="table w-full table-fixed">
               <td
                 colSpan={selection ? (showDisqualifiedReasonColumn ? 9 : 8) : showDisqualifiedReasonColumn ? 8 : 7}
                 className="px-4 py-8 text-center text-onix-400"
@@ -281,7 +313,8 @@ export default function ShopTable({ shops, selection, showDisqualifiedReasonColu
               </td>
             </tr>
           )}
-      </tbody>
-    </table>
+        </tbody>
+      </table>
+    </div>
   )
 }
