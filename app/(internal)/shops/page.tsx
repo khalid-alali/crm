@@ -5,7 +5,7 @@ import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import ShopsFilters from './ShopsFilters'
 import ShopsPageClient from './ShopsPageClient'
 
-const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive'] as const
+const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive'] as const
 
 /** One row per location for filter tabs / dropdowns (no joins). */
 type LocationMetaRow = {
@@ -38,55 +38,12 @@ interface SearchParams {
 }
 
 const PIPELINE_LOCATION_SELECT = `
-  id,
-  name,
-  motherduck_shop_id,
-  chain_name,
-  city,
-  state,
-  status,
-  disqualified_reason,
-  assigned_to,
-  created_at,
-  updated_at,
-  account_id,
+  *,
   accounts(id, business_name),
   program_enrollments(program, status)
 `
 
 type PipelineLocationRow = Record<string, unknown> & { id: string; created_at: string }
-
-type ShopsPipelineResult = {
-  shops: unknown[]
-  counts: Record<string, number>
-  chains: string[]
-}
-
-async function finalizeShopsPipeline(
-  t0: number,
-  shopRows: PipelineLocationRow[] | null | undefined,
-  metaRows: LocationMetaRow[] | null | undefined,
-): Promise<ShopsPipelineResult> {
-  console.log(
-    `[shops] locations+meta (parallel): ${Date.now() - t0}ms rows=${shopRows?.length ?? 0}`,
-  )
-
-  const t1 = Date.now()
-  const withActivity = await attachLastActivity(shopRows ?? [])
-  console.log(`[shops] attachLastActivity: ${Date.now() - t1}ms`)
-
-  const t2 = Date.now()
-  const shops = await attachPrimaryContactsToLocations(
-    supabaseAdmin,
-    withActivity as unknown as { id: string; account_id: string | null }[],
-  )
-  console.log(`[shops] attachPrimaryContacts: ${Date.now() - t2}ms`)
-
-  const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
-  console.log(`[shops] total server: ${Date.now() - t0}ms`)
-
-  return { shops, counts: meta.counts, chains: meta.chains }
-}
 
 async function attachLastActivity(rows: PipelineLocationRow[]) {
   if (rows.length === 0) return rows
@@ -154,27 +111,30 @@ export default async function ShopsPage({
     if (sp.state) listQuery = listQuery.eq('state', sp.state)
     if (sp.assigned_to) listQuery = listQuery.eq('assigned_to', sp.assigned_to)
 
-    const t0 = Date.now()
     const [{ data: shopRows }, { data: metaRows }] = await Promise.all([listQuery, metaQuery])
-    const pipeline = await finalizeShopsPipeline(t0, shopRows ?? [], metaRows ?? [])
-    shops = pipeline.shops
-    counts = pipeline.counts
-    chains = pipeline.chains
+    shops = await attachPrimaryContactsToLocations(
+      supabaseAdmin,
+      (await attachLastActivity(shopRows ?? [])) as unknown as { id: string; account_id: string | null }[],
+    )
+    const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
+    counts = meta.counts
+    chains = meta.chains
   } else {
-    const t0 = Date.now()
-    const [{ data: shopRows }, { data: metaRows }] = await Promise.all([
-      supabaseAdmin
-        .from('locations')
-        .select(PIPELINE_LOCATION_SELECT)
-        // "All" view should hide churned (inactive) by default.
-        .neq('status', 'inactive')
-        .order('updated_at', { ascending: false }),
-      metaQuery,
-    ])
-    const pipeline = await finalizeShopsPipeline(t0, shopRows ?? [], metaRows ?? [])
-    shops = pipeline.shops
-    counts = pipeline.counts
-    chains = pipeline.chains
+    const { data: shopRows } = await supabaseAdmin
+      .from('locations')
+      .select(PIPELINE_LOCATION_SELECT)
+      // "All" view should hide churned (inactive) by default.
+      .neq('status', 'inactive')
+      .order('updated_at', { ascending: false })
+    shops = await attachPrimaryContactsToLocations(
+      supabaseAdmin,
+      (await attachLastActivity(shopRows ?? [])) as unknown as { id: string; account_id: string | null }[],
+    )
+
+    const { data: metaRows } = await metaQuery
+    const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
+    counts = meta.counts
+    chains = meta.chains
   }
 
   return (

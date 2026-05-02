@@ -14,7 +14,15 @@ import {
 import ShopTable, { type ShopRow } from '@/components/ShopTable'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 
-const PIPELINE_STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive'] as const
+const PIPELINE_STATUSES = [
+  'lead',
+  'contacted',
+  'dormant',
+  'in_review',
+  'contracted',
+  'active',
+  'inactive',
+] as const
 
 function shopMatchesQuery(shop: ShopRow, raw: string): boolean {
   const tokens = raw

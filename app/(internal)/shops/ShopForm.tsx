@@ -10,7 +10,7 @@ import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 import AccountSelect from '@/components/AccountSelect'
 import StateSelect from '@/components/StateSelect'
 
-const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
+const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive']
 const PROGRAMS = [
   { key: 'multi_drive', label: 'Multi-Drive' },
   { key: 'ev_program', label: 'EV Program' },
@@ -43,6 +43,10 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
     source: initial?.source ?? '',
     notes: initial?.notes ?? '',
     shop_type: (initial?.shop_type as string | undefined) ?? '',
+    shop_business_types: (Array.isArray(initial?.shop_business_types)
+      ? (initial.shop_business_types as string[])
+      : []
+    ).filter((t): t is 'repair_shop' | 'body_shop' => t === 'repair_shop' || t === 'body_shop'),
     high_priority_target: Boolean(initial?.high_priority_target),
     website: initial?.website ?? '',
     standard_labor_rate:
@@ -216,6 +220,7 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
         postal_code: normalizePostalCode(form.postal_code),
         programStatuses,
         shop_type: form.shop_type === '' ? null : form.shop_type,
+        shop_business_types: form.shop_business_types.length > 0 ? form.shop_business_types : null,
         high_priority_target: form.high_priority_target,
         website: form.website.trim() || null,
         standard_labor_rate: stdRaw === '' ? null : Number(stdRaw),
@@ -482,6 +487,45 @@ export default function ShopForm({ initial, locationId }: ShopFormProps) {
               />
               High priority target
             </label>
+          </div>
+          <div className="sm:col-span-2">
+            <span className="block text-xs font-medium text-onix-600 mb-1">Business lines</span>
+            <div className="flex flex-wrap gap-4 text-sm text-onix-800">
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.shop_business_types.includes('repair_shop')}
+                  onChange={() =>
+                    setForm(f => {
+                      const has = f.shop_business_types.includes('repair_shop')
+                      const next = has
+                        ? f.shop_business_types.filter(x => x !== 'repair_shop')
+                        : [...f.shop_business_types, 'repair_shop']
+                      return { ...f, shop_business_types: next.sort() as ('repair_shop' | 'body_shop')[] }
+                    })
+                  }
+                  className="rounded border-arctic-300"
+                />
+                Repair shop
+              </label>
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.shop_business_types.includes('body_shop')}
+                  onChange={() =>
+                    setForm(f => {
+                      const has = f.shop_business_types.includes('body_shop')
+                      const next = has
+                        ? f.shop_business_types.filter(x => x !== 'body_shop')
+                        : [...f.shop_business_types, 'body_shop']
+                      return { ...f, shop_business_types: next.sort() as ('repair_shop' | 'body_shop')[] }
+                    })
+                  }
+                  className="rounded border-arctic-300"
+                />
+                Body shop
+              </label>
+            </div>
           </div>
         </div>
         <div>

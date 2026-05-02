@@ -22,7 +22,7 @@ export default async function ShopDetailPage({
     .from('locations')
     .select(`
       *,
-      accounts(*),
+      accounts(id, business_name),
       program_enrollments(*),
       activity_log(*),
       tech_competency_surveys(*),

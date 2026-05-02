@@ -29,7 +29,8 @@
     "import:shop-survey-csv:apply": "npx tsx scripts/import-shop-survey-capabilities-csv.ts --apply",
     "import:shop-survey-csv:apply:shell": "npx tsx scripts/import-shop-survey-capabilities-csv.ts --apply --create-shell-shops",
     "import:tech-competency-csv": "npx tsx scripts/import-tech-competency-csv.ts",
-    "import:tech-competency-csv:apply": "npx tsx scripts/import-tech-competency-csv.ts --apply"
+    "import:tech-competency-csv:apply": "npx tsx scripts/import-tech-competency-csv.ts --apply",
+    "validate:bulk-import": "npx tsx scripts/validate-bulk-import.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",

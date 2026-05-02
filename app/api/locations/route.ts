@@ -6,6 +6,8 @@ import { getAppSession } from '@/lib/app-auth'
 import { normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { upsertLocationShopContact } from '@/lib/contact-sync'
 import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
+import { parseShopBusinessTypesField } from '@/lib/shop-business-types'
+
 const SHOP_TYPES = new Set(['generalist', 'specialist'])
 
 const LOCATION_INSERT_KEYS = [
@@ -26,6 +28,7 @@ const LOCATION_INSERT_KEYS = [
   'lng',
   'geocoded_at',
   'shop_type',
+  'shop_business_types',
   'high_priority_target',
   'website',
   'standard_labor_rate',
@@ -117,6 +120,18 @@ export async function POST(req: NextRequest) {
       fields.shop_type = null
     } else if (typeof st !== 'string' || !SHOP_TYPES.has(st)) {
       return NextResponse.json({ error: 'Invalid shop type' }, { status: 400 })
+    }
+  }
+
+  if ('shop_business_types' in fields) {
+    const parsed = parseShopBusinessTypesField(fields.shop_business_types)
+    if (parsed === false) {
+      return NextResponse.json({ error: 'Invalid shop_business_types' }, { status: 400 })
+    }
+    if (parsed !== undefined) {
+      fields.shop_business_types = parsed
+    } else {
+      delete fields.shop_business_types
     }
   }
 

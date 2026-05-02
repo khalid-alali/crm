@@ -5,6 +5,7 @@ import { getAppSession } from '@/lib/app-auth'
 import { htmlToPlainText } from '@/lib/email-html'
 import { SEED_ONBOARDING_TEMPLATE_ID } from '@/lib/email-template-ids'
 import { injectCapabilitiesIntoEmail } from '@/lib/inject-capabilities-email'
+import { normalizeRecipientList } from '@/lib/email-recipients'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -15,7 +16,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
     locationId,
-    to,
+    to: toRaw,
+    cc: ccRaw,
     subject,
     bodyHtml,
     body: bodyPlainLegacy,
@@ -24,7 +26,8 @@ export async function POST(req: NextRequest) {
     template,
   } = body as {
     locationId?: string
-    to?: string
+    to?: string | string[]
+    cc?: string | string[]
     subject?: string
     bodyHtml?: string
     body?: string
@@ -41,8 +44,31 @@ export async function POST(req: NextRequest) {
   const htmlRaw = typeof bodyHtml === 'string' ? bodyHtml.trim() : ''
   const plainLegacy = typeof bodyPlainLegacy === 'string' ? bodyPlainLegacy.trim() : ''
 
-  if (!locationId || !to || !subject) {
+  if (!locationId || !subject) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+
+  let to: string[]
+  let cc: string[]
+  try {
+    to = normalizeRecipientList(toRaw)
+    cc = normalizeRecipientList(ccRaw ?? [])
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Invalid recipients'
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
+
+  if (to.length === 0) {
+    return NextResponse.json({ error: 'At least one To recipient is required' }, { status: 400 })
+  }
+
+  const toSet = new Set(to)
+  if (cc.some(e => toSet.has(e))) {
+    return NextResponse.json({ error: 'Cc cannot include an address already in To' }, { status: 400 })
+  }
+
+  if (to.length + cc.length > 20) {
+    return NextResponse.json({ error: 'At most 20 recipients total (To + Cc)' }, { status: 400 })
   }
 
   const useHtml = htmlRaw.length > 0
@@ -80,6 +106,7 @@ export async function POST(req: NextRequest) {
   const { error: sendError } = await resend.emails.send({
     from,
     to,
+    ...(cc.length > 0 ? { cc } : {}),
     replyTo,
     subject: subjectOut,
     ...(useHtml ? { html: bodyOut, text: plainForSend } : { text: plainForSend }),
@@ -98,7 +125,8 @@ export async function POST(req: NextRequest) {
     type: 'email',
     subject: subjectOut,
     body: activityBody,
-    to_email: to,
+    to_email: to[0],
+    recipients: { to, cc },
     sent_by: session.user?.email ?? 'unknown',
   })
 
@@ -106,7 +134,7 @@ export async function POST(req: NextRequest) {
     .from('locations')
     .update({ status: 'contacted' })
     .eq('id', locationId)
-    .eq('status', 'lead')
+    .in('status', ['lead', 'dormant'])
 
   if (emailTemplateId === SEED_ONBOARDING_TEMPLATE_ID) {
     await supabaseAdmin

@@ -7,6 +7,7 @@ import EmailModal from './EmailModal'
 const nextActionMap: Record<string, { label: string; action: string }> = {
   lead: { label: 'Send intro', action: 'email' },
   contacted: { label: 'Send follow-up', action: 'email' },
+  dormant: { label: 'Re-engage', action: 'email' },
   in_review: { label: 'Send contract', action: 'contract' },
   contracted: { label: 'Start onboarding', action: 'email' },
   active: { label: 'View details', action: 'navigate' },
@@ -20,6 +21,8 @@ interface Props {
   contactName: string
   contactEmail: string
   senderName: string
+  accountId?: string | null
+  accountName?: string | null
   onStatusChange?: () => void
 }
 
@@ -30,6 +33,8 @@ export default function NextActionButton({
   contactName,
   contactEmail,
   senderName,
+  accountId = null,
+  accountName = null,
   onStatusChange,
 }: Props) {
   const router = useRouter()
@@ -62,6 +67,8 @@ export default function NextActionButton({
           contactName={contactName}
           contactEmail={contactEmail}
           senderName={senderName}
+          accountId={accountId}
+          accountName={accountName}
           onClose={() => setShowModal(false)}
           onSent={() => {
             setShowModal(false)

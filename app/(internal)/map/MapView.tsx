@@ -13,13 +13,14 @@ import { US_CONTINENTAL_BOUNDS, US_STATE_BOUNDS } from '@/lib/us-state-map-bound
 const STATUS_COLORS: Record<string, string> = {
   lead: '#6D6E70',
   contacted: '#687CF9',
+  dormant: '#C4A35A',
   in_review: '#8595F9',
   contracted: '#69C77A',
   active: '#1D9E75',
   inactive: '#E24B4A',
 }
 
-const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
+const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive']
 /** Statuses shown in the map filter (churned is toggled separately). */
 const MAP_FILTER_STATUSES = STATUSES.filter(s => s !== 'inactive')
 
@@ -210,6 +211,8 @@ const CRM_CIRCLE_PAINT: mapboxgl.CirclePaint = {
     STATUS_COLORS.lead,
     'contacted',
     STATUS_COLORS.contacted,
+    'dormant',
+    STATUS_COLORS.dormant,
     'in_review',
     STATUS_COLORS.in_review,
     'contracted',

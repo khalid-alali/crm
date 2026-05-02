@@ -9,6 +9,7 @@ import {
   emailContentReferencesCapabilitiesLink,
   replaceLegacyCapabilitiesPreviewUrls,
 } from '@/lib/email-template-placeholders'
+import RecipientPicker, { type RecipientContact } from '@/components/email/RecipientPicker'
 
 type Selection = 'unset' | 'blank' | { type: 'template'; id: string }
 
@@ -18,10 +19,12 @@ interface Props {
   contactName: string
   contactEmail: string
   senderName: string
+  accountId?: string | null
+  accountName?: string | null
   /** When true, activity_log stores a footer so the feed shows this send came from shop detail. */
   fromShopDetail?: boolean
   onClose: () => void
-  onSent: () => void
+  onSent?: () => void
 }
 
 export default function EmailModal({
@@ -30,6 +33,8 @@ export default function EmailModal({
   contactName,
   contactEmail,
   senderName: _senderName,
+  accountId = null,
+  accountName = null,
   fromShopDetail,
   onClose,
   onSent,
@@ -47,7 +52,15 @@ export default function EmailModal({
   const [emailTemplateId, setEmailTemplateId] = useState<string | null>(null)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('<p></p>')
-  const [to, setTo] = useState(contactEmail)
+  const primaryNorm = contactEmail.trim().toLowerCase()
+  const [toList, setToList] = useState<string[]>(() =>
+    contactEmail.trim() ? [contactEmail.trim().toLowerCase()] : [],
+  )
+  const [ccList, setCcList] = useState<string[]>([])
+  const [ccOpen, setCcOpen] = useState(false)
+  const [contacts, setContacts] = useState<RecipientContact[]>([])
+  const [contactsLoading, setContactsLoading] = useState(false)
+  const [contactsError, setContactsError] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [continueLoading, setContinueLoading] = useState(false)
@@ -77,6 +90,51 @@ export default function EmailModal({
   useEffect(() => {
     void loadTemplates()
   }, [loadTemplates])
+
+  const loadContacts = useCallback(async () => {
+    if (!accountId) {
+      setContacts([])
+      return
+    }
+    setContactsLoading(true)
+    setContactsError('')
+    try {
+      const res = await fetch(`/api/contacts?account_id=${encodeURIComponent(accountId)}`)
+      const data = (await res.json()) as unknown
+      if (!res.ok) {
+        const err = typeof data === 'object' && data && 'error' in data ? String((data as { error?: string }).error) : 'Could not load contacts'
+        throw new Error(err)
+      }
+      const rows = Array.isArray(data) ? data : []
+      const mapped: RecipientContact[] = []
+      for (const raw of rows) {
+        const c = raw as Record<string, unknown>
+        const email = typeof c.email === 'string' ? c.email.trim() : ''
+        if (!email) continue
+        const locId = typeof c.location_id === 'string' ? c.location_id : null
+        if (locId && locId !== locationId) continue
+        const scope: 'location' | 'account' = locId === locationId ? 'location' : 'account'
+        mapped.push({
+          id: String(c.id),
+          name: typeof c.name === 'string' ? c.name : null,
+          email,
+          role: typeof c.role === 'string' ? c.role : 'other',
+          scope,
+          isPrimary: Boolean(c.is_primary),
+        })
+      }
+      setContacts(mapped)
+    } catch (e: unknown) {
+      setContactsError(e instanceof Error ? e.message : 'Could not load contacts')
+      setContacts([])
+    } finally {
+      setContactsLoading(false)
+    }
+  }, [accountId, locationId])
+
+  useEffect(() => {
+    void loadContacts()
+  }, [loadContacts])
 
   useEffect(() => {
     if (!placeholderMenuOpen) return
@@ -166,8 +224,8 @@ export default function EmailModal({
   }
 
   async function handleSend() {
-    if (!to) {
-      setError('Recipient email is required')
+    if (toList.length === 0) {
+      setError('At least one To recipient is required')
       return
     }
     setSending(true)
@@ -178,7 +236,8 @@ export default function EmailModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           locationId,
-          to,
+          to: toList,
+          cc: ccList,
           subject,
           bodyHtml: body,
           emailTemplateId,
@@ -189,7 +248,7 @@ export default function EmailModal({
         const j = await res.json().catch(() => ({}))
         throw new Error((j as { error?: string }).error ?? 'Send failed')
       }
-      onSent()
+      onSent?.()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Send failed')
     } finally {
@@ -217,6 +276,11 @@ export default function EmailModal({
 
   const recipientLabel = `${contactName || 'Contact'} · ${shopName}`
   const canContinue = selection !== 'unset' && !continueLoading
+
+  const footerRecipients =
+    step === 2
+      ? `${toList.length} recipient${toList.length === 1 ? '' : 's'}${ccList.length > 0 ? ` · ${ccList.length} Cc` : ''}`
+      : null
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 py-6 sm:py-10">
@@ -363,15 +427,41 @@ export default function EmailModal({
 
               {step === 2 && (
                 <>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-onix-600">To</label>
-                    <input
-                      type="email"
-                      value={to}
-                      onChange={e => setTo(e.target.value)}
-                      className="w-full rounded border border-arctic-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  {contactsError ? <p className="text-sm text-amber-700">{contactsError}</p> : null}
+                  {contactsLoading ? <p className="text-xs text-onix-500">Loading contacts…</p> : null}
+                  <RecipientPicker
+                    label="To"
+                    required
+                    shopName={shopName}
+                    accountName={accountName}
+                    value={toList}
+                    onChange={setToList}
+                    contacts={contacts}
+                    excludeEmails={ccList}
+                    primaryEmail={primaryNorm || null}
+                    placeholder="Add recipient"
+                  />
+                  {!ccOpen && ccList.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setCcOpen(true)}
+                      className="text-left text-xs font-medium text-onix-500 hover:text-onix-800"
+                    >
+                      + Add Cc
+                    </button>
+                  ) : null}
+                  {(ccOpen || ccList.length > 0) && (
+                    <RecipientPicker
+                      label="Cc"
+                      shopName={shopName}
+                      accountName={accountName}
+                      value={ccList}
+                      onChange={setCcList}
+                      contacts={contacts}
+                      excludeEmails={toList}
+                      placeholder="Add Cc"
                     />
-                  </div>
+                  )}
                   <div>
                     <label className="mb-1 block text-xs font-medium text-onix-600">Subject</label>
                     <input
@@ -467,7 +557,9 @@ export default function EmailModal({
 
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-arctic-200 bg-white px-5 py-3">
             <p className="text-xs text-onix-500">
-              {step === 1 ? 'Step 1 of 2 · Pick template' : 'Step 2 of 2 · Review and send'}
+              {step === 1
+                ? 'Step 1 of 2 · Pick template'
+                : `Step 2 of 2 · Review and send${footerRecipients ? ` · ${footerRecipients}` : ''}`}
             </p>
             <div className="flex gap-2">
               {step === 2 && (

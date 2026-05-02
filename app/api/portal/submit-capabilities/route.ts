@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  if (priorStatus === 'contacted') {
+  if (priorStatus === 'contacted' || priorStatus === 'dormant') {
     const { error: stErr } = await supabaseAdmin.from('locations').update({ status: 'in_review' }).eq('id', locationId)
     if (stErr) return NextResponse.json({ error: stErr.message }, { status: 500 })
 
@@ -297,7 +297,7 @@ export async function POST(req: NextRequest) {
       location_id: locationId,
       type: 'status_change',
       subject: 'Pipeline status',
-      body: `${LOCATION_STATUS_LABELS.contacted} → ${LOCATION_STATUS_LABELS.in_review} (capabilities form submitted)`,
+      body: `${LOCATION_STATUS_LABELS[priorStatus] ?? priorStatus} → ${LOCATION_STATUS_LABELS.in_review} (capabilities form submitted)`,
       sent_by: 'portal',
     })
   }

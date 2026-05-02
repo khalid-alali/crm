@@ -315,7 +315,7 @@ export async function POST(req: NextRequest) {
         .from('locations')
         .update({ status: 'contracted' })
         .in('id', locationIds)
-        .in('status', ['lead', 'contacted', 'in_review'])
+        .in('status', ['lead', 'contacted', 'dormant', 'in_review'])
 
       for (const locationId of locationIds) {
         await supabaseAdmin.from('activity_log').insert({

@@ -19,6 +19,7 @@ interface SearchParams {
 const statusTabActive: Record<string, string> = {
   lead: 'bg-arctic-100 text-onix-800 border-arctic-300 ring-1 ring-arctic-300',
   contacted: 'bg-brand-100 text-brand-800 border-brand-400 ring-1 ring-brand-300',
+  dormant: 'bg-amber-100 text-amber-900 border-amber-400 ring-1 ring-amber-300',
   in_review: 'bg-purple-100 text-purple-800 border-purple-400 ring-1 ring-purple-300',
   contracted: 'bg-lime-100 text-lime-800 border-lime-400 ring-1 ring-lime-300',
   active: 'bg-green-100 text-green-800 border-green-400 ring-1 ring-green-300',

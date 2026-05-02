@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Check, FileText, Mail, Pencil, X } from 'lucide-react'
 import { formatBulkPipelineStatusLogBody } from '@/lib/location-status-labels'
-import { activityPreviewPlain, bodyNeedsDrawer, stripEmailActivityFooter } from '@/lib/activity-feed-preview'
+import {
+  activityEmailNeedsRecipientDrawer,
+  activityPreviewPlain,
+  bodyNeedsDrawer,
+  emailActivityCompactRecipientSummary,
+  formatRecipientDrawerSegment,
+  parseActivityRecipients,
+  stripEmailActivityFooter,
+} from '@/lib/activity-feed-preview'
 
 export type ActivityFeedEntry = {
   id: string
@@ -12,6 +20,7 @@ export type ActivityFeedEntry = {
   subject?: string | null
   body?: string | null
   to_email?: string | null
+  recipients?: unknown
   sent_by?: string | null
   created_at: string
   location_id?: string
@@ -117,9 +126,15 @@ function mailtoReplyHref(entry: ActivityFeedEntry): string | null {
 type Props = {
   entries: ActivityFeedEntry[]
   showLocationLink?: boolean
+  /** Optional lowercased-email → display name for richer activity summaries (best-effort). */
+  recipientDisplayNames?: Record<string, string>
 }
 
-export default function ActivityFeed({ entries, showLocationLink = false }: Props) {
+export default function ActivityFeed({
+  entries,
+  showLocationLink = false,
+  recipientDisplayNames,
+}: Props) {
   const [drawerEntry, setDrawerEntry] = useState<ActivityFeedEntry | null>(null)
 
   useEffect(() => {
@@ -153,12 +168,16 @@ export default function ActivityFeed({ entries, showLocationLink = false }: Prop
           const eventLabel = eventTypeLabel(entry.type)
           const { wrap: iconWrap, Icon } = iconTileForType(entry.type)
           const rawBody = typeof entry.body === 'string' ? entry.body : ''
-          const expand = bodyNeedsDrawer(rawBody, 80)
 
           if (entry.type === 'email') {
             const subject = typeof entry.subject === 'string' ? entry.subject.trim() : ''
             const preview = activityPreviewPlain(rawBody, 80, { stripGreeting: true })
-            const replyHref = mailtoReplyHref(entry)
+            const expandEmail =
+              bodyNeedsDrawer(rawBody, 80) || activityEmailNeedsRecipientDrawer(entry.recipients)
+            const recipientSummary = emailActivityCompactRecipientSummary(
+              entry.recipients,
+              recipientDisplayNames,
+            )
 
             return (
               <div
@@ -191,6 +210,9 @@ export default function ActivityFeed({ entries, showLocationLink = false }: Prop
                   <p className="line-clamp-1 text-sm font-medium leading-snug text-onix-900">
                     {subject || '—'}
                   </p>
+                  {recipientSummary ? (
+                    <p className="line-clamp-2 text-[12px] leading-snug text-onix-500">{recipientSummary}</p>
+                  ) : null}
                   {preview ? (
                     <p className="line-clamp-1 text-[13px] leading-snug text-onix-500">{preview}</p>
                   ) : null}
@@ -199,7 +221,7 @@ export default function ActivityFeed({ entries, showLocationLink = false }: Prop
                   <time dateTime={entry.created_at} className="text-[11px] tabular-nums leading-tight text-onix-400">
                     {when}
                   </time>
-                  {expand ? (
+                  {expandEmail ? (
                     <button
                       type="button"
                       onClick={() => setDrawerEntry(entry)}
@@ -276,6 +298,7 @@ export default function ActivityFeed({ entries, showLocationLink = false }: Prop
           entry={drawerEntry}
           onClose={() => setDrawerEntry(null)}
           replyHref={mailtoReplyHref(drawerEntry)}
+          recipientDisplayNames={recipientDisplayNames}
         />
       ) : null}
     </>
@@ -286,10 +309,12 @@ function ActivityDrawer({
   entry,
   onClose,
   replyHref,
+  recipientDisplayNames,
 }: {
   entry: ActivityFeedEntry
   onClose: () => void
   replyHref: string | null
+  recipientDisplayNames?: Record<string, string>
 }) {
   const isEmail = entry.type === 'email'
   const formattedBody = entry.body ? formatBulkPipelineStatusLogBody(entry.body) : ''
@@ -302,8 +327,9 @@ function ActivityDrawer({
     (typeof entry.subject === 'string' && entry.subject.trim()) ||
     (isEmail ? '—' : firstLine || eventTypeLabel(entry.type))
   const bodyText = drawerBodyHtml(entry)
-  const to = typeof entry.to_email === 'string' ? entry.to_email.trim() : ''
+  const toLegacy = typeof entry.to_email === 'string' ? entry.to_email.trim() : ''
   const from = typeof entry.sent_by === 'string' ? entry.sent_by.trim() : ''
+  const parsedRecipients = isEmail ? parseActivityRecipients(entry.recipients) : null
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -329,7 +355,24 @@ function ActivityDrawer({
             </h2>
             {isEmail ? (
               <div className="mt-2 space-y-0.5 text-xs text-onix-600">
-                {to ? <p>To: {to}</p> : null}
+                {parsedRecipients ? (
+                  <>
+                    {parsedRecipients.to.length > 0 ? (
+                      <p className="break-words">
+                        <span className="font-medium text-onix-700">To:</span>{' '}
+                        {formatRecipientDrawerSegment(parsedRecipients.to, recipientDisplayNames)}
+                      </p>
+                    ) : null}
+                    {parsedRecipients.cc.length > 0 ? (
+                      <p className="break-words">
+                        <span className="font-medium text-onix-700">Cc:</span>{' '}
+                        {formatRecipientDrawerSegment(parsedRecipients.cc, recipientDisplayNames)}
+                      </p>
+                    ) : null}
+                  </>
+                ) : toLegacy ? (
+                  <p>To: {toLegacy}</p>
+                ) : null}
                 {from ? <p>From: {from}</p> : null}
               </div>
             ) : from ? (

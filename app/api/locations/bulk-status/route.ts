@@ -4,7 +4,15 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 
-const ALLOWED_STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive'] as const
+const ALLOWED_STATUSES = [
+  'lead',
+  'contacted',
+  'dormant',
+  'in_review',
+  'contracted',
+  'active',
+  'inactive',
+] as const
 type PipelineStatus = (typeof ALLOWED_STATUSES)[number]
 
 const UUID_RE =

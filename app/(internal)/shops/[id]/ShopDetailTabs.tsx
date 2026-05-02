@@ -30,7 +30,7 @@ const PROGRAMS = [
   { key: 'oem_warranty', label: 'OEM Warranty' },
 ]
 const PROGRAM_STATUSES = ['not_enrolled', 'pending_activation', 'active', 'suspended', 'terminated']
-const STATUSES = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive']
+const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive']
 const BASE_TABS = ['activity', 'tasks', 'contracts', 'programs', 'capabilities'] as const
 type BaseTabKey = (typeof BASE_TABS)[number]
 type TabKey = BaseTabKey | 'admin'
@@ -213,6 +213,10 @@ export default function ShopDetailTabs({
   })
   const [commercialDraft, setCommercialDraft] = useState({
     shop_type: (shop.shop_type as string | null) ?? '',
+    shop_business_types: (Array.isArray(shop.shop_business_types)
+      ? (shop.shop_business_types as string[])
+      : []
+    ).filter((t): t is 'repair_shop' | 'body_shop' => t === 'repair_shop' || t === 'body_shop'),
     high_priority_target: Boolean(shop.high_priority_target),
     website: shop.website ?? '',
     standard_labor_rate:
@@ -270,6 +274,10 @@ export default function ShopDetailTabs({
   useEffect(() => {
     setCommercialDraft({
       shop_type: (shop.shop_type as string | null) ?? '',
+      shop_business_types: (Array.isArray(shop.shop_business_types)
+        ? (shop.shop_business_types as string[])
+        : []
+      ).filter((t): t is 'repair_shop' | 'body_shop' => t === 'repair_shop' || t === 'body_shop'),
       high_priority_target: Boolean(shop.high_priority_target),
       website: shop.website ?? '',
       standard_labor_rate:
@@ -286,6 +294,7 @@ export default function ShopDetailTabs({
     setDqNotes(shop.disqualified_notes ?? '')
   }, [
     shop.shop_type,
+    shop.shop_business_types,
     shop.high_priority_target,
     shop.website,
     shop.standard_labor_rate,
@@ -1070,6 +1079,45 @@ export default function ShopDetailTabs({
                     <option value="specialist">Specialist</option>
                   </select>
                 </div>
+                <div>
+                  <span className="block text-[11px] font-medium text-onix-600">Business lines</span>
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-onix-800">
+                    <label className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={commercialDraft.shop_business_types.includes('repair_shop')}
+                        onChange={() =>
+                          setCommercialDraft(d => {
+                            const has = d.shop_business_types.includes('repair_shop')
+                            const next = has
+                              ? d.shop_business_types.filter(x => x !== 'repair_shop')
+                              : [...d.shop_business_types, 'repair_shop']
+                            return { ...d, shop_business_types: next.sort() as ('repair_shop' | 'body_shop')[] }
+                          })
+                        }
+                        className="rounded border-arctic-300"
+                      />
+                      Repair shop
+                    </label>
+                    <label className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={commercialDraft.shop_business_types.includes('body_shop')}
+                        onChange={() =>
+                          setCommercialDraft(d => {
+                            const has = d.shop_business_types.includes('body_shop')
+                            const next = has
+                              ? d.shop_business_types.filter(x => x !== 'body_shop')
+                              : [...d.shop_business_types, 'body_shop']
+                            return { ...d, shop_business_types: next.sort() as ('repair_shop' | 'body_shop')[] }
+                          })
+                        }
+                        className="rounded border-arctic-300"
+                      />
+                      Body shop
+                    </label>
+                  </div>
+                </div>
                 <label className="flex items-center gap-2 text-xs text-onix-800">
                   <input
                     type="checkbox"
@@ -1137,6 +1185,10 @@ export default function ShopDetailTabs({
                       setInlineError(null)
                       void patchShopJson({
                         shop_type: commercialDraft.shop_type === '' ? null : commercialDraft.shop_type,
+                        shop_business_types:
+                          commercialDraft.shop_business_types.length > 0
+                            ? commercialDraft.shop_business_types
+                            : null,
                         high_priority_target: commercialDraft.high_priority_target,
                         website: commercialDraft.website.trim() || null,
                         standard_labor_rate: stdRaw === '' ? null : Number(stdRaw),
@@ -1159,6 +1211,10 @@ export default function ShopDetailTabs({
                     onClick={() => {
                       setCommercialDraft({
                         shop_type: (shop.shop_type as string | null) ?? '',
+                        shop_business_types: (Array.isArray(shop.shop_business_types)
+                          ? (shop.shop_business_types as string[])
+                          : []
+                        ).filter((t): t is 'repair_shop' | 'body_shop' => t === 'repair_shop' || t === 'body_shop'),
                         high_priority_target: Boolean(shop.high_priority_target),
                         website: shop.website ?? '',
                         standard_labor_rate:
@@ -1186,6 +1242,18 @@ export default function ShopDetailTabs({
                 <div className="flex justify-between gap-2">
                   <dt className="text-onix-500">Type</dt>
                   <dd>{shop.shop_type === 'specialist' ? 'Specialist' : shop.shop_type === 'generalist' ? 'Generalist' : '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-onix-500">Business lines</dt>
+                  <dd className="text-right">
+                    {Array.isArray(shop.shop_business_types) && shop.shop_business_types.length > 0
+                      ? (shop.shop_business_types as string[])
+                          .map(t =>
+                            t === 'repair_shop' ? 'Repair shop' : t === 'body_shop' ? 'Body shop' : t,
+                          )
+                          .join(' · ')
+                      : '—'}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-onix-500">High priority</dt>
@@ -1893,6 +1961,14 @@ export default function ShopDetailTabs({
           contactName={primaryContactDisplayName}
           contactEmail={primaryContactEmail}
           senderName={senderName}
+          accountId={shop.account_id ?? null}
+          accountName={
+            shop.accounts && typeof shop.accounts === 'object' && !Array.isArray(shop.accounts)
+              ? (shop.accounts as { business_name?: string | null }).business_name?.trim() || null
+              : Array.isArray(shop.accounts) && shop.accounts[0]
+                ? String((shop.accounts[0] as { business_name?: string }).business_name ?? '').trim() || null
+                : null
+          }
           fromShopDetail
           onClose={() => setShowIntroModal(false)}
           onSent={() => {

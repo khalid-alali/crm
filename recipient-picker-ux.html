@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fixlane CRM — Multi-Recipient Picker UX</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --surface-hover: #f4f4f1;
+    --border: #e5e5e0;
+    --border-strong: #d4d4cf;
+    --text: #1a1a17;
+    --text-soft: #6b6b66;
+    --text-faint: #9a9a94;
+    --accent: #2563eb;
+    --accent-soft: #eff4ff;
+    --accent-border: #c7d6fb;
+    --danger: #dc2626;
+    --success: #15803d;
+    --chip-bg: #f0f0ec;
+    --chip-bg-primary: #eff4ff;
+    --chip-border-primary: #c7d6fb;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+    --shadow-lg: 0 12px 32px rgba(0,0,0,0.08), 0 4px 8px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Söhne', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 48px 32px 96px;
+  }
+
+  .page-header {
+    max-width: 880px;
+    margin: 0 auto 40px;
+  }
+
+  .page-header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+
+  .page-header p {
+    color: var(--text-soft);
+    font-size: 13px;
+  }
+
+  .state-grid {
+    max-width: 880px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 56px;
+  }
+
+  .state {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .state-label {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding-bottom: 2px;
+  }
+
+  .state-label .num {
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.05em;
+  }
+
+  .state-label h2 {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  .state-label .desc {
+    color: var(--text-soft);
+    font-size: 13px;
+  }
+
+  /* ---------- Modal frame ---------- */
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    overflow: visible;
+    position: relative;
+  }
+
+  .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .modal-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .modal-subtitle {
+    font-size: 12px;
+    color: var(--text-soft);
+    margin-top: 2px;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--text-faint);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    line-height: 0;
+  }
+
+  .close-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+  .modal-body {
+    padding: 20px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ---------- Field ---------- */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+  }
+
+  .field-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-soft);
+    letter-spacing: 0.005em;
+  }
+
+  .field-label .required {
+    color: var(--danger);
+    margin-left: 2px;
+  }
+
+  /* ---------- Recipient picker ---------- */
+  .picker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-height: 38px;
+    padding: 5px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    cursor: text;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+
+  .picker:hover { border-color: #b8b8b2; }
+
+  .picker.focused {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+  }
+
+  .picker.error {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px rgba(220,38,38,0.10);
+  }
+
+  /* ---------- Chips ---------- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 4px 0 8px;
+    background: var(--chip-bg);
+    border: 1px solid transparent;
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--text);
+    max-width: 100%;
+  }
+
+  .chip.primary {
+    background: var(--chip-bg-primary);
+    border-color: var(--chip-border-primary);
+  }
+
+  .chip.adhoc {
+    background: #fff8eb;
+    border-color: #fde9b8;
+  }
+
+  .chip-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+  }
+
+  .chip-email {
+    color: var(--text-soft);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chip-x {
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-soft);
+    flex-shrink: 0;
+  }
+
+  .chip-x:hover { background: rgba(0,0,0,0.08); color: var(--text); }
+  .chip-x svg { width: 10px; height: 10px; }
+
+  .chip-marker {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  /* ---------- Inline input ---------- */
+  .picker-input {
+    flex: 1;
+    min-width: 80px;
+    border: none;
+    outline: none;
+    font: inherit;
+    padding: 4px 4px;
+    background: transparent;
+    color: var(--text);
+  }
+
+  .picker-input::placeholder { color: var(--text-faint); }
+
+  /* ---------- Dropdown ---------- */
+  .dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 10;
+    overflow: hidden;
+    max-height: 360px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dropdown-section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dropdown-section + .dropdown-section { border-top: 1px solid var(--border); }
+
+  .dropdown-section-header {
+    padding: 8px 12px 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .dropdown-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: var(--text);
+  }
+
+  .dropdown-row:hover, .dropdown-row.highlighted {
+    background: var(--surface-hover);
+  }
+
+  .dropdown-row.highlighted {
+    background: var(--accent-soft);
+  }
+
+  .row-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--chip-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-soft);
+    flex-shrink: 0;
+  }
+
+  .row-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .row-line-1 {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    overflow: hidden;
+  }
+
+  .row-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row-title {
+    font-size: 12px;
+    color: var(--text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .row-email {
+    font-size: 12px;
+    color: var(--text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--chip-bg-primary);
+    color: var(--accent);
+    border: 1px solid var(--chip-border-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+
+  .row-check {
+    width: 16px;
+    height: 16px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .dropdown-empty {
+    padding: 16px 12px;
+    color: var(--text-soft);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .dropdown-add-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-hover);
+    cursor: pointer;
+    border: none;
+    border-top: 1px solid var(--border);
+    width: 100%;
+    text-align: left;
+    font: inherit;
+  }
+
+  .dropdown-add-row:hover { background: #ecece8; }
+
+  .add-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px dashed var(--border-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-soft);
+    flex-shrink: 0;
+  }
+
+  .add-text {
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .add-text strong { font-weight: 600; }
+
+  .add-hint {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-left: auto;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  }
+
+  /* ---------- Cc collapsed link ---------- */
+  .cc-link {
+    background: none;
+    border: none;
+    color: var(--text-soft);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 0;
+    text-align: left;
+    width: fit-content;
+  }
+
+  .cc-link:hover { color: var(--text); }
+
+  /* ---------- Subject + body ---------- */
+  .subject-input, .body-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    font: inherit;
+    color: var(--text);
+    background: var(--surface);
+  }
+
+  .body-input {
+    min-height: 80px;
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  /* ---------- Footer ---------- */
+  .modal-footer {
+    border-top: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .footer-meta {
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  .footer-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text);
+  }
+
+  .btn:hover { background: var(--surface-hover); }
+
+  .btn-primary {
+    background: var(--text);
+    color: var(--surface);
+    border-color: var(--text);
+  }
+
+  .btn-primary:hover { background: #000; }
+
+  .placeholder-btn {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    font: inherit;
+    font-size: 12px;
+    color: var(--text-soft);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  }
+
+  /* ---------- Validation errors ---------- */
+  .field-error {
+    font-size: 12px;
+    color: var(--danger);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ---------- Save-as-contact prompt ---------- */
+  .save-prompt {
+    margin-top: 12px;
+    background: #fffbeb;
+    border: 1px solid #fde9b8;
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .save-prompt-icon {
+    color: #b45309;
+    flex-shrink: 0;
+  }
+
+  .save-prompt-text {
+    flex: 1;
+    font-size: 13px;
+    color: #78350f;
+  }
+
+  .save-prompt-text strong { font-weight: 600; }
+
+  .save-prompt-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .save-prompt-btn {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid #fde9b8;
+    background: var(--surface);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: #78350f;
+    cursor: pointer;
+  }
+
+  .save-prompt-btn.primary {
+    background: #78350f;
+    color: #fffbeb;
+    border-color: #78350f;
+  }
+
+  /* ---------- Activity log preview ---------- */
+  .activity-row {
+    display: flex;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    align-items: flex-start;
+  }
+
+  .activity-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .activity-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .activity-title {
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .activity-title strong { font-weight: 600; }
+
+  .activity-meta {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-top: 2px;
+  }
+
+  .activity-expand {
+    background: none;
+    border: none;
+    color: var(--text-soft);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .activity-expand:hover { background: var(--surface-hover); color: var(--text); }
+
+  /* ---------- Note callout ---------- */
+  .design-note {
+    margin-top: 6px;
+    padding: 10px 14px;
+    background: #fafaf7;
+    border-left: 2px solid var(--border-strong);
+    font-size: 12px;
+    color: var(--text-soft);
+    line-height: 1.55;
+  }
+
+  .design-note strong { color: var(--text); font-weight: 600; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 720px) {
+    body { padding: 24px 16px 64px; }
+    .modal-header, .modal-body, .modal-footer { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Multi-Recipient Email Picker</h1>
+  <p>Fixlane CRM — Review and send modal. Five key states.</p>
+</div>
+
+<div class="state-grid">
+
+  <!-- ============================================================ -->
+  <!-- STATE 1: Default open -->
+  <!-- ============================================================ -->
+  <div class="state">
+    <div class="state-label">
+      <span class="num">01</span>
+      <h2>Default — modal opens with primary contact pre-populated</h2>
+    </div>
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Review and send</div>
+          <div class="modal-subtitle">Intro — VinFast OEM Program</div>
+        </div>
+        <button class="close-btn" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3 L11 11 M11 3 L3 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">To<span class="required">*</span></label>
+          <div class="picker">
+            <span class="chip primary">
+              <span class="chip-marker" title="Primary contact"></span>
+              <span class="chip-name">Sarah Chen</span>
+              <span class="chip-email">· sarah@oceansideauto.com</span>
+              <button class="chip-x" aria-label="Remove">
+                <svg viewBox="0 0 10 10" fill="none"><path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </button>
+            </span>
+            <input class="picker-input" placeholder="Add recipient" />
+          </div>
+        </div>
+
+        <button class="cc-link">+ Add Cc</button>
+
+        <div class="field">
+          <label class="field-label">Subject</label>
+          <input class="subject-input" value="Oceanside Auto — Partnership opportunity with Fixlane" />
+        </div>
+
+        <div class="field">
+          <label class="field-label">Body</label>
+          <textarea class="body-input">Hi Sarah,
+
+Thanks for the call yesterday. As discussed, here's an overview of the VinFast OEM Program...</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="footer-meta">From: khalid@fixlane.com</div>
+        <div class="footer-actions">
+          <button class="btn">Cancel</button>
+          <button class="btn-primary btn">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="design-note">
+      <strong>Notes.</strong> The primary contact chip carries a small blue dot marker — subtle visual indicator of "primary" without a heavy badge. Email shown inline in the chip in muted color so the BDR sees who they're actually emailing without expanding anything. Cc starts collapsed as a low-emphasis link to keep the default state quiet.
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STATE 2: Dropdown open with contacts -->
+  <!-- ============================================================ -->
+  <div class="state">
+    <div class="state-label">
+      <span class="num">02</span>
+      <h2>Adding a recipient — dropdown grouped by Location / Account</h2>
+    </div>
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Review and send</div>
+          <div class="modal-subtitle">Intro — VinFast OEM Program</div>
+        </div>
+        <button class="close-btn" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3 L11 11 M11 3 L3 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">To<span class="required">*</span></label>
+          <div class="picker focused">
+            <span class="chip primary">
+              <span class="chip-marker"></span>
+              <span class="chip-name">Sarah Chen</span>
+              <span class="chip-email">· sarah@oceansideauto.com</span>
+              <button class="chip-x"><svg viewBox="0 0 10 10" fill="none"><path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+            </span>
+            <input class="picker-input" placeholder="" value="" autofocus />
+
+            <div class="dropdown">
+              <div class="dropdown-section">
+                <div class="dropdown-section-header">Location · Oceanside Auto</div>
+                <button class="dropdown-row">
+                  <span class="row-avatar">SC</span>
+                  <div class="row-content">
+                    <div class="row-line-1">
+                      <span class="row-name">Sarah Chen</span>
+                      <span class="row-title">· Owner</span>
+                    </div>
+                    <div class="row-email">sarah@oceansideauto.com</div>
+                  </div>
+                  <span class="row-badge">Primary</span>
+                  <svg class="row-check" viewBox="0 0 16 16" fill="none"><path d="M3 8 L6.5 11.5 L13 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="dropdown-row highlighted">
+                  <span class="row-avatar">MT</span>
+                  <div class="row-content">
+                    <div class="row-line-1">
+                      <span class="row-name">Mike Torres</span>
+                      <span class="row-title">· Service Manager</span>
+                    </div>
+                    <div class="row-email">mike@oceansideauto.com</div>
+                  </div>
+                </button>
+                <button class="dropdown-row">
+                  <span class="row-avatar">JR</span>
+                  <div class="row-content">
+                    <div class="row-line-1">
+                      <span class="row-name">Janet Ruiz</span>
+                      <span class="row-title">· Office Manager</span>
+                    </div>
+                    <div class="row-email">janet@oceansideauto.com</div>
+                  </div>
+                </button>
+              </div>
+              <div class="dropdown-section">
+                <div class="dropdown-section-header">Account · Pacific Auto Group</div>
+                <button class="dropdown-row">
+                  <span class="row-avatar">DK</span>
+                  <div class="row-content">
+                    <div class="row-line-1">
+                      <span class="row-name">David Kim</span>
+                      <span class="row-title">· Director of Operations</span>
+                    </div>
+                    <div class="row-email">dkim@pacificauto.com</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="cc-link">+ Add Cc</button>
+
+        <div class="field">
+          <label class="field-label">Subject</label>
+          <input class="subject-input" value="Oceanside Auto — Partnership opportunity with Fixlane" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="footer-meta">↑↓ to navigate · Enter to add · Esc to close</div>
+        <div class="footer-actions">
+          <button class="btn">Cancel</button>
+          <button class="btn-primary btn">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="design-note">
+      <strong>Notes.</strong> Two sections: location contacts first (most relevant), account contacts below. Already-selected contacts get a checkmark and stay clickable (toggles off). The "Primary" badge marks the default. Avatars use initials in a muted tile — no fake colors, just identity. Footer keyboard hints appear only while the picker is focused.
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STATE 3: Filtering + ad-hoc -->
+  <!-- ============================================================ -->
+  <div class="state">
+    <div class="state-label">
+      <span class="num">03</span>
+      <h2>Filtering — typing matches contacts and offers ad-hoc add for new emails</h2>
+    </div>
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Review and send</div>
+          <div class="modal-subtitle">Intro — VinFast OEM Program</div>
+        </div>
+        <button class="close-btn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3 L11 11 M11 3 L3 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">To<span class="required">*</span></label>
+          <div class="picker focused">
+            <span class="chip primary">
+              <span class="chip-marker"></span>
+              <span class="chip-name">Sarah Chen</span>
+              <span class="chip-email">· sarah@oceansideauto.com</span>
+              <button class="chip-x"><svg viewBox="0 0 10 10" fill="none"><path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+            </span>
+            <span class="chip">
+              <span class="chip-name">Mike Torres</span>
+              <span class="chip-email">· mike@oceansideauto.com</span>
+              <button class="chip-x"><svg viewBox="0 0 10 10" fill="none"><path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+            </span>
+            <input class="picker-input" value="alex@oceansideauto" />
+
+            <div class="dropdown">
+              <div class="dropdown-empty">No contacts match "alex@oceansideauto"</div>
+              <button class="dropdown-add-row">
+                <span class="add-icon">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2 V10 M2 6 H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                </span>
+                <span class="add-text">Add <strong>alex@oceansideauto.com</strong> as a one-time recipient</span>
+                <span class="add-hint">Enter</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button class="cc-link">+ Add Cc</button>
+
+        <div class="field">
+          <label class="field-label">Subject</label>
+          <input class="subject-input" value="Oceanside Auto — Partnership opportunity with Fixlane" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="footer-meta">2 recipients</div>
+        <div class="footer-actions">
+          <button class="btn">Cancel</button>
+          <button class="btn-primary btn">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="design-note">
+      <strong>Notes.</strong> When typed text doesn't match any contact and is a valid email, the bottom row offers ad-hoc add with a clear "one-time recipient" label — sets the expectation that follow-up will ask whether to save it. The Enter hint reinforces keyboard flow. Footer recipient count keeps the BDR oriented as the list grows.
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STATE 4: Cc expanded with multiple recipients + ad-hoc chip -->
+  <!-- ============================================================ -->
+  <div class="state">
+    <div class="state-label">
+      <span class="num">04</span>
+      <h2>Full state — To + Cc with ad-hoc recipient and primary marker</h2>
+    </div>
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Review and send</div>
+          <div class="modal-subtitle">Intro — VinFast OEM Program</div>
+        </div>
+        <button class="close-btn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3 L11 11 M11 3 L3 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">To<span class="required">*</span></label>
+          <div class="picker">
+            <span class="chip primary">
+              <span class="chip-marker"></span>
+              <span class="chip-name">Sarah Chen</span>
+              <span class="chip-email">· sarah@oceansideauto.com</span>
+              <button class="chip-x"><svg viewBox="0 0 10 10" fill="none"><path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+            </span>
+            <span class="chip">
+              <span class="chip-name">Mike Torres</span>
+              <span class="chip-email">· mike@oceansideauto.com</span>
+              <button class="chip-x"><svg viewBox="0 0 10 10" fill="none"><path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+            </span>
+            <span class="chip adhoc">
+              <span class="chip-name">alex@oceansideauto.com</span>
+              <button class="chip-x"><svg viewBox="0 0 10 10" fill="none"><path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+            </span>
+            <input class="picker-input" placeholder="Add recipient" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Cc</label>
+          <div class="picker">
+            <span class="chip">
+              <span class="chip-name">David Kim</span>
+              <span class="chip-email">· dkim@pacificauto.com</span>
+              <button class="chip-x"><svg viewBox="0 0 10 10" fill="none"><path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+            </span>
+            <input class="picker-input" placeholder="Add Cc" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Subject</label>
+          <input class="subject-input" value="Oceanside Auto — Partnership opportunity with Fixlane" />
+        </div>
+
+        <div class="field">
+          <label class="field-label">Body</label>
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 4px;">
+            <button class="placeholder-btn">{ } Insert placeholder</button>
+          </div>
+          <textarea class="body-input">Hi Sarah,
+
+Thanks for the call yesterday. As discussed, here's an overview of the VinFast OEM Program and how Oceanside Auto fits...</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="footer-meta">3 recipients · 1 Cc</div>
+        <div class="footer-actions">
+          <button class="btn">Cancel</button>
+          <button class="btn-primary btn">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="design-note">
+      <strong>Notes.</strong> Three chip variants visible: <strong>primary</strong> (blue, with dot marker), <strong>existing contact</strong> (neutral gray), <strong>ad-hoc</strong> (warm yellow tint — visually flags "this isn't a saved contact yet" without being alarming). Ad-hoc chip shows just the email since there's no name. The visual hierarchy (blue → gray → yellow) lets the BDR scan recipient status at a glance.
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STATE 5: Post-send save prompt + activity log preview -->
+  <!-- ============================================================ -->
+  <div class="state">
+    <div class="state-label">
+      <span class="num">05</span>
+      <h2>Post-send — save ad-hoc as contact prompt + activity log row</h2>
+    </div>
+
+    <!-- Save prompt (appears in-page after send, not in modal) -->
+    <div class="save-prompt">
+      <div class="save-prompt-icon">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="9" cy="9" r="7.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M9 5 V9.5 M9 12 V12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="save-prompt-text">
+        Email sent. Save <strong>alex@oceansideauto.com</strong> as a contact on Oceanside Auto?
+      </div>
+      <div class="save-prompt-actions">
+        <button class="save-prompt-btn">Dismiss</button>
+        <button class="save-prompt-btn primary">Save contact</button>
+      </div>
+    </div>
+
+    <!-- Activity log row -->
+    <div class="activity-row" style="margin-top: 12px;">
+      <div class="activity-icon">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <rect x="1.5" y="3" width="11" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M2 4 L7 8 L12 4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="activity-content">
+        <div class="activity-title">
+          <strong>Khalid</strong> sent email to <strong>Sarah Chen</strong> + 2 others · cc David Kim
+        </div>
+        <div class="activity-meta">Oceanside Auto — Partnership opportunity with Fixlane · 2 min ago</div>
+      </div>
+      <button class="activity-expand">Expand</button>
+    </div>
+
+    <div class="design-note">
+      <strong>Notes.</strong> Send doesn't block on save-as-contact. The prompt appears below the trigger area (inline, dismissable) — non-modal, low-friction. Activity log preview shows a smart summary: primary recipient by name + count of others + cc as a separate clause. Expanding the row reveals the full To/Cc list in the side drawer (matches your existing pattern of side-drawer-for-detail).
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

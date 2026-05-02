@@ -8,6 +8,7 @@ import { upsertLocationShopContact } from '@/lib/contact-sync'
 import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 import { revalidatePath } from 'next/cache'
 import { parseDisqualifiedReason } from '@/lib/location-outcome-reasons'
+import { parseShopBusinessTypesField } from '@/lib/shop-business-types'
 
 const SHOP_TYPES = new Set(['generalist', 'specialist'])
 
@@ -73,6 +74,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     'source',
     'notes',
     'shop_type',
+    'shop_business_types',
     'high_priority_target',
     'website',
     'standard_labor_rate',
@@ -97,6 +99,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       fields.shop_type = st
     } else {
       return NextResponse.json({ error: 'Invalid shop type' }, { status: 400 })
+    }
+  }
+
+  if ('shop_business_types' in fields) {
+    const parsed = parseShopBusinessTypesField(fields.shop_business_types)
+    if (parsed === false) {
+      return NextResponse.json({ error: 'Invalid shop_business_types' }, { status: 400 })
+    }
+    if (parsed !== undefined) {
+      fields.shop_business_types = parsed
+    } else {
+      delete fields.shop_business_types
     }
   }
 

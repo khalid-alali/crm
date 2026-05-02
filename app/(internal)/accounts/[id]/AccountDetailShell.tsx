@@ -58,6 +58,7 @@ export type ActivityEntry = {
   subject: string | null
   body: string | null
   to_email: string | null
+  recipients?: unknown
   sent_by: string | null
   created_at: string
   locations: { name: string } | null

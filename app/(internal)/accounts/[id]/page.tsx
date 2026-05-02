@@ -59,7 +59,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   if (locationIds.length > 0) {
     const { data: rawActivity } = await supabaseAdmin
       .from('activity_log')
-      .select('id, location_id, type, subject, body, to_email, sent_by, created_at')
+      .select('id, location_id, type, subject, body, to_email, recipients, sent_by, created_at')
       .in('location_id', locationIds)
       .order('created_at', { ascending: false })
       .limit(75)

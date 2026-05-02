@@ -24,7 +24,15 @@ import type { AnalyticsDashboardPayload, AnalyticsRangeParam } from '@/lib/analy
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { formatLocationSource } from '@/lib/location-source'
 
-const PIPELINE_ORDER = ['lead', 'contacted', 'in_review', 'contracted', 'active', 'inactive'] as const
+const PIPELINE_ORDER = [
+  'lead',
+  'contacted',
+  'dormant',
+  'in_review',
+  'contracted',
+  'active',
+  'inactive',
+] as const
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   email: 'Email',
