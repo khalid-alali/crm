@@ -56,6 +56,38 @@ const PIPELINE_LOCATION_SELECT = `
 
 type PipelineLocationRow = Record<string, unknown> & { id: string; created_at: string }
 
+type ShopsPipelineResult = {
+  shops: unknown[]
+  counts: Record<string, number>
+  chains: string[]
+}
+
+async function finalizeShopsPipeline(
+  t0: number,
+  shopRows: PipelineLocationRow[] | null | undefined,
+  metaRows: LocationMetaRow[] | null | undefined,
+): Promise<ShopsPipelineResult> {
+  console.log(
+    `[shops] locations+meta (parallel): ${Date.now() - t0}ms rows=${shopRows?.length ?? 0}`,
+  )
+
+  const t1 = Date.now()
+  const withActivity = await attachLastActivity(shopRows ?? [])
+  console.log(`[shops] attachLastActivity: ${Date.now() - t1}ms`)
+
+  const t2 = Date.now()
+  const shops = await attachPrimaryContactsToLocations(
+    supabaseAdmin,
+    withActivity as unknown as { id: string; account_id: string | null }[],
+  )
+  console.log(`[shops] attachPrimaryContacts: ${Date.now() - t2}ms`)
+
+  const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
+  console.log(`[shops] total server: ${Date.now() - t0}ms`)
+
+  return { shops, counts: meta.counts, chains: meta.chains }
+}
+
 async function attachLastActivity(rows: PipelineLocationRow[]) {
   if (rows.length === 0) return rows
 
@@ -122,15 +154,14 @@ export default async function ShopsPage({
     if (sp.state) listQuery = listQuery.eq('state', sp.state)
     if (sp.assigned_to) listQuery = listQuery.eq('assigned_to', sp.assigned_to)
 
+    const t0 = Date.now()
     const [{ data: shopRows }, { data: metaRows }] = await Promise.all([listQuery, metaQuery])
-    shops = await attachPrimaryContactsToLocations(
-      supabaseAdmin,
-      (await attachLastActivity(shopRows ?? [])) as unknown as { id: string; account_id: string | null }[],
-    )
-    const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
-    counts = meta.counts
-    chains = meta.chains
+    const pipeline = await finalizeShopsPipeline(t0, shopRows ?? [], metaRows ?? [])
+    shops = pipeline.shops
+    counts = pipeline.counts
+    chains = pipeline.chains
   } else {
+    const t0 = Date.now()
     const [{ data: shopRows }, { data: metaRows }] = await Promise.all([
       supabaseAdmin
         .from('locations')
@@ -140,14 +171,10 @@ export default async function ShopsPage({
         .order('updated_at', { ascending: false }),
       metaQuery,
     ])
-    shops = await attachPrimaryContactsToLocations(
-      supabaseAdmin,
-      (await attachLastActivity(shopRows ?? [])) as unknown as { id: string; account_id: string | null }[],
-    )
-
-    const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
-    counts = meta.counts
-    chains = meta.chains
+    const pipeline = await finalizeShopsPipeline(t0, shopRows ?? [], metaRows ?? [])
+    shops = pipeline.shops
+    counts = pipeline.counts
+    chains = pipeline.chains
   }
 
   return (
