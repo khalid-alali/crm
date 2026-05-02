@@ -38,7 +38,18 @@ interface SearchParams {
 }
 
 const PIPELINE_LOCATION_SELECT = `
-  *,
+  id,
+  name,
+  motherduck_shop_id,
+  chain_name,
+  city,
+  state,
+  status,
+  disqualified_reason,
+  assigned_to,
+  created_at,
+  updated_at,
+  account_id,
   accounts(id, business_name),
   program_enrollments(program, status)
 `
@@ -120,18 +131,20 @@ export default async function ShopsPage({
     counts = meta.counts
     chains = meta.chains
   } else {
-    const { data: shopRows } = await supabaseAdmin
-      .from('locations')
-      .select(PIPELINE_LOCATION_SELECT)
-      // "All" view should hide churned (inactive) by default.
-      .neq('status', 'inactive')
-      .order('updated_at', { ascending: false })
+    const [{ data: shopRows }, { data: metaRows }] = await Promise.all([
+      supabaseAdmin
+        .from('locations')
+        .select(PIPELINE_LOCATION_SELECT)
+        // "All" view should hide churned (inactive) by default.
+        .neq('status', 'inactive')
+        .order('updated_at', { ascending: false }),
+      metaQuery,
+    ])
     shops = await attachPrimaryContactsToLocations(
       supabaseAdmin,
       (await attachLastActivity(shopRows ?? [])) as unknown as { id: string; account_id: string | null }[],
     )
 
-    const { data: metaRows } = await metaQuery
     const meta = pipelineMetaFromRows((metaRows ?? []) as LocationMetaRow[])
     counts = meta.counts
     chains = meta.chains
