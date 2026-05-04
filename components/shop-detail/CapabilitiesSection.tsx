@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Check, CircleX, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { ArrowRight, Check, CircleX, FileText, Info, User, X } from 'lucide-react'
 import { formatHoursForDisplay } from '@/lib/portal-hours-schedule'
 import { formatAllocatedTechsDisplay } from '@/lib/portal-capabilities-form'
 
@@ -64,45 +65,95 @@ type TechSurveyCard = {
 }
 
 interface Props {
+  locationId: string
+  locationName: string
   location: CapabilitiesData
   techSurveys: RawSurvey[]
   onSendForm?: () => void
 }
 
-export function CapabilitiesSection({ location, techSurveys, onSendForm }: Props) {
+export function CapabilitiesSection({
+  locationId,
+  locationName,
+  location,
+  techSurveys,
+  onSendForm,
+}: Props) {
   const submitted = !!location.capabilities_submitted_at
   const [openQuizForTech, setOpenQuizForTech] = useState<TechSurveyCard | null>(null)
+  const [surveyModalOpen, setSurveyModalOpen] = useState(false)
   const techCards = useMemo(() => techSurveys.map(parseSurveyCard), [techSurveys])
+  const hasSurveys = techCards.length > 0
 
-  if (!submitted) {
+  const modals = (
+    <>
+      {openQuizForTech && (
+        <QuizAnswersModal tech={openQuizForTech} onClose={() => setOpenQuizForTech(null)} />
+      )}
+      <SurveyTechnicianModal
+        open={surveyModalOpen}
+        onClose={() => setSurveyModalOpen(false)}
+        locationId={locationId}
+        locationName={locationName}
+      />
+    </>
+  )
+
+  /* State A — no capabilities, no surveys */
+  if (!submitted && !hasSurveys) {
     return (
-      <div className="rounded-lg border border-dashed border-arctic-300 p-6 text-center">
-        <p className="mb-3 text-sm text-onix-500">Shop hasn&apos;t submitted their capabilities yet.</p>
-        {onSendForm && (
-          <button
-            type="button"
-            onClick={onSendForm}
-            className="text-sm font-medium text-brand-700 hover:text-brand-800"
-          >
-            Send capabilities form →
-          </button>
-        )}
-      </div>
+      <>
+        <div className="rounded-xl border border-arctic-200 bg-white px-6 py-12 text-center shadow-sm sm:px-10 sm:py-14">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-arctic-100 text-onix-500">
+            <FileText className="h-6 w-6" aria-hidden />
+          </div>
+          <h3 className="text-base font-semibold text-onix-900">No capabilities data yet</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-onix-500">
+            Send the capabilities form to the shop, or survey a technician.
+          </p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+            <button
+              type="button"
+              onClick={() => setSurveyModalOpen(true)}
+              className="inline-flex w-full min-w-[200px] items-center justify-center gap-2 rounded-lg border border-arctic-300 bg-white px-4 py-2.5 text-sm font-medium text-onix-800 hover:bg-arctic-50 sm:w-auto"
+            >
+              <User className="h-4 w-4 shrink-0" aria-hidden />
+              Survey a technician
+            </button>
+            {onSendForm ? (
+              <button
+                type="button"
+                onClick={onSendForm}
+                className="inline-flex w-full min-w-[200px] items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-800 sm:w-auto"
+              >
+                Send capabilities form
+                <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {modals}
+      </>
     )
   }
 
-  const isCA =
-    location.state?.toUpperCase() === 'CA' || location.state?.toUpperCase() === 'CALIFORNIA'
-  const hvCertified = techCards.filter(t => t.hasHvCert).length
-  const acCertified = techCards.filter(t => t.hasAcCert).length
-  const aseCertified = techCards.filter(t => t.hasAseCert).length
-  const oemWarrantyExp = techCards.filter(t => t.hasOemWarranty).length
-  const hvMeterCount = techCards.filter(t => t.hasHvMeter).length
-  const latestSurveyDate = techCards
-    .map(t => (t.surveyedAt ? new Date(t.surveyedAt) : null))
-    .filter((d): d is Date => d !== null && !Number.isNaN(d.getTime()))
-    .sort((a, b) => b.getTime() - a.getTime())[0]
+  /* State B — surveys present, capabilities not submitted */
+  if (!submitted && hasSurveys) {
+    return (
+      <>
+        <CapabilitiesNudgeBanner onSendForm={onSendForm} />
+        <TechnicianCompetencyPanel
+          techCards={techCards}
+          onSurveyClick={() => setSurveyModalOpen(true)}
+          onOpenQuiz={setOpenQuizForTech}
+          interiorEmpty={false}
+        />
+        {modals}
+      </>
+    )
+  }
 
+  /* State C & D — shop capabilities submitted */
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -117,6 +168,44 @@ export function CapabilitiesSection({ location, techSurveys, onSendForm }: Props
         </span>
       </div>
 
+      <ShopCapabilitiesDetailGrid location={location} />
+
+      <TechnicianCompetencyPanel
+        techCards={techCards}
+        onSurveyClick={() => setSurveyModalOpen(true)}
+        onOpenQuiz={setOpenQuizForTech}
+        interiorEmpty={!hasSurveys}
+      />
+      {modals}
+    </div>
+  )
+}
+
+function CapabilitiesNudgeBanner({ onSendForm }: { onSendForm?: () => void }) {
+  return (
+    <div className="mb-6 flex gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+      <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" aria-hidden />
+      <div className="min-w-0">
+        <span>Capabilities form not submitted yet. </span>
+        {onSendForm ? (
+          <button
+            type="button"
+            onClick={onSendForm}
+            className="font-medium text-brand-700 underline decoration-brand-600/40 underline-offset-2 hover:text-brand-800"
+          >
+            Send it to the shop →
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function ShopCapabilitiesDetailGrid({ location }: { location: CapabilitiesData }) {
+  const isCA =
+    location.state?.toUpperCase() === 'CA' || location.state?.toUpperCase() === 'CALIFORNIA'
+  return (
+    <>
       <section className="space-y-2">
         <div className="text-xs font-semibold uppercase tracking-wide text-onix-500">Capacity</div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -157,17 +246,56 @@ export function CapabilitiesSection({ location, techSurveys, onSendForm }: Props
           {isCA && <DetailRow label="BAR license" value={location.bar_license_number} />}
         </div>
       </section>
+    </>
+  )
+}
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
+function TechnicianCompetencyPanel({
+  techCards,
+  onSurveyClick,
+  onOpenQuiz,
+  interiorEmpty,
+}: {
+  techCards: TechSurveyCard[]
+  onSurveyClick: () => void
+  onOpenQuiz: (t: TechSurveyCard) => void
+  interiorEmpty: boolean
+}) {
+  const hvCertified = techCards.filter(t => t.hasHvCert).length
+  const acCertified = techCards.filter(t => t.hasAcCert).length
+  const aseCertified = techCards.filter(t => t.hasAseCert).length
+  const oemWarrantyExp = techCards.filter(t => t.hasOemWarranty).length
+  const hvMeterCount = techCards.filter(t => t.hasHvMeter).length
+  const latestSurveyDate = techCards
+    .map(t => (t.surveyedAt ? new Date(t.surveyedAt) : null))
+    .filter((d): d is Date => d !== null && !Number.isNaN(d.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime())[0]
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wide text-onix-500">Technician competency</div>
-          <div className="text-xs text-onix-500">
-            {techCards.length} surveyed
-            {latestSurveyDate
-              ? ` · Latest ${latestSurveyDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-              : ''}
-          </div>
+          {techCards.length > 0 ? (
+            <div className="mt-1 text-xs text-onix-500">
+              {techCards.length} surveyed
+              {latestSurveyDate
+                ? ` · Latest ${latestSurveyDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                : ''}
+            </div>
+          ) : null}
         </div>
+        <button
+          type="button"
+          onClick={onSurveyClick}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-arctic-300 bg-white px-2.5 py-1.5 text-xs font-medium text-onix-700 hover:bg-arctic-50"
+        >
+          <User className="h-3.5 w-3.5" aria-hidden />
+          Survey a technician
+        </button>
+      </div>
+
+      {techCards.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <MiniStat label="HV certified" value={hvCertified} />
           <MiniStat label="AC (EPA 609)" value={acCertified} />
@@ -175,87 +303,367 @@ export function CapabilitiesSection({ location, techSurveys, onSendForm }: Props
           <MiniStat label="OEM warranty exp" value={oemWarrantyExp} />
           <MiniStat label="Own HV meter" value={hvMeterCount} />
         </div>
-        <div className="space-y-2">
-          {techCards.length === 0 && (
-            <div className="rounded-lg border border-dashed border-arctic-300 p-4 text-sm text-onix-500">
-              No technician competency surveys yet.
-            </div>
-          )}
-          {techCards.map(tech => (
-            <button
-              key={tech.id}
-              type="button"
-              onClick={() => setOpenQuizForTech(tech)}
-              className="w-full rounded-lg border border-arctic-200 p-4 text-left hover:bg-arctic-50"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-2">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-semibold text-violet-700">
-                    {initialsForName(tech.name)}
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-onix-900">
-                      {tech.name}
-                      {tech.years ? (
-                        <span className="ml-1.5 text-xs font-normal text-onix-500">{tech.years} years</span>
-                      ) : null}
-                    </div>
-                    <div className="text-xs text-onix-500">Surveyed {formatSurveyDate(tech.surveyedAt)}</div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <StatusPill label="HV cert" ok={tech.hasHvCert} />
-                  <StatusPill label="AC cert" ok={tech.hasAcCert} />
-                  <StatusPill label="HV meter" ok={tech.hasHvMeter} />
-                  <StatusPill label="OEM warranty" ok={tech.hasOemWarranty} />
-                  {tech.quizTotal !== null && (
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${quizPillClass(tech.quizCorrect, tech.quizTotal)}`}
-                    >
-                      Quiz {tech.quizCorrect ?? 0}/{tech.quizTotal}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 border-t border-arctic-200 pt-3">
-                <LabeledChipRow
-                  label="ASE certs"
-                  chips={tech.aseCerts.length ? tech.aseCerts.map(shortenAseLabel) : ['None']}
-                  tone="neutral"
-                />
-                <LabeledChipRow
-                  label="Vehicles"
-                  chips={tech.vehicles.length ? tech.vehicles.map(shortenVehicleLabel) : ['None']}
-                />
-                <LabeledChipRow
-                  label="Regular work"
-                  chips={tech.regularWork.length ? tech.regularWork.map(shortenRegularWorkLabel) : ['None']}
-                />
-                <LabeledChipRow
-                  label="EV brands"
-                  chips={tech.evBrands.length ? tech.evBrands : ['None listed']}
-                  tone="indigo"
-                />
-                <LabeledChipRow
-                  label="EV/HV repairs"
-                  chips={tech.evHvRepairs.length ? tech.evHvRepairs.map(shortenRepairLabel) : ['None listed']}
-                />
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
+      ) : null}
 
-      {openQuizForTech && (
-        <QuizAnswersModal tech={openQuizForTech} onClose={() => setOpenQuizForTech(null)} />
-      )}
+      <div className="space-y-2">
+        {interiorEmpty && techCards.length === 0 ? (
+          <div className="rounded-xl border border-arctic-200 bg-arctic-50 px-6 py-12 text-center">
+            <p className="text-sm font-medium text-onix-800">No technicians surveyed yet</p>
+            <button
+              type="button"
+              onClick={onSurveyClick}
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-800"
+            >
+              <User className="h-4 w-4" aria-hidden />
+              Survey a technician
+            </button>
+          </div>
+        ) : null}
+        {techCards.map(tech => (
+          <button
+            key={tech.id}
+            type="button"
+            onClick={() => onOpenQuiz(tech)}
+            className="w-full rounded-lg border border-arctic-200 p-4 text-left hover:bg-arctic-50"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-2">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-semibold text-violet-700">
+                  {initialsForName(tech.name)}
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-onix-900">
+                    {tech.name}
+                    {formatYearsDisplay(tech.years) ? (
+                      <span className="ml-1.5 text-xs font-normal text-onix-500">
+                        {formatYearsDisplay(tech.years)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-xs text-onix-500">Surveyed {formatSurveyDate(tech.surveyedAt)}</div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <StatusPill label="HV cert" ok={tech.hasHvCert} />
+                <StatusPill label="AC cert" ok={tech.hasAcCert} />
+                <StatusPill label="HV meter" ok={tech.hasHvMeter} />
+                <StatusPill label="OEM warranty" ok={tech.hasOemWarranty} />
+                {tech.quizTotal !== null && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${quizPillClass(tech.quizCorrect, tech.quizTotal)}`}
+                  >
+                    Quiz {tech.quizCorrect ?? 0}/{tech.quizTotal}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 border-t border-arctic-200 pt-3">
+              <LabeledChipRow
+                label="ASE certs"
+                chips={tech.aseCerts.length ? tech.aseCerts.map(shortenAseLabel) : ['None']}
+                tone="neutral"
+              />
+              <LabeledChipRow
+                label="Vehicles"
+                chips={tech.vehicles.length ? tech.vehicles.map(shortenVehicleLabel) : ['None']}
+              />
+              <LabeledChipRow
+                label="Regular work"
+                chips={tech.regularWork.length ? tech.regularWork.map(shortenRegularWorkLabel) : ['None']}
+              />
+              <LabeledChipRow
+                label="EV brands"
+                chips={tech.evBrands.length ? tech.evBrands : ['None listed']}
+                tone="indigo"
+              />
+              <LabeledChipRow
+                label="EV/HV repairs"
+                chips={tech.evHvRepairs.length ? tech.evHvRepairs.map(shortenRepairLabel) : ['None listed']}
+              />
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+const FILLOUT_TECH_EVAL_FORM_BASE = 'https://forms.fillout.com/t/eCyjERXVBRus'
+
+function buildFilloutTechSurveyUrl(params: {
+  techName: string
+  techEmail: string
+  shopName: string
+  locationId: string
+}): string {
+  const u = new URL(FILLOUT_TECH_EVAL_FORM_BASE)
+  u.searchParams.set('name', params.techName.trim())
+  u.searchParams.set('email', params.techEmail.trim().toLowerCase())
+  u.searchParams.set('shop', params.shopName.trim())
+  u.searchParams.set('shop_id', params.locationId)
+  return u.toString()
+}
+
+function buildTechSurveyEmailHtml(formHref: string): string {
+  const safeHref = escapeHtmlAttr(formHref)
+  return `<p>Hey!</p>
+<p>This is RepairWise, your shop recently joined the largest EV repair network in the country.</p>
+<p>Please take 5 minutes to complete this <a href="${safeHref}" target="_blank" rel="noopener noreferrer">EV Readiness Form</a>.</p>
+<p>This helps us match EV training and jobs to your shop.</p>
+<p>Thanks!<br />RepairWise Team</p>`
+}
+
+function escapeHtmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+}
+
+function SurveyTechnicianModal({
+  open,
+  onClose,
+  locationId,
+  locationName,
+}: {
+  open: boolean
+  onClose: () => void
+  locationId: string
+  locationName: string
+}) {
+  const router = useRouter()
+  const [phase, setPhase] = useState<'form' | 'success'>('form')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [sentName, setSentName] = useState('')
+
+  useEffect(() => {
+    if (!open) {
+      setPhase('form')
+      setName('')
+      setEmail('')
+      setError(null)
+      setSentName('')
+    }
+  }, [open])
+
+  if (!open) return null
+
+  async function submitSend() {
+    setError(null)
+    const n = name.trim()
+    const em = email.trim().toLowerCase()
+    if (!n) {
+      setError('Technician name is required.')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      setError('Enter a valid email address.')
+      return
+    }
+    const formHref = buildFilloutTechSurveyUrl({
+      techName: n,
+      techEmail: em,
+      shopName: locationName,
+      locationId,
+    })
+    const bodyHtml = buildTechSurveyEmailHtml(formHref)
+    setSending(true)
+    try {
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          locationId,
+          to: em,
+          subject: 'RepairWise — EV readiness survey',
+          bodyHtml,
+          fromShopDetail: true,
+          fromShopDetailLabel: 'Technician survey',
+          skipLocationStatusAdvance: true,
+        }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Failed to send email')
+      setSentName(n)
+      setPhase('success')
+      router.refresh()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to send')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+      role="presentation"
+    >
+      <div
+        className="w-full max-w-md rounded-xl bg-white shadow-xl"
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="survey-tech-modal-title"
+      >
+        <div className="border-b border-arctic-200 px-5 py-4">
+          <h4 id="survey-tech-modal-title" className="text-lg font-semibold text-onix-950">
+            Survey a technician
+          </h4>
+          <p className="mt-1 text-sm text-onix-600">
+            We&apos;ll send them a short survey link. You can send to multiple technicians by repeating this.
+          </p>
+        </div>
+
+        {phase === 'form' ? (
+          <div className="space-y-4 px-5 py-4">
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-onix-500">
+                Technician name
+              </label>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Marcus Torres"
+                className="mt-1 w-full rounded-lg border border-arctic-300 px-3 py-2 text-sm text-onix-900 outline-none focus:border-brand-600"
+                autoComplete="name"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-onix-500">
+                Email address
+              </label>
+              <input
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                type="email"
+                placeholder="marcus@shopname.com"
+                className="mt-1 w-full rounded-lg border border-arctic-300 px-3 py-2 text-sm text-onix-900 outline-none focus:border-brand-600"
+                autoComplete="email"
+              />
+            </div>
+            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-arctic-300 px-4 py-2 text-sm font-medium text-onix-800 hover:bg-arctic-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => void submitSend()}
+                className="rounded-lg border border-onix-900 bg-white px-4 py-2 text-sm font-medium text-onix-900 hover:bg-arctic-50 disabled:opacity-50"
+              >
+                {sending ? 'Sending…' : 'Send survey'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4 px-5 py-4">
+            <div
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+              role="status"
+            >
+              Survey link sent to <span className="font-semibold">{sentName}</span>.
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPhase('form')
+                  setName('')
+                  setEmail('')
+                  setError(null)
+                }}
+                className="rounded-lg border border-arctic-300 px-4 py-2 text-sm font-medium text-onix-800 hover:bg-arctic-50"
+              >
+                Send to another
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-onix-900 bg-white px-4 py-2 text-sm font-medium text-onix-900 hover:bg-arctic-50"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        <p className="border-t border-arctic-100 px-5 py-3 text-center text-xs text-onix-500">
+          To survey another technician, just submit again
+        </p>
+      </div>
     </div>
   )
 }
 
+function formatYearsDisplay(years: string | null): string | null {
+  if (!years) return null
+  const t = years.trim()
+  if (!t) return null
+  if (/year/i.test(t)) return t
+  return `${t} years`
+}
+
+/** Fillout webhooks store answers under `responses.questions[]`; map into legacy grid keys for parsing. */
+function mergeFilloutQuestionsIntoResponse(response: Record<string, unknown>): Record<string, unknown> {
+  const questions = response.questions
+  if (!Array.isArray(questions) || questions.length === 0) return response
+  const out: Record<string, unknown> = { ...response }
+  for (const item of questions) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    const name = typeof row.name === 'string' ? row.name.trim() : ''
+    const value = row.value
+    if (!name) continue
+    const set = (key: string) => {
+      if (value == null || value === '') return
+      if (out[key] == null || out[key] === '') out[key] = value
+    }
+    if (name.includes('years of experience') && name.includes('shop')) {
+      set('Years of Experience (Full Time)')
+    } else if (name.includes('OEM warranty') && name.includes('dealership')) {
+      set('Performed OEM Warranty Repairs')
+    } else if (name.includes('vehicles are you comfortable')) {
+      set('Vehicles Comfortable With')
+    } else if (name.includes('work do you perform') && name.includes('regular')) {
+      set('Types of Regular Work')
+    } else if (name === 'ASE Certificates') {
+      set('ASE Certificates')
+    } else if (name.includes('High Voltage (HV) certified')) {
+      set('HV Certified')
+    } else if (name.includes('EPA 609')) {
+      set('AC Certified (EPA 609)')
+    } else if (name.includes('EV brands have you worked')) {
+      set('EV Brands Experience')
+    } else if (name.includes('EV / HV repairs')) {
+      set('EV/HV Repairs Performed')
+    } else if (name.includes('multimeter') && name.includes('HV isolation')) {
+      set('Owns HV Isolation Multimeter/Kit')
+    } else if (name.includes('crank, no start')) {
+      set('Crank No Start - First Steps Answer')
+    } else if (name.includes('AC blowing warm')) {
+      set('AC Blowing Warm - Suspected Issue')
+    } else if (name.includes("window doesn't roll") || name.includes('window does not roll')) {
+      set('Window Inoperative - First Check')
+    } else if (name.includes('left hand mirror')) {
+      set('Mirror Tilt Fault Suspect')
+    }
+  }
+  return out
+}
+
 function parseSurveyCard(survey: RawSurvey): TechSurveyCard {
-  const response =
+  const raw =
     survey.responses && typeof survey.responses === 'object' ? (survey.responses as Record<string, unknown>) : {}
+  const response = mergeFilloutQuestionsIntoResponse(raw)
   const answers = parseQuizAnswers(response)
   const scored = answers.filter(a => a.isCorrect !== null)
   const aseRaw = firstStringFromValues([response['ASE Certificates']])

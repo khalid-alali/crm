@@ -1706,6 +1706,8 @@ export default function ShopDetailTabs({
           {tab === 'capabilities' && (
             <div className="space-y-3">
               <CapabilitiesSection
+                locationId={shop.id}
+                locationName={shop.name ?? 'Shop'}
                 location={{
                   bar_license_number: shop.bar_license_number ?? null,
                   hours_of_operation: shop.hours_of_operation ?? null,

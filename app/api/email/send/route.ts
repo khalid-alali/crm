@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
     bodyHtml,
     body: bodyPlainLegacy,
     fromShopDetail,
+    fromShopDetailLabel,
+    skipLocationStatusAdvance,
     emailTemplateId: emailTemplateIdRaw,
     template,
   } = body as {
@@ -33,6 +35,10 @@ export async function POST(req: NextRequest) {
     body?: string
     template?: string
     fromShopDetail?: boolean
+    /** Appended to activity log line after "Sent from shop detail (...)" */
+    fromShopDetailLabel?: string
+    /** When true, do not advance lead/dormant → contacted or other location status side effects */
+    skipLocationStatusAdvance?: boolean
     emailTemplateId?: string | null
   }
 
@@ -116,8 +122,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: sendError.message }, { status: 500 })
   }
 
+  const shopDetailLabel =
+    typeof fromShopDetailLabel === 'string' && fromShopDetailLabel.trim()
+      ? fromShopDetailLabel.trim()
+      : 'Email'
   const activityBody = fromShopDetail
-    ? `${plainForSend}\n\n— Sent from shop detail (Email)`
+    ? `${plainForSend}\n\n— Sent from shop detail (${shopDetailLabel})`
     : plainForSend
 
   await supabaseAdmin.from('activity_log').insert({
@@ -130,11 +140,13 @@ export async function POST(req: NextRequest) {
     sent_by: session.user?.email ?? 'unknown',
   })
 
-  await supabaseAdmin
-    .from('locations')
-    .update({ status: 'contacted' })
-    .eq('id', locationId)
-    .in('status', ['lead', 'dormant'])
+  if (!skipLocationStatusAdvance) {
+    await supabaseAdmin
+      .from('locations')
+      .update({ status: 'contacted' })
+      .eq('id', locationId)
+      .in('status', ['lead', 'dormant'])
+  }
 
   if (emailTemplateId === SEED_ONBOARDING_TEMPLATE_ID) {
     await supabaseAdmin

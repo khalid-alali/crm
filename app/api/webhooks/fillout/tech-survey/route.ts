@@ -88,6 +88,27 @@ type ResolveResult =
   | { ok: true; locationId: string; matchMethod: string; matchDetail: string }
   | { ok: false; error: string; status: number }
 
+/**
+ * Fillout may POST `{ formId, formName, submission: { questions, ... } }` or send the
+ * submission-shaped object at the root / under `data`. Normalize to one submission record.
+ */
+function extractSubmissionPayload(body: Record<string, unknown>): Record<string, unknown> | null {
+  const wrapped = body.submission
+  if (isRecord(wrapped)) return wrapped
+  const data = body.data
+  if (isRecord(data) && (Array.isArray(data.questions) || data.submissionTime != null)) {
+    return data
+  }
+  if (
+    Array.isArray(body.questions) ||
+    body.submissionTime != null ||
+    typeof body.submissionId === 'string'
+  ) {
+    return body
+  }
+  return null
+}
+
 async function resolveLocation(
   shopIdParam: string,
   shopNameFromForm: string,
@@ -215,9 +236,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const submission = body.submission
+  const submission = extractSubmissionPayload(body)
   if (!isRecord(submission)) {
-    return NextResponse.json({ error: 'Missing submission object' }, { status: 400 })
+    return NextResponse.json(
+      {
+        error:
+          'Missing submission payload: expected body.submission, body.data, or root fields like questions / submissionTime.',
+      },
+      { status: 400 },
+    )
   }
 
   const questionsRaw = submission.questions
