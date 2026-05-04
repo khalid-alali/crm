@@ -40,16 +40,23 @@ function isAuthorizedRequest(req: NextRequest): boolean {
   return secureTokenEquals(provided, expected)
 }
 
-/** Prod-safe logging: keep secrets out of log drains. */
+/** Prod-safe logging: keep secrets out of log drains (incl. Vercel proxy / OIDC headers). */
+const REDACT_HEADER_NAMES = new Set(
+  [
+    'authorization',
+    'cookie',
+    'x-fillout-webhook-secret',
+    'x-vercel-oidc-token',
+    'x-vercel-sc-headers',
+    'x-vercel-proxy-signature',
+  ].map(s => s.toLowerCase()),
+)
+
 function maskSensitiveHeaders(h: Headers): Record<string, string> {
   const out: Record<string, string> = {}
   h.forEach((value, key) => {
     const lower = key.toLowerCase()
-    if (lower === 'authorization') {
-      out[key] = /^Bearer\s+\S+/i.test(value) ? 'Bearer [redacted]' : '[redacted]'
-    } else if (lower === 'x-fillout-webhook-secret') {
-      out[key] = value ? '[redacted]' : ''
-    } else if (lower === 'cookie') {
+    if (REDACT_HEADER_NAMES.has(lower)) {
       out[key] = value ? '[redacted]' : ''
     } else {
       out[key] = value
@@ -72,6 +79,86 @@ function queryForLog(searchParams: URLSearchParams): Record<string, string> {
   return out
 }
 
+/** `console.log` on nested arrays shows `[Array]` — expand for Vercel / server logs. */
+function jsonSnippetForLog(value: unknown, maxChars: number): string {
+  try {
+    const s = JSON.stringify(value)
+    if (s.length <= maxChars) return s
+    return `${s.slice(0, maxChars)}… (+${s.length - maxChars} more chars)`
+  } catch {
+    try {
+      return String(value).slice(0, maxChars)
+    } catch {
+      return '[unprintable]'
+    }
+  }
+}
+
+function questionsExpandedForLog(questions: unknown): unknown {
+  if (!Array.isArray(questions)) return questions
+  return questions.map((q, i) => {
+    if (!isRecord(q)) return { index: i, raw: q }
+    return {
+      id: q.id,
+      name: q.name,
+      type: q.type,
+      valueJson: jsonSnippetForLog(q.value, 2500),
+    }
+  })
+}
+
+function urlParametersExpandedForLog(params: unknown): unknown {
+  if (!Array.isArray(params)) return params
+  return params.map((p, i) => {
+    if (!isRecord(p)) return { index: i, raw: p }
+    return {
+      id: p.id,
+      name: p.name,
+      valueJson: jsonSnippetForLog(p.value, 800),
+    }
+  })
+}
+
+/**
+ * Structured payload for logs (questions + url params expanded as JSON strings).
+ * Avoid logging a raw nested object — runtimes often collapse `questions` to `[Array]`.
+ */
+function webhookPayloadLogSummary(parsed: unknown): Record<string, unknown> {
+  if (!isRecord(parsed)) {
+    return { shape: typeof parsed, snippet: jsonSnippetForLog(parsed, 3000) }
+  }
+  const summary: Record<string, unknown> = {
+    formId: parsed.formId ?? null,
+    formName: parsed.formName ?? null,
+  }
+  if (Array.isArray(parsed.urlParameters)) {
+    summary.rootUrlParameters = urlParametersExpandedForLog(parsed.urlParameters)
+  }
+  const sub = parsed.submission
+  if (isRecord(sub)) {
+    summary.submission = {
+      submissionId: sub.submissionId ?? null,
+      submissionTime: sub.submissionTime ?? null,
+      lastUpdatedAt: sub.lastUpdatedAt ?? null,
+      questionCount: Array.isArray(sub.questions) ? sub.questions.length : 0,
+      questions: questionsExpandedForLog(sub.questions),
+      urlParameters: urlParametersExpandedForLog(sub.urlParameters),
+      quiz: sub.quiz ?? null,
+      calculationCount: Array.isArray(sub.calculations) ? sub.calculations.length : 0,
+    }
+  } else if (Array.isArray(parsed.questions)) {
+    summary.submission = null
+    summary.note = 'Root-level submission shape (no body.submission wrapper)'
+    summary.questionCount = parsed.questions.length
+    summary.questions = questionsExpandedForLog(parsed.questions)
+    summary.urlParameters = urlParametersExpandedForLog(parsed.urlParameters)
+  } else {
+    summary.submission = null
+    summary.topLevelKeys = Object.keys(parsed)
+  }
+  return summary
+}
+
 function logFilloutWebhookUnauthorized(req: NextRequest, bodyLength: number) {
   console.log('[fillout-tech-survey] unauthorized', {
     at: new Date().toISOString(),
@@ -82,14 +169,14 @@ function logFilloutWebhookUnauthorized(req: NextRequest, bodyLength: number) {
   })
 }
 
-function logFilloutWebhookIncoming(req: NextRequest, body: unknown) {
+function logFilloutWebhookIncoming(req: NextRequest, parsed: unknown) {
   console.log('[fillout-tech-survey] incoming', {
     at: new Date().toISOString(),
     method: req.method,
     contentType: req.headers.get('content-type'),
     query: queryForLog(req.nextUrl.searchParams),
     headers: maskSensitiveHeaders(req.headers),
-    body,
+    payload: webhookPayloadLogSummary(parsed),
   })
 }
 
@@ -100,6 +187,41 @@ function normalizeStr(v: unknown): string {
   return ''
 }
 
+/**
+ * Fillout `value` is not always a string (multi-select, choice objects, etc.).
+ * `normalizeStr` on those becomes empty and we incorrectly 400 on "Full Name".
+ */
+function stringFromFilloutValue(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (Array.isArray(value)) {
+    return value
+      .map(stringFromFilloutValue)
+      .filter(Boolean)
+      .join(', ')
+  }
+  if (isRecord(value)) {
+    const direct =
+      stringFromFilloutValue(value.label) ||
+      stringFromFilloutValue(value.text) ||
+      stringFromFilloutValue(value.answer) ||
+      stringFromFilloutValue(value.value)
+    if (direct) return direct
+    const opts = value.selectedOptions
+    if (Array.isArray(opts)) {
+      return opts
+        .map(o => (isRecord(o) ? stringFromFilloutValue(o.label ?? o.value) : stringFromFilloutValue(o)))
+        .filter(Boolean)
+        .join(', ')
+    }
+    const sel = value.selections
+    if (Array.isArray(sel)) return stringFromFilloutValue(sel)
+  }
+  return ''
+}
+
 function valueFromQuestions(
   questions: unknown[],
   byId: Map<string, unknown>,
@@ -107,20 +229,20 @@ function valueFromQuestions(
 ): string {
   const fromId =
     nameNeedle === 'Full Name'
-      ? normalizeStr(byId.get(Q.fullName))
+      ? stringFromFilloutValue(byId.get(Q.fullName))
       : nameNeedle === 'Shop Name'
-        ? normalizeStr(byId.get(Q.shopName))
+        ? stringFromFilloutValue(byId.get(Q.shopName))
         : nameNeedle === 'Phone Number'
-          ? normalizeStr(byId.get(Q.phone))
+          ? stringFromFilloutValue(byId.get(Q.phone))
           : nameNeedle === 'Email'
-            ? normalizeStr(byId.get(Q.email))
+            ? stringFromFilloutValue(byId.get(Q.email))
             : ''
   if (fromId) return fromId
   const lower = nameNeedle.toLowerCase()
   for (const q of questions) {
     if (!isRecord(q)) continue
     const n = normalizeStr(q.name).toLowerCase()
-    if (n === lower) return normalizeStr(q.value)
+    if (n === lower) return stringFromFilloutValue(q.value)
   }
   return ''
 }
@@ -131,10 +253,18 @@ function urlParamMap(urlParameters: unknown): Record<string, string> {
   for (const p of urlParameters) {
     if (!isRecord(p)) continue
     const key = normalizeStr(p.name) || normalizeStr(p.id)
-    const val = normalizeStr(p.value)
+    const val = stringFromFilloutValue(p.value)
     if (key && val) out[key] = val
   }
   return out
+}
+
+/** URL params sometimes appear on the webhook root as well as under `submission`. */
+function mergedUrlParams(body: Record<string, unknown>, submission: Record<string, unknown>): Record<string, string> {
+  return {
+    ...urlParamMap(body.urlParameters),
+    ...urlParamMap(submission.urlParameters),
+  }
 }
 
 type ResolveResult =
@@ -166,7 +296,22 @@ function firstNestedObjectWithQuestions(body: Record<string, unknown>): Record<s
  *
  * Fails when Advanced webhook body is fully custom (no `questions` / `submission` shape).
  */
+function normalizeBodyMaybeStringSubmission(body: Record<string, unknown>): Record<string, unknown> {
+  const sub = body.submission
+  if (typeof sub !== 'string') return body
+  const t = sub.trim()
+  if (!t || (!t.startsWith('{') && !t.startsWith('['))) return body
+  try {
+    const parsed = JSON.parse(t) as unknown
+    if (isRecord(parsed)) return { ...body, submission: parsed }
+  } catch {
+    /* ignore */
+  }
+  return body
+}
+
 function extractSubmissionPayload(body: Record<string, unknown>): Record<string, unknown> | null {
+  const root = normalizeBodyMaybeStringSubmission(body)
   const tryCandidate = (c: unknown): Record<string, unknown> | null => {
     if (!isRecord(c)) return null
     if (isRecord(c.submission) && looksLikeSubmissionRecord(c.submission)) {
@@ -177,13 +322,13 @@ function extractSubmissionPayload(body: Record<string, unknown>): Record<string,
   }
 
   const ordered: unknown[] = [
-    body.submission,
-    body.data,
-    body.payload,
-    body.record,
-    body.result,
-    body.event,
-    Array.isArray(body.submissions) ? body.submissions[0] : null,
+    root.submission,
+    root.data,
+    root.payload,
+    root.record,
+    root.result,
+    root.event,
+    Array.isArray(root.submissions) ? root.submissions[0] : null,
   ]
 
   for (const c of ordered) {
@@ -191,9 +336,9 @@ function extractSubmissionPayload(body: Record<string, unknown>): Record<string,
     if (hit) return hit
   }
 
-  if (looksLikeSubmissionRecord(body)) return body
+  if (looksLikeSubmissionRecord(root)) return root
 
-  const nested = firstNestedObjectWithQuestions(body)
+  const nested = firstNestedObjectWithQuestions(root)
   if (nested) return nested
 
   return null
@@ -369,6 +514,7 @@ export async function POST(req: NextRequest) {
     const receivedTopLevelKeys = Object.keys(body)
     return NextResponse.json(
       {
+        code: 'MISSING_SUBMISSION_PAYLOAD',
         error:
           'Could not find a Fillout submission object (expected `submission` with `questions`, or equivalent).',
         receivedTopLevelKeys,
@@ -388,7 +534,7 @@ export async function POST(req: NextRequest) {
     if (id) byId.set(id, q.value)
   }
 
-  const urlParams = urlParamMap(submission.urlParameters)
+  const urlParams = mergedUrlParams(body, submission)
 
   const techFullName =
     valueFromQuestions(questions, byId, 'Full Name') || urlParams.name || ''
@@ -408,7 +554,13 @@ export async function POST(req: NextRequest) {
 
   if (!techFullName) {
     return NextResponse.json(
-      { error: 'Full Name is required (form field or URL parameter name).' },
+      {
+        code: 'FULL_NAME_REQUIRED',
+        error: 'Full Name is required (form field or URL parameter `name`).',
+        hint:
+          'Prefill the Fillout link with `name=` and `shop_id=` (CRM location UUID). Webhook `submission.urlParameters` must include those when the form does not store the name.',
+        questionCount: questions.length,
+      },
       { status: 400 },
     )
   }
@@ -419,7 +571,10 @@ export async function POST(req: NextRequest) {
     urlParams.shop ?? '',
   )
   if (!resolved.ok) {
-    return NextResponse.json({ error: resolved.error }, { status: resolved.status })
+    return NextResponse.json(
+      { code: 'LOCATION_UNRESOLVED', error: resolved.error },
+      { status: resolved.status },
+    )
   }
 
   const { data: locationRow, error: locErr } = await supabaseAdmin
