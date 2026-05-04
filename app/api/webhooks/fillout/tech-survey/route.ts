@@ -40,6 +40,59 @@ function isAuthorizedRequest(req: NextRequest): boolean {
   return secureTokenEquals(provided, expected)
 }
 
+/** Prod-safe logging: keep secrets out of log drains. */
+function maskSensitiveHeaders(h: Headers): Record<string, string> {
+  const out: Record<string, string> = {}
+  h.forEach((value, key) => {
+    const lower = key.toLowerCase()
+    if (lower === 'authorization') {
+      out[key] = /^Bearer\s+\S+/i.test(value) ? 'Bearer [redacted]' : '[redacted]'
+    } else if (lower === 'x-fillout-webhook-secret') {
+      out[key] = value ? '[redacted]' : ''
+    } else if (lower === 'cookie') {
+      out[key] = value ? '[redacted]' : ''
+    } else {
+      out[key] = value
+    }
+  })
+  return out
+}
+
+function queryForLog(searchParams: URLSearchParams): Record<string, string> {
+  const out: Record<string, string> = {}
+  searchParams.forEach((value, key) => {
+    if (key === 'token' && value.length > 12) {
+      out[key] = `${value.slice(0, 4)}…${value.slice(-4)} (len ${value.length})`
+    } else if (key === 'token') {
+      out[key] = `[len ${value.length}]`
+    } else {
+      out[key] = value
+    }
+  })
+  return out
+}
+
+function logFilloutWebhookUnauthorized(req: NextRequest, bodyLength: number) {
+  console.log('[fillout-tech-survey] unauthorized', {
+    at: new Date().toISOString(),
+    method: req.method,
+    query: queryForLog(req.nextUrl.searchParams),
+    headers: maskSensitiveHeaders(req.headers),
+    bodyLength,
+  })
+}
+
+function logFilloutWebhookIncoming(req: NextRequest, body: unknown) {
+  console.log('[fillout-tech-survey] incoming', {
+    at: new Date().toISOString(),
+    method: req.method,
+    contentType: req.headers.get('content-type'),
+    query: queryForLog(req.nextUrl.searchParams),
+    headers: maskSensitiveHeaders(req.headers),
+    body,
+  })
+}
+
 function normalizeStr(v: unknown): string {
   if (v == null) return ''
   if (typeof v === 'string') return v.trim()
@@ -88,24 +141,61 @@ type ResolveResult =
   | { ok: true; locationId: string; matchMethod: string; matchDetail: string }
   | { ok: false; error: string; status: number }
 
+function looksLikeSubmissionRecord(r: Record<string, unknown>): boolean {
+  if (Array.isArray(r.questions)) return true
+  if (r.submissionTime != null) return true
+  if (typeof r.submissionId === 'string' && r.submissionId.length > 0) return true
+  return false
+}
+
+/** If Fillout wraps the payload one level down (varies by product / webhook version). */
+function firstNestedObjectWithQuestions(body: Record<string, unknown>): Record<string, unknown> | null {
+  for (const v of Object.values(body)) {
+    if (!isRecord(v)) continue
+    if (looksLikeSubmissionRecord(v)) return v
+    if (isRecord(v.submission) && looksLikeSubmissionRecord(v.submission)) {
+      return v.submission as Record<string, unknown>
+    }
+  }
+  return null
+}
+
 /**
- * Fillout may POST `{ formId, formName, submission: { questions, ... } }` or send the
- * submission-shaped object at the root / under `data`. Normalize to one submission record.
+ * Normalize Fillout webhook JSON to a single `Submission` record (same idea as GET
+ * `/forms/{formId}/submissions/{id}` → `{ submission: { ... } }`).
+ *
+ * Fails when Advanced webhook body is fully custom (no `questions` / `submission` shape).
  */
 function extractSubmissionPayload(body: Record<string, unknown>): Record<string, unknown> | null {
-  const wrapped = body.submission
-  if (isRecord(wrapped)) return wrapped
-  const data = body.data
-  if (isRecord(data) && (Array.isArray(data.questions) || data.submissionTime != null)) {
-    return data
+  const tryCandidate = (c: unknown): Record<string, unknown> | null => {
+    if (!isRecord(c)) return null
+    if (isRecord(c.submission) && looksLikeSubmissionRecord(c.submission)) {
+      return c.submission as Record<string, unknown>
+    }
+    if (looksLikeSubmissionRecord(c)) return c
+    return null
   }
-  if (
-    Array.isArray(body.questions) ||
-    body.submissionTime != null ||
-    typeof body.submissionId === 'string'
-  ) {
-    return body
+
+  const ordered: unknown[] = [
+    body.submission,
+    body.data,
+    body.payload,
+    body.record,
+    body.result,
+    body.event,
+    Array.isArray(body.submissions) ? body.submissions[0] : null,
+  ]
+
+  for (const c of ordered) {
+    const hit = tryCandidate(c)
+    if (hit) return hit
   }
+
+  if (looksLikeSubmissionRecord(body)) return body
+
+  const nested = firstNestedObjectWithQuestions(body)
+  if (nested) return nested
+
   return null
 }
 
@@ -225,23 +315,65 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  const rawText = await req.text()
+
   if (!isAuthorizedRequest(req)) {
+    logFilloutWebhookUnauthorized(req, rawText.length)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: Record<string, unknown>
+  let raw: unknown
+  if (!rawText.trim()) {
+    logFilloutWebhookIncoming(req, null)
+    return NextResponse.json({ error: 'Empty JSON body' }, { status: 400 })
+  }
   try {
-    body = (await req.json()) as Record<string, unknown>
+    raw = JSON.parse(rawText) as unknown
   } catch {
+    console.log('[fillout-tech-survey] invalid JSON', {
+      at: new Date().toISOString(),
+      method: req.method,
+      query: queryForLog(req.nextUrl.searchParams),
+      headers: maskSensitiveHeaders(req.headers),
+      bodyPreview: rawText.slice(0, 4000),
+    })
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  logFilloutWebhookIncoming(req, raw)
+
+  let body: Record<string, unknown>
+  if (Array.isArray(raw)) {
+    if (raw.length === 1 && isRecord(raw[0])) {
+      body = raw[0] as Record<string, unknown>
+    } else {
+      return NextResponse.json(
+        {
+          error: 'JSON body must be one object (or a single-element array of an object).',
+          received: `array length ${raw.length}`,
+        },
+        { status: 400 },
+      )
+    }
+  } else if (isRecord(raw)) {
+    body = raw
+  } else {
+    return NextResponse.json(
+      { error: 'JSON body must be a JSON object', receivedType: typeof raw },
+      { status: 400 },
+    )
   }
 
   const submission = extractSubmissionPayload(body)
   if (!isRecord(submission)) {
+    const receivedTopLevelKeys = Object.keys(body)
     return NextResponse.json(
       {
         error:
-          'Missing submission payload: expected body.submission, body.data, or root fields like questions / submissionTime.',
+          'Could not find a Fillout submission object (expected `submission` with `questions`, or equivalent).',
+        receivedTopLevelKeys,
+        hint:
+          'In Fillout → Integrate → Webhook: if Advanced view customizes the POST body, reset to the default payload or include the standard `submission` + `questions` shape. Test webhooks from Fillout must still include that structure.',
       },
       { status: 400 },
     )
