@@ -20,6 +20,14 @@ function parseNullableNumber(raw: unknown): number | null | undefined {
   return n
 }
 
+function parseNullableInt(raw: unknown): number | null | undefined {
+  if (raw === undefined) return undefined
+  if (raw === null || raw === '') return null
+  const n = Number.parseInt(String(raw), 10)
+  if (!Number.isFinite(n)) return undefined
+  return n
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await getAppSession()
@@ -73,6 +81,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     'assigned_to',
     'source',
     'notes',
+    'vf_onboarding_name',
+    'vf_onboarding_status',
+    'vf_go_live_week',
+    'routable_id',
+    'routable_payment_method_count',
+    'routable_status',
+    'routable_account_last4',
+    'last_routable_link_sent_at',
+    'adas_calibration_equipped',
     'shop_type',
     'shop_business_types',
     'high_priority_target',
@@ -148,6 +165,67 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Warranty labor rate cannot be negative' }, { status: 400 })
     }
     fields.warranty_labor_rate = n
+  }
+
+  if ('vf_onboarding_name' in fields) {
+    const v = fields.vf_onboarding_name
+    fields.vf_onboarding_name =
+      v == null || v === '' ? null : String(v).trim() || null
+  }
+  if ('vf_onboarding_status' in fields) {
+    const v = fields.vf_onboarding_status
+    fields.vf_onboarding_status =
+      v == null || v === '' ? null : String(v).trim() || null
+  }
+  if ('vf_go_live_week' in fields) {
+    const v = fields.vf_go_live_week
+    if (v == null || v === '') {
+      fields.vf_go_live_week = null
+    } else {
+      const s = String(v).trim()
+      const t = Date.parse(s.includes('T') ? s : `${s}T12:00:00`)
+      if (Number.isNaN(t)) {
+        return NextResponse.json({ error: 'Invalid vf_go_live_week' }, { status: 400 })
+      }
+      fields.vf_go_live_week = new Date(t).toISOString().slice(0, 10)
+    }
+  }
+  if ('routable_id' in fields) {
+    const v = fields.routable_id
+    fields.routable_id = v == null || v === '' ? null : String(v).trim() || null
+  }
+  if ('routable_payment_method_count' in fields) {
+    const n = parseNullableInt(fields.routable_payment_method_count)
+    if (n === undefined) {
+      return NextResponse.json({ error: 'Invalid routable_payment_method_count' }, { status: 400 })
+    }
+    if (n !== null && n < 0) {
+      return NextResponse.json({ error: 'routable_payment_method_count cannot be negative' }, { status: 400 })
+    }
+    fields.routable_payment_method_count = n
+  }
+  if ('routable_status' in fields) {
+    const v = fields.routable_status
+    fields.routable_status = v == null || v === '' ? null : String(v).trim() || null
+  }
+  if ('routable_account_last4' in fields) {
+    const v = fields.routable_account_last4
+    fields.routable_account_last4 = v == null || v === '' ? null : String(v).trim().slice(0, 32) || null
+  }
+  if ('last_routable_link_sent_at' in fields) {
+    const v = fields.last_routable_link_sent_at
+    if (v == null || v === '') {
+      fields.last_routable_link_sent_at = null
+    } else {
+      const t = Date.parse(String(v))
+      if (Number.isNaN(t)) {
+        return NextResponse.json({ error: 'Invalid last_routable_link_sent_at' }, { status: 400 })
+      }
+      fields.last_routable_link_sent_at = new Date(t).toISOString()
+    }
+  }
+  if ('adas_calibration_equipped' in fields) {
+    fields.adas_calibration_equipped = Boolean(fields.adas_calibration_equipped)
   }
 
   const nextStatus = 'status' in fields ? String(fields.status) : prevStatus

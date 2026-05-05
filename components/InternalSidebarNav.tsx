@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChartColumn, CarFront, House, ListTodo, Mail, MapPinned, Store, Users } from 'lucide-react'
+import { BatteryCharging, ChartColumn, CarFront, House, ListTodo, Mail, MapPinned, Store, Users } from 'lucide-react'
 import GlobalSearch from '@/components/GlobalSearch'
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/shops', label: 'Shops', icon: Store },
   { href: '/tesla', label: 'Tesla', icon: CarFront },
+  { href: '/vinfast', label: 'VinFast', icon: BatteryCharging },
   { href: '/accounts', label: 'Accounts', icon: Users },
   { href: '/map', label: 'Map', icon: MapPinned },
   { href: '/analytics', label: 'Analytics', icon: ChartColumn },

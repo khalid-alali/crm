@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Ban, Check, FileText, Link2, Loader2, Mail, Pencil, Sparkles, Trash2, X } from 'lucide-react'
+import { Ban, Check, ChevronRight, FileText, Link2, Loader2, Mail, Pencil, Sparkles, Trash2, X } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import DeleteShopButton from '@/components/DeleteShopButton'
 import EmailModal from '@/components/EmailModal'
@@ -23,13 +23,13 @@ import TaskFormModal from '@/components/tasks/TaskFormModal'
 import TaskRow from '@/components/tasks/TaskRow'
 import type { TaskWithLocation } from '@/lib/types/task'
 import { isTaskResolvedInLast30Days } from '@/lib/tasks/date-groups'
+import { getProgramConfig, VINFAST_PROGRAM_ID } from '@/lib/program-config'
 
-const PROGRAMS = [
-  { key: 'multi_drive', label: 'Multi-Drive' },
-  { key: 'ev_program', label: 'EV Program' },
-  { key: 'oem_warranty', label: 'OEM Warranty' },
-]
-const PROGRAM_STATUSES = ['not_enrolled', 'pending_activation', 'active', 'suspended', 'terminated']
+const PROGRAM_CARD_CONFIG = [
+  { key: 'vinfast', enrollmentKey: 'oem_warranty', label: 'VinFast OEM' },
+  { key: 'tesla', enrollmentKey: 'ev_program', label: 'Tesla / EV' },
+  { key: 'multidrive', enrollmentKey: 'multi_drive', label: 'Multidrive' },
+] as const
 const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive']
 const BASE_TABS = ['activity', 'tasks', 'contracts', 'programs', 'capabilities'] as const
 type BaseTabKey = (typeof BASE_TABS)[number]
@@ -75,6 +75,36 @@ type ShopStatusCachePayload = {
   synced_at: string | null
 }
 
+type OwnerTag = 'fl' | 'vf' | 'shop'
+type PhaseNumber = 1 | 2 | 3 | 4 | 5
+
+type ChecklistRow = {
+  item_key: string
+  completed_at: string | null
+  completed_by_user_id?: string | null
+  notes?: string | null
+}
+
+type EnrollmentChecklistItem = {
+  key: string
+  label: string
+  owner: OwnerTag
+  phase: PhaseNumber
+  phaseLabel: string
+  order: number
+  description?: string
+  actionLabel?: string
+  completedAt: string | null
+  completedBy: string | null
+}
+
+type LegacyProgramEnrollment = {
+  program: string
+  status: string
+  enrolled_at?: string | null
+  updated_at?: string | null
+}
+
 function fmtDate(value: string | null | undefined): string {
   if (!value) return '—'
   const dt = new Date(value)
@@ -114,6 +144,19 @@ function activityBadge(value: string | null | undefined): string {
   const days = Math.floor((Date.now() - ts) / 86400000)
   if (days <= 0) return 'Today'
   return `${days}d ago`
+}
+
+function formatShortDate(value: string | null | undefined): string {
+  if (!value) return '—'
+  const dt = new Date(value)
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function ownerLabel(owner: OwnerTag): string {
+  if (owner === 'vf') return 'VF'
+  if (owner === 'shop') return 'Shop'
+  return 'FL'
 }
 
 /** `location_enrichment` from shop detail query (array or single row). */
@@ -158,17 +201,16 @@ export default function ShopDetailTabs({
   const [operationalStatus, setOperationalStatus] = useState<string | null>(null)
   const [operationalStatusLoading, setOperationalStatusLoading] = useState(false)
   const [assignedTo, setAssignedTo] = useState(() => normalizeBdrAssignedTo(shop.assigned_to))
-  const [programStatuses, setProgramStatuses] = useState<Record<string, string>>(
-    Object.fromEntries(
-      PROGRAMS.map(program => {
-        const e = shop.program_enrollments?.find((enrollment: any) => enrollment.program === program.key)
-        return [program.key, e?.status ?? 'not_enrolled']
-      }),
-    ),
-  )
+  const [selectedProgram, setSelectedProgram] = useState<(typeof PROGRAM_CARD_CONFIG)[number]['key']>('vinfast')
+  const [autoCollapseDonePhases, setAutoCollapseDonePhases] = useState(true)
+  const [showCompletedItems, setShowCompletedItems] = useState(false)
+  const [phaseOpenOverrides, setPhaseOpenOverrides] = useState<Record<number, boolean>>({})
+  const [phaseShowCompletedOverrides, setPhaseShowCompletedOverrides] = useState<Record<number, boolean>>({})
+  const [checklistBusyItem, setChecklistBusyItem] = useState<string | null>(null)
+  const [enrollingProgram, setEnrollingProgram] = useState<string | null>(null)
+  const [unenrollingVinfast, setUnenrollingVinfast] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
-  const [savingPrograms, setSavingPrograms] = useState(false)
   const [showIntroModal, setShowIntroModal] = useState(false)
   const [showSendContractModal, setShowSendContractModal] = useState(false)
   const [sendContractModalDraft, setSendContractModalDraft] = useState<SendContractDraftPrefill | null>(null)
@@ -256,6 +298,11 @@ export default function ShopDetailTabs({
     setInlineEdit(null)
     setInlineError(null)
     setEnrichFeedback(null)
+    setSelectedProgram('vinfast')
+    setAutoCollapseDonePhases(true)
+    setShowCompletedItems(false)
+    setPhaseOpenOverrides({})
+    setPhaseShowCompletedOverrides({})
   }, [
     shop.id,
     shop.assigned_to,
@@ -376,6 +423,119 @@ export default function ShopDetailTabs({
   )
 
   const visibleTabs = useMemo((): TabKey[] => [...BASE_TABS, 'admin'], [])
+  const legacyProgramByKey = useMemo(() => {
+    const rows = (Array.isArray(shop.program_enrollments) ? shop.program_enrollments : []) as LegacyProgramEnrollment[]
+    return new Map<string, LegacyProgramEnrollment>(rows.map(row => [String(row.program), row]))
+  }, [shop.program_enrollments])
+  const vinfastEnrollment = useMemo(() => {
+    const rows = Array.isArray(shop.location_program_enrollments) ? shop.location_program_enrollments : []
+    return rows.find((row: any) => row?.program_id === VINFAST_PROGRAM_ID) ?? null
+  }, [shop.location_program_enrollments])
+  const vinfastChecklistRows = useMemo((): ChecklistRow[] => {
+    const rows = Array.isArray(vinfastEnrollment?.program_enrollment_checklist)
+      ? vinfastEnrollment.program_enrollment_checklist
+      : []
+    return rows.map((row: any) => ({
+      item_key: String(row.item_key ?? ''),
+      completed_at: row.completed_at ?? null,
+      completed_by_user_id: row.completed_by_user_id ?? null,
+      notes: row.notes ?? null,
+    }))
+  }, [vinfastEnrollment])
+  const vinfastChecklistItems = useMemo((): EnrollmentChecklistItem[] => {
+    const config = getProgramConfig(VINFAST_PROGRAM_ID)
+    const rowsByKey = new Map(vinfastChecklistRows.map(row => [row.item_key, row]))
+    const checklistAliases: Record<string, string[]> = {
+      technical_training_scheduled: ['vf_technical_training_scheduled'],
+    }
+    return (config?.checklist ?? [])
+      .filter(item => item.phase && item.phaseLabel && item.owner)
+      .map(item => {
+        const row =
+          rowsByKey.get(item.key) ??
+          (checklistAliases[item.key] ?? []).map(alias => rowsByKey.get(alias)).find(Boolean)
+        const routablePaymentMethodCount = Number(shop.routable_payment_method_count ?? 0)
+        const routableLinked =
+          item.key === 'routable_payout_method_linked' &&
+          Number.isFinite(routablePaymentMethodCount) &&
+          routablePaymentMethodCount > 0
+        return {
+          key: item.key,
+          label: item.label,
+          owner: item.owner as OwnerTag,
+          phase: item.phase as PhaseNumber,
+          phaseLabel: item.phaseLabel as string,
+          order: item.order ?? 999,
+          description: item.description,
+          actionLabel: item.actionLabel,
+          completedAt: routableLinked ? new Date().toISOString() : row?.completed_at ?? null,
+          completedBy: routableLinked ? 'auto' : row?.completed_by_user_id ?? null,
+        }
+      })
+      .sort((a, b) => (a.phase === b.phase ? a.order - b.order : a.phase - b.phase))
+  }, [shop.routable_status, vinfastChecklistRows])
+  const vinfastPhaseNumbers: PhaseNumber[] = [1, 2, 3, 4, 5]
+  const vinfastPhases = useMemo(() => {
+    return vinfastPhaseNumbers.map(phase => {
+      const items = vinfastChecklistItems.filter(item => item.phase === phase)
+      const done = items.filter(item => Boolean(item.completedAt)).length
+      return {
+        phase,
+        title: items[0]?.phaseLabel ?? `Phase ${phase}`,
+        items,
+        done,
+        total: items.length,
+      }
+    })
+  }, [vinfastChecklistItems])
+  const activePhase = useMemo(() => {
+    const next = vinfastPhases.find(phase => phase.done < phase.total)
+    return next?.phase ?? 5
+  }, [vinfastPhases])
+  const enrolledProgramsCount = useMemo(() => {
+    return PROGRAM_CARD_CONFIG.filter(program => {
+      if (program.key === 'vinfast') return Boolean(vinfastEnrollment)
+      const enrollment = legacyProgramByKey.get(program.enrollmentKey)
+      return enrollment && enrollment.status !== 'not_enrolled'
+    }).length
+  }, [legacyProgramByKey, vinfastEnrollment])
+  const programCardStats = useMemo(() => {
+    return PROGRAM_CARD_CONFIG.map(program => {
+      const enrollment = legacyProgramByKey.get(program.enrollmentKey)
+      const enrolled = Boolean(enrollment && enrollment.status !== 'not_enrolled')
+      if (program.key === 'vinfast') {
+        const total = vinfastChecklistItems.length
+        const completed = vinfastChecklistItems.filter(item => item.completedAt).length
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+        return {
+          ...program,
+          enrolled: Boolean(vinfastEnrollment),
+          enrolledAt: vinfastEnrollment?.enrolled_at ?? vinfastEnrollment?.updated_at ?? null,
+          completed,
+          total,
+          pct,
+          statusBadge:
+            !vinfastEnrollment ? null : completed >= total && total > 0 ? 'Active' : 'In progress',
+        }
+      }
+      const total = 4
+      const completed = enrolled ? (enrollment?.status === 'active' ? total : 1) : 0
+      const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+      return {
+        ...program,
+        enrolled,
+        enrolledAt: enrollment?.enrolled_at ?? enrollment?.updated_at ?? null,
+        completed,
+        total,
+        pct,
+        statusBadge: !enrolled ? null : enrollment?.status === 'active' ? 'Active' : 'In progress',
+      }
+    })
+  }, [legacyProgramByKey, vinfastChecklistItems, vinfastEnrollment])
+  const selectedProgramStats = useMemo(
+    () => programCardStats.find(program => program.key === selectedProgram) ?? programCardStats[0],
+    [programCardStats, selectedProgram],
+  )
 
   useEffect(() => {
     if (tab !== 'admin') return
@@ -612,17 +772,71 @@ export default function ShopDetailTabs({
     }
   }
 
-  async function savePrograms() {
-    setSavingPrograms(true)
-    for (const [program, pStatus] of Object.entries(programStatuses)) {
-      await fetch(`/api/locations/${shop.id}/programs`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ program, status: pStatus }),
-      })
+  async function enrollProgram(programKey: string) {
+    setEnrollingProgram(programKey)
+    try {
+      if (programKey === VINFAST_PROGRAM_ID) {
+        const res = await fetch('/api/vinfast/enrollments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ location_id: shop.id }),
+        })
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) throw new Error(data.error ?? 'Could not enroll in VinFast')
+      } else {
+        await fetch(`/api/locations/${shop.id}/programs`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ program: programKey, status: 'pending_activation' }),
+        })
+      }
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not enroll program')
+    } finally {
+      setEnrollingProgram(null)
     }
-    setSavingPrograms(false)
-    router.refresh()
+  }
+
+  async function unenrollVinfastProgram() {
+    if (!vinfastEnrollment?.id) return
+    if (!window.confirm('Unenroll this shop from VinFast? Checklist history will be preserved.')) return
+    const reasonInput = window.prompt('Optional reason for unenrollment (leave blank to skip):', '')
+    const reason = reasonInput == null ? null : reasonInput.trim() || null
+
+    setUnenrollingVinfast(true)
+    try {
+      const res = await fetch(`/api/vinfast/enrollments/${vinfastEnrollment.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not unenroll VinFast')
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not unenroll VinFast')
+    } finally {
+      setUnenrollingVinfast(false)
+    }
+  }
+
+  async function toggleVinfastChecklistItem(item: EnrollmentChecklistItem, completed: boolean) {
+    if (!vinfastEnrollment?.id) return
+    setChecklistBusyItem(item.key)
+    try {
+      const res = await fetch(`/api/vinfast/enrollments/${vinfastEnrollment.id}/checklist`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_key: item.key, completed }),
+      })
+      if (!res.ok) throw new Error('Could not update checklist item')
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not update checklist item')
+    } finally {
+      setChecklistBusyItem(null)
+    }
   }
 
   async function addNote() {
@@ -1464,6 +1678,15 @@ export default function ShopDetailTabs({
                   }`}
                 >
                   {t}
+                  {t === 'programs' ? (
+                    <span
+                      className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-[11px] ${
+                        tab === t ? 'bg-brand-100 text-brand-800' : 'bg-arctic-100 text-onix-600'
+                      }`}
+                    >
+                      {enrolledProgramsCount}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -1680,26 +1903,332 @@ export default function ShopDetailTabs({
           )}
 
           {tab === 'programs' && (
-            <div className="max-w-sm space-y-3">
-              {PROGRAMS.map(program => (
-                <div key={program.key} className="flex items-center justify-between">
-                  <span className="w-36 text-sm font-medium">{program.label}</span>
-                  <select value={programStatuses[program.key]} onChange={e => setProgramStatuses(ps => ({ ...ps, [program.key]: e.target.value }))} className="rounded border border-arctic-300 px-2 py-1 text-sm">
-                    {PROGRAM_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-                  </select>
-                </div>
-              ))}
-              <div className="flex items-center justify-between">
-                <span className="w-36 text-sm font-medium">VinFast Status</span>
-                <span className="text-sm text-onix-700">
-                  {operationalStatusLoading
-                    ? 'Loading...'
-                    : operationalStatus ?? '—'}
-                </span>
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                {programCardStats.map(card => (
+                  <button
+                    key={card.key}
+                    type="button"
+                    onClick={() => setSelectedProgram(card.key)}
+                    className={`rounded-lg border p-4 text-left transition ${
+                      selectedProgram === card.key
+                        ? 'border-brand-500 bg-white shadow-[0_0_0_3px_rgba(99,91,255,0.10)]'
+                        : 'border-arctic-200 bg-white hover:border-arctic-300'
+                    } ${card.enrolled ? '' : 'opacity-55'}`}
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-onix-900">{card.label}</p>
+                        <p className="text-xs text-onix-500">
+                          {card.enrolled ? `Enrolled · ${formatShortDate(card.enrolledAt)}` : 'Not enrolled'}
+                        </p>
+                      </div>
+                      {card.enrolled ? (
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`rounded px-2 py-0.5 text-[11px] font-medium ${
+                              card.statusBadge === 'Active'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {card.statusBadge}
+                          </span>
+                          {card.key === 'vinfast' && selectedProgram === 'vinfast' && (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation()
+                                void unenrollVinfastProgram()
+                              }}
+                              disabled={unenrollingVinfast}
+                              className="rounded border border-red-300 px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {unenrollingVinfast ? 'Unenrolling…' : 'Unenroll'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            void enrollProgram(card.enrollmentKey)
+                          }}
+                          className="rounded border border-arctic-300 px-2 py-0.5 text-[11px] font-medium text-onix-700 hover:bg-arctic-50"
+                        >
+                          {enrollingProgram === card.enrollmentKey ? 'Enrolling…' : '+ Enroll'}
+                        </button>
+                      )}
+                    </div>
+                    {card.enrolled ? (
+                      <div className="flex items-center gap-2 text-xs text-onix-500">
+                        <span>
+                          {card.completed} / {card.total}
+                        </span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded bg-arctic-100">
+                          <span
+                            className={`block h-full ${
+                              card.statusBadge === 'Active' ? 'bg-emerald-600' : 'bg-brand-600'
+                            }`}
+                            style={{ width: `${card.pct}%` }}
+                          />
+                        </div>
+                        <span>{card.pct}%</span>
+                      </div>
+                    ) : null}
+                  </button>
+                ))}
               </div>
-              <button onClick={savePrograms} disabled={savingPrograms} className="rounded bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-60">
-                {savingPrograms ? 'Saving…' : 'Save Programs'}
-              </button>
+
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-onix-700">VinFast Status</span>
+                <span className="text-onix-600">{operationalStatusLoading ? 'Loading…' : operationalStatus ?? '—'}</span>
+              </div>
+
+              {selectedProgram === 'vinfast' ? (
+                <div className="space-y-3 rounded-lg border border-arctic-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-onix-950">VinFast onboarding checklist</h3>
+                      <p className="text-sm text-onix-500">
+                        {selectedProgramStats?.completed ?? 0} of {selectedProgramStats?.total ?? 0} complete · started{' '}
+                        {formatShortDate(selectedProgramStats?.enrolledAt ?? null)} · est. activation{' '}
+                        {formatShortDate(shop.vf_go_live_week ?? null)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-onix-600">
+                      <label className="inline-flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={showCompletedItems}
+                          onChange={e => setShowCompletedItems(e.target.checked)}
+                        />
+                        Show completed items
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs text-onix-500">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">FL</span>
+                      Fixlane team
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">VF</span>
+                      VinFast team
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Shop</span>
+                      Shop owner
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {vinfastPhases.map(phase => {
+                      const isDone = phase.total > 0 && phase.done === phase.total
+                      const isActive = !isDone && phase.phase === activePhase
+                      const pct = phase.total > 0 ? Math.round((phase.done / phase.total) * 100) : 0
+                      const isExpanded =
+                        !autoCollapseDonePhases ||
+                        (isDone ? false : isActive) ||
+                        phaseOpenOverrides[phase.phase] === true
+                      const completedItems = phase.items.filter(item => Boolean(item.completedAt))
+                      const scheduledTrainingDone = phase.items.some(
+                        item =>
+                          item.key === 'technical_training_scheduled' && Boolean(item.completedAt),
+                      )
+                      const openItems = phase.items.filter(item => {
+                        if (item.completedAt) return false
+                        if (item.key === 'technical_training_completed' && !scheduledTrainingDone) {
+                          return false
+                        }
+                        return true
+                      })
+                      const visibleCompleted = showCompletedItems || phaseShowCompletedOverrides[phase.phase]
+
+                      return (
+                        <div key={phase.phase} className="overflow-hidden rounded-lg border border-arctic-200">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPhaseOpenOverrides(prev => ({ ...prev, [phase.phase]: !isExpanded }))
+                            }
+                            className="flex w-full items-center gap-3 bg-arctic-50 px-4 py-3 text-left"
+                          >
+                            <span
+                              className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
+                                isDone
+                                  ? 'bg-emerald-600 text-white'
+                                  : isActive
+                                    ? 'bg-brand-600 text-white'
+                                    : 'bg-arctic-100 text-onix-600'
+                              }`}
+                            >
+                              {isDone ? '✓' : phase.phase}
+                            </span>
+                            <span className="flex-1 text-sm font-semibold text-onix-900">
+                              Phase {phase.phase} · {phase.title}
+                            </span>
+                            <span className="h-1 w-[90px] overflow-hidden rounded bg-arctic-100">
+                              <span
+                                className={`block h-full ${isDone ? 'bg-emerald-600' : 'bg-brand-600'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </span>
+                            <span className="w-14 text-right text-xs text-onix-500">
+                              {phase.done} / {phase.total}
+                            </span>
+                            <ChevronRight
+                              className={`h-4 w-4 text-onix-500 transition ${isExpanded ? 'rotate-90' : ''}`}
+                              aria-hidden
+                            />
+                          </button>
+                          {isExpanded ? (
+                            <div className="border-t border-arctic-200">
+                              {!showCompletedItems && completedItems.length > 0 && !visibleCompleted ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPhaseShowCompletedOverrides(prev => ({ ...prev, [phase.phase]: true }))
+                                  }
+                                  className="w-full px-4 py-2 text-center text-xs text-brand-700 hover:bg-arctic-50"
+                                >
+                                  ↓ Show {completedItems.length} completed items
+                                </button>
+                              ) : null}
+
+                              {(visibleCompleted ? completedItems : []).map(item => (
+                                <div key={item.key} className="grid grid-cols-[28px_1fr_auto] gap-2 border-t border-arctic-100 px-4 py-2.5 first:border-t-0">
+                                  {item.key === 'routable_payout_method_linked' ? (
+                                    <span className="mt-0.5 grid h-[18px] w-[18px] place-items-center rounded border border-emerald-600 bg-emerald-600 text-xs text-white">
+                                      ✓
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => void toggleVinfastChecklistItem(item, false)}
+                                      disabled={checklistBusyItem === item.key}
+                                      className="mt-0.5 grid h-[18px] w-[18px] place-items-center rounded border border-emerald-600 bg-emerald-600 text-xs text-white"
+                                    >
+                                      ✓
+                                    </button>
+                                  )}
+                                  <div>
+                                    <div className="text-sm text-onix-500 line-through">
+                                      <span
+                                        className={`mr-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                          item.owner === 'fl'
+                                            ? 'bg-brand-100 text-brand-700'
+                                            : item.owner === 'vf'
+                                              ? 'bg-amber-100 text-amber-700'
+                                              : 'bg-emerald-100 text-emerald-700'
+                                        }`}
+                                      >
+                                        {ownerLabel(item.owner)}
+                                      </span>
+                                      {item.label}
+                                    </div>
+                                    {item.description ? <div className="text-xs text-onix-500">{item.description}</div> : null}
+                                  </div>
+                                  <div className="text-xs text-onix-500">
+                                    {formatShortDate(item.completedAt)} · {item.completedBy ?? 'auto'}
+                                  </div>
+                                </div>
+                              ))}
+
+                              {openItems.map(item => (
+                                <div key={item.key} className="grid grid-cols-[28px_1fr_auto] gap-2 border-t border-arctic-100 px-4 py-2.5 first:border-t-0">
+                                  {item.key === 'routable_payout_method_linked' ? (
+                                    <span className="mt-0.5 h-[18px] w-[18px] rounded border border-arctic-300 bg-arctic-50" />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => void toggleVinfastChecklistItem(item, true)}
+                                      disabled={checklistBusyItem === item.key}
+                                      className="mt-0.5 h-[18px] w-[18px] rounded border border-arctic-300 bg-white"
+                                    />
+                                  )}
+                                  <div>
+                                    <div className="text-sm text-onix-900">
+                                      <span
+                                        className={`mr-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                          item.owner === 'fl'
+                                            ? 'bg-brand-100 text-brand-700'
+                                            : item.owner === 'vf'
+                                              ? 'bg-amber-100 text-amber-700'
+                                              : 'bg-emerald-100 text-emerald-700'
+                                        }`}
+                                      >
+                                        {ownerLabel(item.owner)}
+                                      </span>
+                                      {item.label}
+                                    </div>
+                                    {item.description ? <div className="text-xs text-onix-500">{item.description}</div> : null}
+                                  </div>
+                                  {item.actionLabel ? (
+                                    item.key === 'stock_parts_order' ? (
+                                      <a
+                                        href="https://app.repairwise.pro/admin/stock-orders"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                                      >
+                                        {item.actionLabel}
+                                      </a>
+                                    ) : item.key === 'dsa_serial_logged' ? (
+                                      <a
+                                        href="https://docs.google.com/spreadsheets/d/1CsHQuWR-xg6P-1bIgaIdA5-KGm9E-JJQe5Gl_soK-Qs/edit?pli=1&gid=2074238741#gid=2074238741"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                                      >
+                                        {item.actionLabel}
+                                      </a>
+                                    ) : item.key === 'shop_activated_vf' ? (
+                                      hasAdminShopLink ? (
+                                        <a
+                                          href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                                        >
+                                          Open admin
+                                        </a>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={openAdminMatchModal}
+                                          className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                                        >
+                                          Link admin
+                                        </button>
+                                      )
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                                      >
+                                        {item.actionLabel}
+                                      </button>
+                                    )
+                                  ) : (
+                                    <span className="text-xs text-onix-400">—</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-arctic-200 bg-white p-4 text-sm text-onix-600">
+                  {selectedProgramStats?.label} checklist is coming next. Use the VinFast card for full phased onboarding.
+                </div>
+              )}
             </div>
           )}
 

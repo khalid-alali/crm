@@ -62,6 +62,7 @@ export default function ShopsPageClient({ title, shops, pipelineStatusFilter, ch
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
   const [bulkApplying, setBulkApplying] = useState(false)
   const [bulkError, setBulkError] = useState<string | null>(null)
+  const [bulkVinfastApplying, setBulkVinfastApplying] = useState(false)
 
   const filtered = useMemo(
     () => shops.filter(s => shopMatchesQuery(s, query)),
@@ -145,6 +146,28 @@ export default function ShopsPageClient({ title, shops, pipelineStatusFilter, ch
       setBulkError(e instanceof Error ? e.message : 'Update failed')
     } finally {
       setBulkApplying(false)
+    }
+  }
+
+  async function runBulkVinfastEnroll() {
+    if (selectedIds.size === 0) return
+    setBulkVinfastApplying(true)
+    setBulkError(null)
+    try {
+      const ids = Array.from(selectedIds)
+      const res = await fetch('/api/vinfast/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location_ids: ids }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'VinFast enroll failed')
+      setSelectedIds(new Set())
+      router.refresh()
+    } catch (e: unknown) {
+      setBulkError(e instanceof Error ? e.message : 'VinFast enroll failed')
+    } finally {
+      setBulkVinfastApplying(false)
     }
   }
 
@@ -238,6 +261,14 @@ export default function ShopsPageClient({ title, shops, pipelineStatusFilter, ch
               className="text-onix-600 underline hover:text-onix-900"
             >
               Clear selection
+            </button>
+            <button
+              type="button"
+              disabled={bulkVinfastApplying}
+              onClick={() => void runBulkVinfastEnroll()}
+              className="rounded-lg border border-brand-300 bg-white px-3 py-1.5 font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50"
+            >
+              {bulkVinfastApplying ? 'Enrolling…' : 'Enroll in VinFast'}
             </button>
           </div>
         )}

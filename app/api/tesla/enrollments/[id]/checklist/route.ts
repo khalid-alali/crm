@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { getAppSession } from '@/lib/app-auth'
-import { TESLA_PROGRAM_ID, programChecklistKeys } from '@/lib/program-config'
+import {
+  CHECKLIST_EDITABLE_PROGRAM_IDS,
+  programChecklistKeys,
+  TESLA_PROGRAM_ID,
+} from '@/lib/program-config'
 import { deriveProgramStage, isTeslaStage } from '@/lib/program-stage'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -33,13 +37,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: enrollment, error: loadError } = await supabaseAdmin
     .from('location_program_enrollments')
-    .select('id, program_id, stage, manual_stage_override, first_job_completed_at')
+    .select('id, program_id, stage, manual_stage_override, first_job_completed_at, unenrolled_at')
     .eq('id', id)
     .single()
 
   if (loadError || !enrollment) return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 })
-  if (enrollment.program_id !== TESLA_PROGRAM_ID) {
-    return NextResponse.json({ error: 'Only Tesla enrollments are editable here' }, { status: 400 })
+  if (!CHECKLIST_EDITABLE_PROGRAM_IDS.includes(enrollment.program_id)) {
+    return NextResponse.json({ error: 'Enrollment program does not support checklist here' }, { status: 400 })
+  }
+  if (enrollment.unenrolled_at) {
+    return NextResponse.json({ error: 'Enrollment is no longer active' }, { status: 400 })
   }
 
   if (!programChecklistKeys(enrollment.program_id).includes(itemKey)) {
@@ -101,6 +108,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (enrollmentUpdateError) return NextResponse.json({ error: enrollmentUpdateError.message }, { status: 500 })
 
-  revalidatePath('/tesla')
+  if (enrollment.program_id === TESLA_PROGRAM_ID) {
+    revalidatePath('/tesla')
+  }
+  revalidatePath('/shops')
   return NextResponse.json({ ok: true, enrollment: updatedEnrollment })
 }

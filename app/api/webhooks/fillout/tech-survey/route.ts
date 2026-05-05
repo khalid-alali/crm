@@ -40,146 +40,6 @@ function isAuthorizedRequest(req: NextRequest): boolean {
   return secureTokenEquals(provided, expected)
 }
 
-/** Prod-safe logging: keep secrets out of log drains (incl. Vercel proxy / OIDC headers). */
-const REDACT_HEADER_NAMES = new Set(
-  [
-    'authorization',
-    'cookie',
-    'x-fillout-webhook-secret',
-    'x-vercel-oidc-token',
-    'x-vercel-sc-headers',
-    'x-vercel-proxy-signature',
-  ].map(s => s.toLowerCase()),
-)
-
-function maskSensitiveHeaders(h: Headers): Record<string, string> {
-  const out: Record<string, string> = {}
-  h.forEach((value, key) => {
-    const lower = key.toLowerCase()
-    if (REDACT_HEADER_NAMES.has(lower)) {
-      out[key] = value ? '[redacted]' : ''
-    } else {
-      out[key] = value
-    }
-  })
-  return out
-}
-
-function queryForLog(searchParams: URLSearchParams): Record<string, string> {
-  const out: Record<string, string> = {}
-  searchParams.forEach((value, key) => {
-    if (key === 'token' && value.length > 12) {
-      out[key] = `${value.slice(0, 4)}…${value.slice(-4)} (len ${value.length})`
-    } else if (key === 'token') {
-      out[key] = `[len ${value.length}]`
-    } else {
-      out[key] = value
-    }
-  })
-  return out
-}
-
-/** `console.log` on nested arrays shows `[Array]` — expand for Vercel / server logs. */
-function jsonSnippetForLog(value: unknown, maxChars: number): string {
-  try {
-    const s = JSON.stringify(value)
-    if (s.length <= maxChars) return s
-    return `${s.slice(0, maxChars)}… (+${s.length - maxChars} more chars)`
-  } catch {
-    try {
-      return String(value).slice(0, maxChars)
-    } catch {
-      return '[unprintable]'
-    }
-  }
-}
-
-function questionsExpandedForLog(questions: unknown): unknown {
-  if (!Array.isArray(questions)) return questions
-  return questions.map((q, i) => {
-    if (!isRecord(q)) return { index: i, raw: q }
-    return {
-      id: q.id,
-      name: q.name,
-      type: q.type,
-      valueJson: jsonSnippetForLog(q.value, 2500),
-    }
-  })
-}
-
-function urlParametersExpandedForLog(params: unknown): unknown {
-  if (!Array.isArray(params)) return params
-  return params.map((p, i) => {
-    if (!isRecord(p)) return { index: i, raw: p }
-    return {
-      id: p.id,
-      name: p.name,
-      valueJson: jsonSnippetForLog(p.value, 800),
-    }
-  })
-}
-
-/**
- * Structured payload for logs (questions + url params expanded as JSON strings).
- * Avoid logging a raw nested object — runtimes often collapse `questions` to `[Array]`.
- */
-function webhookPayloadLogSummary(parsed: unknown): Record<string, unknown> {
-  if (!isRecord(parsed)) {
-    return { shape: typeof parsed, snippet: jsonSnippetForLog(parsed, 3000) }
-  }
-  const summary: Record<string, unknown> = {
-    formId: parsed.formId ?? null,
-    formName: parsed.formName ?? null,
-  }
-  if (Array.isArray(parsed.urlParameters)) {
-    summary.rootUrlParameters = urlParametersExpandedForLog(parsed.urlParameters)
-  }
-  const sub = parsed.submission
-  if (isRecord(sub)) {
-    summary.submission = {
-      submissionId: sub.submissionId ?? null,
-      submissionTime: sub.submissionTime ?? null,
-      lastUpdatedAt: sub.lastUpdatedAt ?? null,
-      questionCount: Array.isArray(sub.questions) ? sub.questions.length : 0,
-      questions: questionsExpandedForLog(sub.questions),
-      urlParameters: urlParametersExpandedForLog(sub.urlParameters),
-      quiz: sub.quiz ?? null,
-      calculationCount: Array.isArray(sub.calculations) ? sub.calculations.length : 0,
-    }
-  } else if (Array.isArray(parsed.questions)) {
-    summary.submission = null
-    summary.note = 'Root-level submission shape (no body.submission wrapper)'
-    summary.questionCount = parsed.questions.length
-    summary.questions = questionsExpandedForLog(parsed.questions)
-    summary.urlParameters = urlParametersExpandedForLog(parsed.urlParameters)
-  } else {
-    summary.submission = null
-    summary.topLevelKeys = Object.keys(parsed)
-  }
-  return summary
-}
-
-function logFilloutWebhookUnauthorized(req: NextRequest, bodyLength: number) {
-  console.log('[fillout-tech-survey] unauthorized', {
-    at: new Date().toISOString(),
-    method: req.method,
-    query: queryForLog(req.nextUrl.searchParams),
-    headers: maskSensitiveHeaders(req.headers),
-    bodyLength,
-  })
-}
-
-function logFilloutWebhookIncoming(req: NextRequest, parsed: unknown) {
-  console.log('[fillout-tech-survey] incoming', {
-    at: new Date().toISOString(),
-    method: req.method,
-    contentType: req.headers.get('content-type'),
-    query: queryForLog(req.nextUrl.searchParams),
-    headers: maskSensitiveHeaders(req.headers),
-    payload: webhookPayloadLogSummary(parsed),
-  })
-}
-
 function normalizeStr(v: unknown): string {
   if (v == null) return ''
   if (typeof v === 'string') return v.trim()
@@ -460,32 +320,16 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const rawText = await req.text()
-
   if (!isAuthorizedRequest(req)) {
-    logFilloutWebhookUnauthorized(req, rawText.length)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   let raw: unknown
-  if (!rawText.trim()) {
-    logFilloutWebhookIncoming(req, null)
-    return NextResponse.json({ error: 'Empty JSON body' }, { status: 400 })
-  }
   try {
-    raw = JSON.parse(rawText) as unknown
+    raw = await req.json()
   } catch {
-    console.log('[fillout-tech-survey] invalid JSON', {
-      at: new Date().toISOString(),
-      method: req.method,
-      query: queryForLog(req.nextUrl.searchParams),
-      headers: maskSensitiveHeaders(req.headers),
-      bodyPreview: rawText.slice(0, 4000),
-    })
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
-
-  logFilloutWebhookIncoming(req, raw)
 
   let body: Record<string, unknown>
   if (Array.isArray(raw)) {
