@@ -3,7 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Ban, Check, ChevronRight, FileText, Link2, Loader2, Mail, Pencil, Sparkles, Trash2, X } from 'lucide-react'
+import {
+  Ban,
+  Check,
+  ChevronRight,
+  FileText,
+  Info,
+  Link2,
+  Loader2,
+  Mail,
+  Pencil,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import DeleteShopButton from '@/components/DeleteShopButton'
 import EmailModal from '@/components/EmailModal'
@@ -23,13 +36,24 @@ import TaskFormModal from '@/components/tasks/TaskFormModal'
 import TaskRow from '@/components/tasks/TaskRow'
 import type { TaskWithLocation } from '@/lib/types/task'
 import { isTaskResolvedInLast30Days } from '@/lib/tasks/date-groups'
-import { getProgramConfig, VINFAST_PROGRAM_ID } from '@/lib/program-config'
+import { VINFAST_PROGRAM_ID } from '@/lib/program-config'
+import {
+  buildVinfastChecklistMaps,
+  evaluateVinfastPrerequisites,
+  getVinfastEffectiveCompletedAt,
+  rowForCanonicalKey,
+  vinfastChecklistDefinitions,
+  vinfastPhaseProgress,
+  type VinfastCompletionContext,
+} from '@/lib/vinfast-checklist'
 
 const PROGRAM_CARD_CONFIG = [
   { key: 'vinfast', enrollmentKey: 'oem_warranty', label: 'VinFast OEM' },
   { key: 'tesla', enrollmentKey: 'ev_program', label: 'Tesla / EV' },
   { key: 'multidrive', enrollmentKey: 'multi_drive', label: 'Multidrive' },
 ] as const
+const VINFAST_WELCOME_TEMPLATE_ID = '8bb8f454-fc68-448c-96d8-ea25049a66f8'
+const VINFAST_IT_SETUP_TEMPLATE_ID = 'a4428cd1-9c51-459e-9819-d4d71bf52af3'
 const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive']
 const BASE_TABS = ['activity', 'tasks', 'contracts', 'programs', 'capabilities'] as const
 type BaseTabKey = (typeof BASE_TABS)[number]
@@ -93,9 +117,13 @@ type EnrollmentChecklistItem = {
   phaseLabel: string
   order: number
   description?: string
+  tooltip?: string
   actionLabel?: string
   completedAt: string | null
   completedBy: string | null
+  blockedIncomplete: boolean
+  waitingOn: string[]
+  isVirtualComplete: boolean
 }
 
 type LegacyProgramEnrollment = {
@@ -153,10 +181,65 @@ function formatShortDate(value: string | null | undefined): string {
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+/** `vf_go_live_week` from API → `YYYY-MM-DD` for `<input type="date" />`. */
+function vfGoLiveToDateInputValue(raw: string | null | undefined): string {
+  if (raw == null || String(raw).trim() === '') return ''
+  const s = String(raw).trim()
+  const ymd = s.slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd
+  const t = Date.parse(s.includes('T') ? s : `${s}T12:00:00`)
+  if (Number.isNaN(t)) return ''
+  return new Date(t).toISOString().slice(0, 10)
+}
+
 function ownerLabel(owner: OwnerTag): string {
   if (owner === 'vf') return 'VF'
   if (owner === 'shop') return 'Shop'
   return 'FL'
+}
+
+function ChecklistItemLabelWithTooltip({
+  item,
+  muted,
+}: {
+  item: EnrollmentChecklistItem
+  muted?: boolean
+}) {
+  return (
+    <div className={`text-sm ${muted ? 'text-onix-500' : 'text-onix-900'}`}>
+      <span
+        className={`mr-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+          item.owner === 'fl'
+            ? 'bg-brand-100 text-brand-700'
+            : item.owner === 'vf'
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-emerald-100 text-emerald-700'
+        }`}
+      >
+        {ownerLabel(item.owner)}
+      </span>
+      <span className="inline-flex items-center gap-1 align-middle">
+        {item.label}
+        {item.tooltip ? (
+          <span className="group relative inline-flex align-middle">
+            <button
+              type="button"
+              className="rounded p-0.5 text-onix-400 hover:bg-arctic-100 hover:text-onix-600"
+              aria-label={`${item.label}: details`}
+            >
+              <Info className="h-3.5 w-3.5" aria-hidden />
+            </button>
+            <span
+              role="tooltip"
+              className="pointer-events-none invisible absolute left-0 top-full z-50 mt-1.5 w-[min(20rem,calc(100vw-2rem))] rounded-md border border-arctic-200 bg-white p-2.5 text-left text-xs font-normal normal-case leading-snug text-onix-700 shadow-lg group-hover:visible group-focus-within:visible whitespace-pre-line"
+            >
+              {item.tooltip}
+            </span>
+          </span>
+        ) : null}
+      </span>
+    </div>
+  )
 }
 
 /** `location_enrichment` from shop detail query (array or single row). */
@@ -206,12 +289,18 @@ export default function ShopDetailTabs({
   const [showCompletedItems, setShowCompletedItems] = useState(false)
   const [phaseOpenOverrides, setPhaseOpenOverrides] = useState<Record<number, boolean>>({})
   const [phaseShowCompletedOverrides, setPhaseShowCompletedOverrides] = useState<Record<number, boolean>>({})
+  const [phaseShowBlockedOverrides, setPhaseShowBlockedOverrides] = useState<Record<number, boolean>>({})
+  const [editingTargetActivation, setEditingTargetActivation] = useState(false)
+  const [targetActivationDraft, setTargetActivationDraft] = useState(() => vfGoLiveToDateInputValue(shop.vf_go_live_week))
+  const [savingTargetActivation, setSavingTargetActivation] = useState(false)
   const [checklistBusyItem, setChecklistBusyItem] = useState<string | null>(null)
   const [enrollingProgram, setEnrollingProgram] = useState<string | null>(null)
   const [unenrollingVinfast, setUnenrollingVinfast] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
   const [showIntroModal, setShowIntroModal] = useState(false)
+  const [showVinfastWelcomeModal, setShowVinfastWelcomeModal] = useState(false)
+  const [showVinfastItSetupModal, setShowVinfastItSetupModal] = useState(false)
   const [showSendContractModal, setShowSendContractModal] = useState(false)
   const [sendContractModalDraft, setSendContractModalDraft] = useState<SendContractDraftPrefill | null>(null)
   const [remindingContractId, setRemindingContractId] = useState<string | null>(null)
@@ -317,6 +406,12 @@ export default function ShopDetailTabs({
     shop.source,
     shop.notes,
   ])
+
+  useEffect(() => {
+    if (!editingTargetActivation) {
+      setTargetActivationDraft(vfGoLiveToDateInputValue(shop.vf_go_live_week))
+    }
+  }, [shop.vf_go_live_week, editingTargetActivation])
 
   useEffect(() => {
     setCommercialDraft({
@@ -443,53 +538,91 @@ export default function ShopDetailTabs({
     }))
   }, [vinfastEnrollment])
   const vinfastChecklistItems = useMemo((): EnrollmentChecklistItem[] => {
-    const config = getProgramConfig(VINFAST_PROGRAM_ID)
+    const defs = vinfastChecklistDefinitions()
     const rowsByKey = new Map(vinfastChecklistRows.map(row => [row.item_key, row]))
-    const checklistAliases: Record<string, string[]> = {
-      technical_training_scheduled: ['vf_technical_training_scheduled'],
+    const ctx: VinfastCompletionContext = {
+      rowsByKey,
+      routablePaymentMethodCount: Number(shop.routable_payment_method_count ?? 0),
+      vfGoLiveWeek: shop.vf_go_live_week ?? null,
+      firstJobCompletedAt: vinfastEnrollment?.first_job_completed_at ?? null,
     }
-    return (config?.checklist ?? [])
-      .filter(item => item.phase && item.phaseLabel && item.owner)
-      .map(item => {
-        const row =
-          rowsByKey.get(item.key) ??
-          (checklistAliases[item.key] ?? []).map(alias => rowsByKey.get(alias)).find(Boolean)
-        const routablePaymentMethodCount = Number(shop.routable_payment_method_count ?? 0)
-        const routableLinked =
-          item.key === 'routable_payout_method_linked' &&
-          Number.isFinite(routablePaymentMethodCount) &&
-          routablePaymentMethodCount > 0
+    const { itemsByPhase, labelByKey } = buildVinfastChecklistMaps(defs)
+    const completedAtByKey = new Map<string, string | null>()
+    for (const def of defs) {
+      completedAtByKey.set(def.key, getVinfastEffectiveCompletedAt(def.key, def, ctx))
+    }
+    const nowMs = Date.now()
+    return defs
+      .map(def => {
+        const row = rowForCanonicalKey(def.key, rowsByKey)
+        const completedAt = completedAtByKey.get(def.key) ?? null
+        const { satisfied, waitingOn } = evaluateVinfastPrerequisites(
+          def,
+          def.prerequisites,
+          completedAtByKey,
+          itemsByPhase,
+          labelByKey,
+          nowMs,
+        )
+        const blockedIncomplete = !completedAt && !satisfied
+        const isVirtualComplete =
+          Boolean(completedAt) &&
+          !row?.completed_at &&
+          (def.key === 'routable_payout_method_linked' ||
+            def.key === 'go_live_week_set' ||
+            def.key === 'first_booking_received')
+        let completedBy: string | null = row?.completed_by_user_id ?? null
+        if (isVirtualComplete) completedBy = 'auto'
         return {
-          key: item.key,
-          label: item.label,
-          owner: item.owner as OwnerTag,
-          phase: item.phase as PhaseNumber,
-          phaseLabel: item.phaseLabel as string,
-          order: item.order ?? 999,
-          description: item.description,
-          actionLabel: item.actionLabel,
-          completedAt: routableLinked ? new Date().toISOString() : row?.completed_at ?? null,
-          completedBy: routableLinked ? 'auto' : row?.completed_by_user_id ?? null,
+          key: def.key,
+          label: def.label,
+          owner: def.owner as OwnerTag,
+          phase: def.phase as PhaseNumber,
+          phaseLabel: def.phaseLabel as string,
+          order: def.order ?? 999,
+          description: def.description,
+          tooltip: def.tooltip,
+          actionLabel: def.actionLabel,
+          completedAt,
+          completedBy,
+          blockedIncomplete,
+          waitingOn,
+          isVirtualComplete,
         }
       })
       .sort((a, b) => (a.phase === b.phase ? a.order - b.order : a.phase - b.phase))
-  }, [shop.routable_status, vinfastChecklistRows])
+  }, [
+    shop.routable_payment_method_count,
+    shop.vf_go_live_week,
+    vinfastEnrollment,
+    vinfastChecklistRows,
+  ])
   const vinfastPhaseNumbers: PhaseNumber[] = [1, 2, 3, 4, 5]
   const vinfastPhases = useMemo(() => {
     return vinfastPhaseNumbers.map(phase => {
       const items = vinfastChecklistItems.filter(item => item.phase === phase)
-      const done = items.filter(item => Boolean(item.completedAt)).length
+      const showBlocked = phaseShowBlockedOverrides[phase] ?? false
+      const { done, total } = vinfastPhaseProgress({
+        phaseItems: items.map(i => ({
+          completedAt: i.completedAt,
+          blockedIncomplete: i.blockedIncomplete,
+        })),
+        showBlocked,
+      })
+      const allComplete = items.length > 0 && items.every(item => Boolean(item.completedAt))
       return {
         phase,
         title: items[0]?.phaseLabel ?? `Phase ${phase}`,
         items,
         done,
-        total: items.length,
+        total,
+        allComplete,
+        showBlocked,
       }
     })
-  }, [vinfastChecklistItems])
+  }, [vinfastChecklistItems, phaseShowBlockedOverrides])
   const activePhase = useMemo(() => {
-    const next = vinfastPhases.find(phase => phase.done < phase.total)
+    const next = vinfastPhases.find(phase => !phase.allComplete)
     return next?.phase ?? 5
   }, [vinfastPhases])
   const enrolledProgramsCount = useMemo(() => {
@@ -702,6 +835,20 @@ export default function ShopDetailTabs({
     return data
   }
 
+  async function saveTargetActivation() {
+    setSavingTargetActivation(true)
+    try {
+      const v = targetActivationDraft.trim()
+      await patchShopJson({ vf_go_live_week: v === '' ? null : v })
+      setEditingTargetActivation(false)
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not save target activation')
+    } finally {
+      setSavingTargetActivation(false)
+    }
+  }
+
   async function handleStatusSelect(next: string) {
     if (next === status) return
     if (next === 'inactive' && status !== 'inactive') {
@@ -834,6 +981,71 @@ export default function ShopDetailTabs({
       router.refresh()
     } catch (e: unknown) {
       window.alert(e instanceof Error ? e.message : 'Could not update checklist item')
+    } finally {
+      setChecklistBusyItem(null)
+    }
+  }
+
+  async function completeVinfastChecklistKey(itemKey: string) {
+    if (!vinfastEnrollment?.id) return
+    setChecklistBusyItem(itemKey)
+    try {
+      const res = await fetch(`/api/vinfast/enrollments/${vinfastEnrollment.id}/checklist`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_key: itemKey, completed: true }),
+      })
+      if (!res.ok) throw new Error('Could not update checklist item')
+    } finally {
+      setChecklistBusyItem(null)
+    }
+  }
+
+  async function triggerQuickbooksAndRoutableAdd(itemKey: string) {
+    if (!vinfastEnrollment?.id) return
+    if (!hasAdminShopLink) {
+      setTab('admin')
+      openAdminMatchModal()
+      window.alert('Admin shop is not linked yet. Link admin first, then run Add.')
+      return
+    }
+
+    setChecklistBusyItem(itemKey)
+    try {
+      const res = await fetch(`/api/locations/${shop.id}/quickbooks-routable`, {
+        method: 'POST',
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not trigger QuickBooks/Routable add')
+
+      const checklistRes = await fetch(`/api/vinfast/enrollments/${vinfastEnrollment.id}/checklist`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_key: itemKey, completed: true }),
+      })
+      const checklistData = (await checklistRes.json().catch(() => ({}))) as { error?: string }
+      if (!checklistRes.ok) {
+        throw new Error(checklistData.error ?? 'Sent to Zapier, but failed to update checklist item')
+      }
+
+      router.refresh()
+      window.alert('Sent to Zapier.')
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not trigger QuickBooks/Routable add')
+    } finally {
+      setChecklistBusyItem(null)
+    }
+  }
+
+  async function resendRoutableInvite(itemKey: string) {
+    setChecklistBusyItem(itemKey)
+    try {
+      const res = await fetch(`/api/locations/${shop.id}/routable-invite`, { method: 'POST' })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not resend Routable invite')
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not resend Routable invite')
     } finally {
       setChecklistBusyItem(null)
     }
@@ -1906,10 +2118,17 @@ export default function ShopDetailTabs({
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
                 {programCardStats.map(card => (
-                  <button
+                  <div
                     key={card.key}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedProgram(card.key)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedProgram(card.key)
+                      }
+                    }}
                     className={`rounded-lg border p-4 text-left transition ${
                       selectedProgram === card.key
                         ? 'border-brand-500 bg-white shadow-[0_0_0_3px_rgba(99,91,255,0.10)]'
@@ -1977,7 +2196,7 @@ export default function ShopDetailTabs({
                         <span>{card.pct}%</span>
                       </div>
                     ) : null}
-                  </button>
+                  </div>
                 ))}
               </div>
 
@@ -1992,9 +2211,63 @@ export default function ShopDetailTabs({
                     <div>
                       <h3 className="text-base font-semibold text-onix-950">VinFast onboarding checklist</h3>
                       <p className="text-sm text-onix-500">
-                        {selectedProgramStats?.completed ?? 0} of {selectedProgramStats?.total ?? 0} complete · started{' '}
-                        {formatShortDate(selectedProgramStats?.enrolledAt ?? null)} · est. activation{' '}
-                        {formatShortDate(shop.vf_go_live_week ?? null)}
+                        <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-1">
+                          <span>
+                            {selectedProgramStats?.completed ?? 0} of {selectedProgramStats?.total ?? 0} complete ·
+                            started {formatShortDate(selectedProgramStats?.enrolledAt ?? null)}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span aria-hidden className="text-onix-400">
+                              ·
+                            </span>
+                            <span className="font-medium text-onix-600">Target activation</span>
+                            {editingTargetActivation ? (
+                              <span className="inline-flex flex-wrap items-center gap-2">
+                                <input
+                                  type="date"
+                                  value={targetActivationDraft}
+                                  onChange={e => setTargetActivationDraft(e.target.value)}
+                                  className="rounded border border-arctic-300 bg-white px-2 py-0.5 text-sm text-onix-900"
+                                  title="Pick a date or type YYYY-MM-DD"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void saveTargetActivation()}
+                                  disabled={savingTargetActivation}
+                                  className="rounded border border-arctic-300 bg-white px-2 py-0.5 text-xs font-medium text-onix-800 hover:bg-arctic-50 disabled:opacity-50"
+                                >
+                                  {savingTargetActivation ? 'Saving…' : 'Save'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingTargetActivation(false)
+                                    setTargetActivationDraft(vfGoLiveToDateInputValue(shop.vf_go_live_week))
+                                  }}
+                                  disabled={savingTargetActivation}
+                                  className="rounded px-2 py-0.5 text-xs text-onix-600 hover:bg-arctic-50 disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1">
+                                <span>{formatShortDate(shop.vf_go_live_week ?? null)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTargetActivationDraft(vfGoLiveToDateInputValue(shop.vf_go_live_week))
+                                    setEditingTargetActivation(true)
+                                  }}
+                                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-onix-400 hover:bg-arctic-100 hover:text-onix-700"
+                                  aria-label="Edit target activation date"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                                </button>
+                              </span>
+                            )}
+                          </span>
+                        </span>
                       </p>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-onix-600">
@@ -2026,26 +2299,143 @@ export default function ShopDetailTabs({
 
                   <div className="space-y-2">
                     {vinfastPhases.map(phase => {
-                      const isDone = phase.total > 0 && phase.done === phase.total
+                      const isDone = phase.allComplete
                       const isActive = !isDone && phase.phase === activePhase
-                      const pct = phase.total > 0 ? Math.round((phase.done / phase.total) * 100) : 0
+                      const pct =
+                        phase.total > 0 ? Math.min(100, Math.round((phase.done / phase.total) * 100)) : 0
                       const isExpanded =
                         !autoCollapseDonePhases ||
                         (isDone ? false : isActive) ||
                         phaseOpenOverrides[phase.phase] === true
                       const completedItems = phase.items.filter(item => Boolean(item.completedAt))
-                      const scheduledTrainingDone = phase.items.some(
-                        item =>
-                          item.key === 'technical_training_scheduled' && Boolean(item.completedAt),
-                      )
-                      const openItems = phase.items.filter(item => {
-                        if (item.completedAt) return false
-                        if (item.key === 'technical_training_completed' && !scheduledTrainingDone) {
-                          return false
-                        }
-                        return true
-                      })
                       const visibleCompleted = showCompletedItems || phaseShowCompletedOverrides[phase.phase]
+                      const blockedHiddenCount = phase.items.filter(
+                        item => !item.completedAt && item.blockedIncomplete && !phase.showBlocked,
+                      ).length
+
+                      const visibleIncomplete = phase.items
+                        .filter(item => {
+                          if (item.completedAt) return false
+                          if (item.blockedIncomplete && !phase.showBlocked) return false
+                          return true
+                        })
+                        .sort((a, b) => a.order - b.order)
+
+                      const completedSorted = (visibleCompleted ? completedItems : [])
+                        .slice()
+                        .sort((a, b) => a.order - b.order)
+
+                      function renderActionCell(item: EnrollmentChecklistItem) {
+                        if (item.key === 'routable_payout_method_linked') {
+                          const hasRoutableId = Boolean(String(shop.routable_id ?? '').trim())
+                          const pmCount = Number(shop.routable_payment_method_count ?? 0)
+                          if (hasRoutableId && pmCount === 0) {
+                            return (
+                              <button
+                                type="button"
+                                disabled={checklistBusyItem === item.key}
+                                onClick={() => void resendRoutableInvite(item.key)}
+                                className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {checklistBusyItem === item.key ? 'Sending...' : 'Resend link'}
+                              </button>
+                            )
+                          }
+                          return <span className="text-xs text-onix-400">—</span>
+                        }
+                        if (!item.actionLabel) {
+                          return <span className="text-xs text-onix-400">—</span>
+                        }
+                        if (
+                          item.key === 'stock_parts_order_placed' ||
+                          item.key === 'wall_charger_ordered'
+                        ) {
+                          return (
+                            <a
+                              href="https://app.repairwise.pro/admin/stock-orders"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                            >
+                              {item.actionLabel}
+                            </a>
+                          )
+                        }
+                        if (item.key === 'dsa_serial_logged') {
+                          return (
+                            <a
+                              href="https://docs.google.com/spreadsheets/d/1CsHQuWR-xg6P-1bIgaIdA5-KGm9E-JJQe5Gl_soK-Qs/edit?pli=1&gid=2074238741#gid=2074238741"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                            >
+                              {item.actionLabel}
+                            </a>
+                          )
+                        }
+                        if (item.key === 'shop_activated') {
+                          return hasAdminShopLink ? (
+                            <a
+                              href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                            >
+                              Open admin
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={openAdminMatchModal}
+                              className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                            >
+                              Link admin
+                            </button>
+                          )
+                        }
+                        if (item.key === 'vf_email_sent') {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setShowVinfastItSetupModal(true)}
+                              className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                            >
+                              {item.actionLabel}
+                            </button>
+                          )
+                        }
+                        if (item.key === 'welcome_email_sent') {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setShowVinfastWelcomeModal(true)}
+                              className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                            >
+                              {item.actionLabel}
+                            </button>
+                          )
+                        }
+                        if (item.key === 'add_shop_to_quickbooks_and_routable') {
+                          return (
+                            <button
+                              type="button"
+                              disabled={checklistBusyItem === item.key}
+                              onClick={() => void triggerQuickbooksAndRoutableAdd(item.key)}
+                              className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {checklistBusyItem === item.key ? 'Adding...' : item.actionLabel}
+                            </button>
+                          )
+                        }
+                        return (
+                          <button
+                            type="button"
+                            className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                          >
+                            {item.actionLabel}
+                          </button>
+                        )
+                      }
 
                       return (
                         <div key={phase.phase} className="overflow-hidden rounded-lg border border-arctic-200">
@@ -2086,6 +2476,24 @@ export default function ShopDetailTabs({
                           </button>
                           {isExpanded ? (
                             <div className="border-t border-arctic-200">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-arctic-100 px-4 py-2 text-xs text-onix-600">
+                                <label className="inline-flex cursor-pointer items-center gap-1.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={phase.showBlocked}
+                                    onChange={e =>
+                                      setPhaseShowBlockedOverrides(prev => ({
+                                        ...prev,
+                                        [phase.phase]: e.target.checked,
+                                      }))
+                                    }
+                                  />
+                                  Show blocked items
+                                  {blockedHiddenCount > 0 && !phase.showBlocked ? (
+                                    <span className="text-onix-400">({blockedHiddenCount} hidden)</span>
+                                  ) : null}
+                                </label>
+                              </div>
                               {!showCompletedItems && completedItems.length > 0 && !visibleCompleted ? (
                                 <button
                                   type="button"
@@ -2098,9 +2506,12 @@ export default function ShopDetailTabs({
                                 </button>
                               ) : null}
 
-                              {(visibleCompleted ? completedItems : []).map(item => (
-                                <div key={item.key} className="grid grid-cols-[28px_1fr_auto] gap-2 border-t border-arctic-100 px-4 py-2.5 first:border-t-0">
-                                  {item.key === 'routable_payout_method_linked' ? (
+                              {completedSorted.map(item => (
+                                <div
+                                  key={item.key}
+                                  className="grid grid-cols-[28px_1fr_auto] gap-2 border-t border-arctic-100 px-4 py-2.5 first:border-t-0"
+                                >
+                                  {item.isVirtualComplete ? (
                                     <span className="mt-0.5 grid h-[18px] w-[18px] place-items-center rounded border border-emerald-600 bg-emerald-600 text-xs text-white">
                                       ✓
                                     </span>
@@ -2115,108 +2526,65 @@ export default function ShopDetailTabs({
                                     </button>
                                   )}
                                   <div>
-                                    <div className="text-sm text-onix-500 line-through">
-                                      <span
-                                        className={`mr-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                          item.owner === 'fl'
-                                            ? 'bg-brand-100 text-brand-700'
-                                            : item.owner === 'vf'
-                                              ? 'bg-amber-100 text-amber-700'
-                                              : 'bg-emerald-100 text-emerald-700'
-                                        }`}
-                                      >
-                                        {ownerLabel(item.owner)}
-                                      </span>
-                                      {item.label}
-                                    </div>
-                                    {item.description ? <div className="text-xs text-onix-500">{item.description}</div> : null}
+                                    <ChecklistItemLabelWithTooltip item={item} muted />
+                                    {item.description ? (
+                                      <div className="text-xs text-onix-500">{item.description}</div>
+                                    ) : null}
                                   </div>
                                   <div className="text-xs text-onix-500">
-                                    {formatShortDate(item.completedAt)} · {item.completedBy ?? 'auto'}
+                                    {formatShortDate(item.completedAt)} · {item.completedBy ?? '—'}
                                   </div>
                                 </div>
                               ))}
 
-                              {openItems.map(item => (
-                                <div key={item.key} className="grid grid-cols-[28px_1fr_auto] gap-2 border-t border-arctic-100 px-4 py-2.5 first:border-t-0">
-                                  {item.key === 'routable_payout_method_linked' ? (
-                                    <span className="mt-0.5 h-[18px] w-[18px] rounded border border-arctic-300 bg-arctic-50" />
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => void toggleVinfastChecklistItem(item, true)}
-                                      disabled={checklistBusyItem === item.key}
-                                      className="mt-0.5 h-[18px] w-[18px] rounded border border-arctic-300 bg-white"
-                                    />
-                                  )}
-                                  <div>
-                                    <div className="text-sm text-onix-900">
-                                      <span
-                                        className={`mr-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                          item.owner === 'fl'
-                                            ? 'bg-brand-100 text-brand-700'
-                                            : item.owner === 'vf'
-                                              ? 'bg-amber-100 text-amber-700'
-                                              : 'bg-emerald-100 text-emerald-700'
-                                        }`}
-                                      >
-                                        {ownerLabel(item.owner)}
-                                      </span>
-                                      {item.label}
-                                    </div>
-                                    {item.description ? <div className="text-xs text-onix-500">{item.description}</div> : null}
-                                  </div>
-                                  {item.actionLabel ? (
-                                    item.key === 'stock_parts_order' ? (
-                                      <a
-                                        href="https://app.repairwise.pro/admin/stock-orders"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
-                                      >
-                                        {item.actionLabel}
-                                      </a>
-                                    ) : item.key === 'dsa_serial_logged' ? (
-                                      <a
-                                        href="https://docs.google.com/spreadsheets/d/1CsHQuWR-xg6P-1bIgaIdA5-KGm9E-JJQe5Gl_soK-Qs/edit?pli=1&gid=2074238741#gid=2074238741"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
-                                      >
-                                        {item.actionLabel}
-                                      </a>
-                                    ) : item.key === 'shop_activated_vf' ? (
-                                      hasAdminShopLink ? (
-                                        <a
-                                          href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
-                                        >
-                                          Open admin
-                                        </a>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={openAdminMatchModal}
-                                          className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
-                                        >
-                                          Link admin
-                                        </button>
-                                      )
+                              {visibleIncomplete.map(item => {
+                                const routableSlot = item.key === 'routable_payout_method_linked'
+                                const showDisabledBlocked = item.blockedIncomplete && phase.showBlocked
+                                return (
+                                  <div
+                                    key={item.key}
+                                    className={`grid grid-cols-[28px_1fr_auto] gap-2 border-t border-arctic-100 px-4 py-2.5 first:border-t-0 ${
+                                      showDisabledBlocked ? 'opacity-70' : ''
+                                    }`}
+                                  >
+                                    {routableSlot ? (
+                                      <span className="mt-0.5 h-[18px] w-[18px] rounded border border-arctic-300 bg-arctic-50" />
+                                    ) : showDisabledBlocked ? (
+                                      <button
+                                        type="button"
+                                        disabled
+                                        className="mt-0.5 h-[18px] w-[18px] cursor-not-allowed rounded border border-arctic-200 bg-arctic-100"
+                                        aria-label="Blocked by prerequisites"
+                                      />
                                     ) : (
                                       <button
                                         type="button"
-                                        className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
-                                      >
-                                        {item.actionLabel}
-                                      </button>
-                                    )
-                                  ) : (
-                                    <span className="text-xs text-onix-400">—</span>
-                                  )}
-                                </div>
-                              ))}
+                                        onClick={() => void toggleVinfastChecklistItem(item, true)}
+                                        disabled={checklistBusyItem === item.key}
+                                        className="mt-0.5 h-[18px] w-[18px] rounded border border-arctic-300 bg-white"
+                                      />
+                                    )}
+                                    <div>
+                                      <ChecklistItemLabelWithTooltip item={item} />
+                                      {item.key === 'routable_payout_method_linked' &&
+                                      shop.last_routable_link_sent_at ? (
+                                        <div className="text-xs text-onix-500">
+                                          Last link sent: {fmtDate(shop.last_routable_link_sent_at)}
+                                        </div>
+                                      ) : null}
+                                      {item.description ? (
+                                        <div className="text-xs text-onix-500">{item.description}</div>
+                                      ) : null}
+                                      {showDisabledBlocked && item.waitingOn.length > 0 ? (
+                                        <div className="mt-1 text-xs text-amber-800">
+                                          Waiting on: {item.waitingOn.join('; ')}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                    {renderActionCell(item)}
+                                  </div>
+                                )
+                              })}
                             </div>
                           ) : null}
                         </div>
@@ -2505,6 +2873,72 @@ export default function ShopDetailTabs({
           onSent={() => {
             setShowIntroModal(false)
             router.refresh()
+          }}
+        />
+      )}
+
+      {showVinfastItSetupModal && (
+        <EmailModal
+          locationId={shop.id}
+          shopName={shop.name}
+          contactName={primaryContactDisplayName}
+          contactEmail={primaryContactEmail}
+          senderName={senderName}
+          accountId={shop.account_id ?? null}
+          accountName={
+            shop.accounts && typeof shop.accounts === 'object' && !Array.isArray(shop.accounts)
+              ? (shop.accounts as { business_name?: string | null }).business_name?.trim() || null
+              : Array.isArray(shop.accounts) && shop.accounts[0]
+                ? String((shop.accounts[0] as { business_name?: string }).business_name ?? '').trim() || null
+                : null
+          }
+          initialTemplateId={VINFAST_IT_SETUP_TEMPLATE_ID}
+          autoContinueFromInitialTemplate
+          fromShopDetail
+          onClose={() => setShowVinfastItSetupModal(false)}
+          onSent={() => {
+            void (async () => {
+              try {
+                await completeVinfastChecklistKey('vf_email_sent')
+                setShowVinfastItSetupModal(false)
+                router.refresh()
+              } catch (e: unknown) {
+                window.alert(e instanceof Error ? e.message : 'Could not update checklist item')
+              }
+            })()
+          }}
+        />
+      )}
+
+      {showVinfastWelcomeModal && (
+        <EmailModal
+          locationId={shop.id}
+          shopName={shop.name}
+          contactName={primaryContactDisplayName}
+          contactEmail={primaryContactEmail}
+          senderName={senderName}
+          accountId={shop.account_id ?? null}
+          accountName={
+            shop.accounts && typeof shop.accounts === 'object' && !Array.isArray(shop.accounts)
+              ? (shop.accounts as { business_name?: string | null }).business_name?.trim() || null
+              : Array.isArray(shop.accounts) && shop.accounts[0]
+                ? String((shop.accounts[0] as { business_name?: string }).business_name ?? '').trim() || null
+                : null
+          }
+          initialTemplateId={VINFAST_WELCOME_TEMPLATE_ID}
+          autoContinueFromInitialTemplate
+          fromShopDetail
+          onClose={() => setShowVinfastWelcomeModal(false)}
+          onSent={() => {
+            void (async () => {
+              try {
+                await completeVinfastChecklistKey('welcome_email_sent')
+                setShowVinfastWelcomeModal(false)
+                router.refresh()
+              } catch (e: unknown) {
+                window.alert(e instanceof Error ? e.message : 'Could not update checklist item')
+              }
+            })()
           }}
         />
       )}

@@ -238,7 +238,7 @@ export const EmailBodyEditor = forwardRef<EmailBodyEditorHandle, Props>(function
   if (!editor) {
     return (
       <div
-        className={`rounded border border-arctic-200 bg-arctic-50 ${compact ? 'min-h-32' : 'h-[560px]'}`}
+        className={`rounded border border-arctic-200 bg-arctic-50 ${compact ? 'min-h-32' : 'h-[min(78vh,880px)] min-h-[640px]'}`}
         aria-hidden
       />
     )
@@ -257,13 +257,17 @@ export const EmailBodyEditor = forwardRef<EmailBodyEditorHandle, Props>(function
   }
 
   return (
-    <div className="email-tiptap-editor flex h-[560px] flex-col overflow-hidden rounded border border-arctic-200">
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <EmailEditorToolbar editor={editor} />
-        <EditorContent
-          editor={editor}
-          className="email-tiptap-editor__content min-h-[12rem] bg-white"
-        />
+    <div className="email-tiptap-editor flex h-[min(78vh,880px)] min-h-[640px] flex-col overflow-hidden rounded border border-arctic-200 bg-white">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-white">
+        <div className="shrink-0">
+          <EmailEditorToolbar editor={editor} />
+        </div>
+        <div className="min-h-0 flex-1 bg-white">
+          <EditorContent
+            editor={editor}
+            className="email-tiptap-editor__content h-full min-h-[28rem] bg-white"
+          />
+        </div>
       </div>
     </div>
   )

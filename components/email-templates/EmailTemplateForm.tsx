@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EmailBodyEditor, type EmailBodyEditorHandle } from '@/components/EmailBodyEditor'
+import RecipientPicker from '@/components/email/RecipientPicker'
 import {
   EMAIL_TEMPLATE_CATEGORIES,
   EMAIL_TEMPLATE_CATEGORY_LABELS,
@@ -17,6 +18,8 @@ function formFingerprint(
   description: string,
   subject: string,
   bodyHtml: string,
+  defaultRecipients: string[],
+  defaultCcRecipients: string[],
 ): string {
   return JSON.stringify({
     name: name.trim(),
@@ -24,6 +27,8 @@ function formFingerprint(
     description: description.trim(),
     subject: subject.trim(),
     bodyHtml,
+    defaultRecipients,
+    defaultCcRecipients,
   })
 }
 
@@ -34,6 +39,8 @@ export type EmailTemplateRow = {
   description: string | null
   subject: string
   body_html: string
+  default_recipients: string[] | null
+  default_cc_recipients: string[] | null
   created_by: string | null
   archived: boolean
   created_at: string
@@ -47,6 +54,9 @@ const DISCARD_MESSAGE = 'You have unsaved changes. Discard them and leave this p
 export default function EmailTemplateForm({ mode, templateId }: Props) {
   const router = useRouter()
   const editorRef = useRef<EmailBodyEditorHandle>(null)
+  const subjectInputRef = useRef<HTMLInputElement>(null)
+  /** Last field the user edited; sidebar clicks blur inputs, so we cannot rely on focus alone. */
+  const lastInsertFieldRef = useRef<'subject' | 'body'>('body')
   const [loading, setLoading] = useState(mode === 'edit')
   const [saving, setSaving] = useState(false)
   const [name, setName] = useState('')
@@ -54,6 +64,8 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
   const [description, setDescription] = useState('')
   const [subject, setSubject] = useState('')
   const [bodyHtml, setBodyHtml] = useState('<p></p>')
+  const [defaultRecipients, setDefaultRecipients] = useState<string[]>([])
+  const [defaultCcRecipients, setDefaultCcRecipients] = useState<string[]>([])
   const [error, setError] = useState('')
   const [savedFingerprint, setSavedFingerprint] = useState<string | null>(null)
   const baselineSyncedRef = useRef(false)
@@ -64,8 +76,17 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
   )
 
   const fingerprint = useMemo(
-    () => formFingerprint(name, category, description, subject, bodyHtml),
-    [name, category, description, subject, bodyHtml],
+    () =>
+      formFingerprint(
+        name,
+        category,
+        description,
+        subject,
+        bodyHtml,
+        defaultRecipients,
+        defaultCcRecipients,
+      ),
+    [name, category, description, subject, bodyHtml, defaultRecipients, defaultCcRecipients],
   )
   const isDirty = savedFingerprint !== null && fingerprint !== savedFingerprint
 
@@ -81,6 +102,8 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
       setDescription(data.description ?? '')
       setSubject(data.subject)
       setBodyHtml(data.body_html || '<p></p>')
+      setDefaultRecipients(data.default_recipients ?? [])
+      setDefaultCcRecipients(data.default_cc_recipients ?? [])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Load failed')
     } finally {
@@ -99,8 +122,18 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
     }
     if (baselineSyncedRef.current) return
     baselineSyncedRef.current = true
-    setSavedFingerprint(formFingerprint(name, category, description, subject, bodyHtml))
-  }, [loading, name, category, description, subject, bodyHtml])
+    setSavedFingerprint(
+      formFingerprint(
+        name,
+        category,
+        description,
+        subject,
+        bodyHtml,
+        defaultRecipients,
+        defaultCcRecipients,
+      ),
+    )
+  }, [loading, name, category, description, subject, bodyHtml, defaultRecipients, defaultCcRecipients])
 
   const clearSaveFlashTimers = useCallback(() => {
     const t = saveFlashTimersRef.current
@@ -154,6 +187,8 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
             description: description.trim() || null,
             subject,
             body_html: bodyHtml,
+            default_recipients: defaultRecipients.length > 0 ? defaultRecipients : null,
+            default_cc_recipients: defaultCcRecipients.length > 0 ? defaultCcRecipients : null,
           }),
         })
         const data = await res.json().catch(() => ({}))
@@ -171,11 +206,23 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
           description: description.trim() || null,
           subject,
           body_html: bodyHtml,
+          default_recipients: defaultRecipients.length > 0 ? defaultRecipients : null,
+          default_cc_recipients: defaultCcRecipients.length > 0 ? defaultCcRecipients : null,
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Save failed')
-      setSavedFingerprint(formFingerprint(name, category, description, subject, bodyHtml))
+      setSavedFingerprint(
+        formFingerprint(
+          name,
+          category,
+          description,
+          subject,
+          bodyHtml,
+          defaultRecipients,
+          defaultCcRecipients,
+        ),
+      )
       clearSaveFlashTimers()
       setSaveFlashFading(false)
       setSaveFlashVisible(true)
@@ -216,7 +263,39 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
     }
   }
 
+  function insertIntoSubjectAtCursor(token: string) {
+    const el = subjectInputRef.current
+    if (!el) {
+      setSubject(prev => (prev ? `${prev}${prev.endsWith(' ') ? '' : ' '}` : '') + token)
+      return
+    }
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? el.value.length
+    const next = el.value.slice(0, start) + token + el.value.slice(end)
+    setSubject(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + token.length
+      el.setSelectionRange(pos, pos)
+    })
+  }
+
+  function appendTokenToSubject(token: string) {
+    setSubject(prev => (prev ? `${prev}${prev.endsWith(' ') ? '' : ' '}` : '') + token)
+    requestAnimationFrame(() => subjectInputRef.current?.focus())
+  }
+
   function insertToken(token: string) {
+    const subjectEl = subjectInputRef.current
+    const subjectFocused = Boolean(subjectEl && document.activeElement === subjectEl)
+    if (subjectFocused) {
+      insertIntoSubjectAtCursor(token)
+      return
+    }
+    if (lastInsertFieldRef.current === 'subject') {
+      appendTokenToSubject(token)
+      return
+    }
     editorRef.current?.insertText(token)
   }
 
@@ -340,13 +419,43 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
           <div>
             <label className="mb-1 block text-xs font-medium text-onix-600">Subject</label>
             <input
+              ref={subjectInputRef}
               type="text"
               value={subject}
               onChange={e => setSubject(e.target.value)}
+              onFocus={() => {
+                lastInsertFieldRef.current = 'subject'
+              }}
               className="w-full rounded-lg border border-arctic-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
-          <div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <RecipientPicker
+              label="To"
+              shopName="Template defaults"
+              accountName={null}
+              value={defaultRecipients}
+              onChange={setDefaultRecipients}
+              contacts={[]}
+              excludeEmails={defaultCcRecipients}
+              placeholder="Add default recipient"
+            />
+            <RecipientPicker
+              label="Cc"
+              shopName="Template defaults"
+              accountName={null}
+              value={defaultCcRecipients}
+              onChange={setDefaultCcRecipients}
+              contacts={[]}
+              excludeEmails={defaultRecipients}
+              placeholder="Add default Cc"
+            />
+          </div>
+          <div
+            onFocusCapture={() => {
+              lastInsertFieldRef.current = 'body'
+            }}
+          >
             <label className="mb-1 block text-xs font-medium text-onix-600">Body</label>
             <EmailBodyEditor ref={editorRef} value={bodyHtml} onChange={setBodyHtml} compact={false} />
           </div>
@@ -355,13 +464,16 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
         <aside className="w-full shrink-0 space-y-6 lg:sticky lg:top-6 lg:self-start lg:w-64">
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-wide text-onix-500">Insert placeholder</h2>
-            <p className="mt-1 text-xs text-onix-500">Click to insert into the body at the cursor.</p>
+            <p className="mt-1 text-xs text-onix-500">
+              Inserts into the subject or body field you last used, at the cursor when possible.
+            </p>
             <p className="mt-3 text-xs font-medium text-violet-700">Merge fields</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {EMAIL_MERGE_PLACEHOLDER_TOKENS.map(token => (
                 <button
                   key={token}
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => insertToken(token)}
                   className="rounded-full bg-violet-50 px-2 py-1 font-mono text-[10px] text-violet-900 hover:bg-violet-100"
                 >

@@ -3,8 +3,11 @@ export const EMAIL_MERGE_PLACEHOLDER_TOKENS = [
   '{{contact_first_name}}',
   '{{contact_full_name}}',
   '{{shop_name}}',
+  '{{shop_address}}',
   '{{shop_city}}',
   '{{shop_state}}',
+  '{{vinfast_store_code}}',
+  '{{dealer_code}}',
   '{{sender_first_name}}',
   '{{sender_full_name}}',
 ] as const

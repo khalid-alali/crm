@@ -21,10 +21,29 @@ interface Props {
   senderName: string
   accountId?: string | null
   accountName?: string | null
+  initialTemplateId?: string | null
+  autoContinueFromInitialTemplate?: boolean
   /** When true, activity_log stores a footer so the feed shows this send came from shop detail. */
   fromShopDetail?: boolean
   onClose: () => void
   onSent?: () => void
+}
+
+function normalizeRecipientList(values: unknown): string[] {
+  if (!Array.isArray(values)) return []
+  const emails = values
+    .filter((v): v is string => typeof v === 'string')
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean)
+  return Array.from(new Set(emails))
+}
+
+function warningNeedsAdminLink(warning: string): boolean {
+  return (
+    warning.includes('{{vinfast_store_code}}') &&
+    warning.includes('{{dealer_code}}') &&
+    warning.includes('no Admin shop ID')
+  )
 }
 
 export default function EmailModal({
@@ -35,6 +54,8 @@ export default function EmailModal({
   senderName: _senderName,
   accountId = null,
   accountName = null,
+  initialTemplateId = null,
+  autoContinueFromInitialTemplate = false,
   fromShopDetail,
   onClose,
   onSent,
@@ -64,8 +85,10 @@ export default function EmailModal({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [continueLoading, setContinueLoading] = useState(false)
+  const [autoContinueAttempted, setAutoContinueAttempted] = useState(false)
   const [placeholderMenuOpen, setPlaceholderMenuOpen] = useState(false)
   const [placeholderTarget, setPlaceholderTarget] = useState<'body' | 'subject'>('body')
+  const [renderWarnings, setRenderWarnings] = useState<string[]>([])
 
   const showCapabilitiesHint = useMemo(
     () => (step === 2 ? emailContentReferencesCapabilitiesLink(subject, body) : false),
@@ -90,6 +113,15 @@ export default function EmailModal({
   useEffect(() => {
     void loadTemplates()
   }, [loadTemplates])
+
+  useEffect(() => {
+    if (!initialTemplateId) return
+    if (templatesLoading) return
+    if (selection !== 'unset') return
+    const match = templates.find(t => t.id === initialTemplateId)
+    if (!match) return
+    setSelection({ type: 'template', id: initialTemplateId })
+  }, [initialTemplateId, selection, templates, templatesLoading])
 
   const loadContacts = useCallback(async () => {
     if (!accountId) {
@@ -196,6 +228,7 @@ export default function EmailModal({
       setEmailTemplateId(null)
       setSubject('')
       setBody('<p></p>')
+      setRenderWarnings([])
       setStep(2)
       return
     }
@@ -210,11 +243,21 @@ export default function EmailModal({
         error?: string
         subject?: string
         bodyHtml?: string
+        warnings?: unknown
+        defaultRecipients?: unknown
+        defaultCcRecipients?: unknown
       }
       if (!res.ok) throw new Error(data.error ?? 'Could not render template')
+      const templateTo = normalizeRecipientList(data.defaultRecipients)
+      const templateCc = normalizeRecipientList(data.defaultCcRecipients)
       setEmailTemplateId(selection.id)
       setSubject(replaceLegacyCapabilitiesPreviewUrls(data.subject ?? ''))
       setBody(replaceLegacyCapabilitiesPreviewUrls(data.bodyHtml ?? '<p></p>'))
+      setToList(templateTo.length > 0 ? templateTo : (contactEmail.trim() ? [contactEmail.trim().toLowerCase()] : []))
+      setCcList(templateCc)
+      setCcOpen(templateCc.length > 0)
+      const w = data.warnings
+      setRenderWarnings(Array.isArray(w) ? w.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : [])
       setStep(2)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Could not load template')
@@ -255,6 +298,15 @@ export default function EmailModal({
       setSending(false)
     }
   }
+
+  useEffect(() => {
+    if (!autoContinueFromInitialTemplate) return
+    if (autoContinueAttempted) return
+    if (step !== 1) return
+    if (selection === 'unset' || selection === 'blank') return
+    setAutoContinueAttempted(true)
+    void handleContinue()
+  }, [autoContinueAttempted, autoContinueFromInitialTemplate, selection, step])
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -427,6 +479,35 @@ export default function EmailModal({
 
               {step === 2 && (
                 <>
+                  {renderWarnings.length > 0 ? (
+                    <div
+                      className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950"
+                      role="status"
+                    >
+                      <ul className="list-disc space-y-1 pl-4">
+                        {renderWarnings.map((w, i) => {
+                          const showAdminLink = warningNeedsAdminLink(w)
+                          return (
+                            <li key={i}>
+                              <span>{w}</span>
+                              {showAdminLink ? (
+                                <>
+                                  {' '}
+                                  <a
+                                    href={`/shops/${locationId}`}
+                                    className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
+                                  >
+                                    Link Admin shop ID
+                                  </a>
+                                  <span>, then pick the template again.</span>
+                                </>
+                              ) : null}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
                   {contactsError ? <p className="text-sm text-amber-700">{contactsError}</p> : null}
                   {contactsLoading ? <p className="text-xs text-onix-500">Loading contacts…</p> : null}
                   <RecipientPicker
@@ -568,6 +649,7 @@ export default function EmailModal({
                   onClick={() => {
                     setStep(1)
                     setError('')
+                    setRenderWarnings([])
                     setPlaceholderMenuOpen(false)
                   }}
                   className="rounded px-4 py-1.5 text-sm text-onix-600 hover:bg-arctic-100"

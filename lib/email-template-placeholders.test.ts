@@ -15,6 +15,7 @@ describe('replaceEmailTemplatePlaceholders', () => {
       contact_full_name: 'Ada Lovelace',
       contact_name: 'Ada Lovelace',
       shop_name: 'Acme',
+      shop_address: '1 Main, San Francisco, CA 94102',
       shop_city: 'SF',
       shop_state: 'CA',
       sender_first_name: 'Leo',
@@ -36,6 +37,7 @@ describe('replaceEmailTemplatePlaceholders', () => {
       contact_full_name: 'Ada Lovelace',
       contact_name: 'Ada Lovelace',
       shop_name: 'Test Shop',
+      shop_address: '100 Oak St, SF, CA',
       shop_city: 'SF',
       shop_state: 'CA',
       sender_first_name: 'Leo',
@@ -80,7 +82,7 @@ describe('subjectAndBodyWithPlaceholders', () => {
     const r = subjectAndBodyWithPlaceholders(
       'Hello {{shop_name}}',
       '<p>{{shop_name}}</p>',
-      { shop_name: 'Acme', contact_first_name: 'x', contact_full_name: 'x', contact_name: 'x', shop_city: '', shop_state: '', sender_first_name: 'y', sender_full_name: 'y', sender_name: 'y' },
+      { shop_name: 'Acme', shop_address: '', contact_first_name: 'x', contact_full_name: 'x', contact_name: 'x', shop_city: '', shop_state: '', sender_first_name: 'y', sender_full_name: 'y', sender_name: 'y' },
       'http://p',
     )
     expect(r.subject).toBe('Hello Acme')

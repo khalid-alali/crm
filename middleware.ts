@@ -19,5 +19,5 @@ export default withAuth({
 
 export const config = {
   // Public shop portal + token APIs (auth enforced inside routes where needed).
-  matcher: ['/((?!portal|api/portal|api/webhooks|api/auth|_next|favicon|signin).*)'],
+  matcher: ['/((?!portal|api/portal|api/webhooks|api/shops|api/cron|api/auth|_next|favicon|signin).*)'],
 }

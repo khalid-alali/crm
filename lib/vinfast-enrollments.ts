@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { VINFAST_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
+import { rowForCanonicalKey, type VinfastChecklistRow } from '@/lib/vinfast-checklist'
 import { getMissingChecklistKeys, isTeslaStage, type TeslaStage } from '@/lib/program-stage'
 
 type EnrollmentRow = {
@@ -224,20 +225,14 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
   const cacheByShopId = new Map((cacheData ?? []).map(row => [row.shop_id as string, row as ShopStatusCacheRow]))
   const config = getProgramConfig(VINFAST_PROGRAM_ID)
   const checklistDef = config?.checklist ?? []
-  const checklistAliases: Record<string, string[]> = {
-    technical_training_scheduled: ['vf_technical_training_scheduled'],
-  }
 
   return enrollments.map(enrollment => {
     const loc = locationById.get(enrollment.location_id)
     const rows = checklistByEnrollment.get(enrollment.id) ?? []
     const rowsByKey = new Map(rows.map(row => [row.item_key, row]))
-    const completedKeys = rows.filter(r => r.completed_at).map(r => r.item_key)
 
     const checklist = checklistDef.map(item => {
-      const row =
-        rowsByKey.get(item.key) ??
-        (checklistAliases[item.key] ?? []).map(alias => rowsByKey.get(alias)).find(Boolean)
+      const row = rowForCanonicalKey(item.key, rowsByKey as Map<string, VinfastChecklistRow>)
       return {
         itemKey: item.key,
         label: item.label,
@@ -245,6 +240,10 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
         notes: row?.notes ?? null,
       }
     })
+
+    const canonicalCompletedKeys = checklistDef
+      .filter(def => Boolean(rowForCanonicalKey(def.key, rowsByKey as Map<string, VinfastChecklistRow>)?.completed_at))
+      .map(def => def.key)
 
     const normalizedStage = normalizeVinfastStage({
       locationStatus: loc?.status,
@@ -282,7 +281,7 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
       ),
       highSignalName: isHighSignalShopName(loc?.name ?? null),
       checklist,
-      missingChecklistKeys: getMissingChecklistKeys(VINFAST_PROGRAM_ID, completedKeys),
+      missingChecklistKeys: getMissingChecklistKeys(VINFAST_PROGRAM_ID, canonicalCompletedKeys),
     }
   })
 }

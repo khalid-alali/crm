@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const { data, error } = await supabaseAdmin
     .from('email_templates')
     .select(
-      'id, name, category, description, subject, body_html, created_by, archived, created_at, updated_at',
+      'id, name, category, description, subject, body_html, default_recipients, default_cc_recipients, created_by, archived, created_at, updated_at',
     )
     .eq('id', id.trim())
     .maybeSingle()
@@ -50,6 +50,32 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (typeof body.body_html === 'string') patch.body_html = body.body_html
   if (body.description === null) patch.description = null
   else if (typeof body.description === 'string') patch.description = body.description.trim() || null
+  if (Array.isArray(body.default_recipients)) {
+    const values = Array.from(
+      new Set(
+        body.default_recipients
+          .filter((v): v is string => typeof v === 'string')
+          .map(v => v.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    )
+    patch.default_recipients = values.length > 0 ? values : null
+  } else if (body.default_recipients === null) {
+    patch.default_recipients = null
+  }
+  if (Array.isArray(body.default_cc_recipients)) {
+    const values = Array.from(
+      new Set(
+        body.default_cc_recipients
+          .filter((v): v is string => typeof v === 'string')
+          .map(v => v.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    )
+    patch.default_cc_recipients = values.length > 0 ? values : null
+  } else if (body.default_cc_recipients === null) {
+    patch.default_cc_recipients = null
+  }
   if (typeof body.category === 'string') {
     const c = body.category.trim()
     if (!isEmailTemplateCategory(c)) {
@@ -68,7 +94,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     .update(patch)
     .eq('id', id.trim())
     .select(
-      'id, name, category, description, subject, body_html, created_by, archived, created_at, updated_at',
+      'id, name, category, description, subject, body_html, default_recipients, default_cc_recipients, created_by, archived, created_at, updated_at',
     )
     .maybeSingle()
 

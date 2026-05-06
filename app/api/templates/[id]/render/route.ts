@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAppSession } from '@/lib/app-auth'
-import { buildEmailMergeContext, mergeContextToStaticMap } from '@/lib/email-template-merge'
+import {
+  buildEmailMergeContext,
+  emailMergeWarningsForVinfastPlaceholders,
+  mergeContextToStaticMap,
+} from '@/lib/email-template-merge'
 import { CAPABILITIES_LINK_DISPLAY_SENTINEL } from '@/lib/email-template-ids'
 import { subjectAndBodyWithPlaceholders } from '@/lib/email-template-placeholders'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -28,7 +32,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const { data: template, error: tErr } = await supabaseAdmin
     .from('email_templates')
-    .select('id, name, subject, body_html, archived')
+    .select('id, name, subject, body_html, default_recipients, default_cc_recipients, archived')
     .eq('id', id.trim())
     .eq('archived', false)
     .maybeSingle()
@@ -49,10 +53,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     CAPABILITIES_LINK_DISPLAY_SENTINEL,
   )
 
+  const warnings = emailMergeWarningsForVinfastPlaceholders(
+    template.subject,
+    template.body_html,
+    mergeCtx,
+  )
+
   return NextResponse.json({
     templateId: template.id,
     templateName: template.name,
     subject: rendered.subject,
     bodyHtml: rendered.bodyHtml,
+    defaultRecipients: template.default_recipients ?? [],
+    defaultCcRecipients: template.default_cc_recipients ?? [],
+    warnings,
   })
 }

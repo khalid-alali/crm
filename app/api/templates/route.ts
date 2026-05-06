@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   let q = supabaseAdmin
     .from('email_templates')
     .select(
-      'id, name, category, description, subject, body_html, created_by, archived, created_at, updated_at',
+      'id, name, category, description, subject, body_html, default_recipients, default_cc_recipients, created_by, archived, created_at, updated_at',
     )
     .order('updated_at', { ascending: false })
 
@@ -42,6 +42,26 @@ export async function POST(req: NextRequest) {
   const bodyHtml = typeof body.body_html === 'string' ? body.body_html : ''
   const description =
     typeof body.description === 'string' && body.description.trim() ? body.description.trim() : null
+  const defaultRecipients = Array.isArray(body.default_recipients)
+    ? Array.from(
+        new Set(
+          body.default_recipients
+            .filter((v): v is string => typeof v === 'string')
+            .map(v => v.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      )
+    : null
+  const defaultCcRecipients = Array.isArray(body.default_cc_recipients)
+    ? Array.from(
+        new Set(
+          body.default_cc_recipients
+            .filter((v): v is string => typeof v === 'string')
+            .map(v => v.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      )
+    : null
 
   if (!name || !category || !subject) {
     return NextResponse.json({ error: 'name, category, and subject are required' }, { status: 400 })
@@ -60,11 +80,14 @@ export async function POST(req: NextRequest) {
       description,
       subject,
       body_html: bodyHtml,
+      default_recipients: defaultRecipients && defaultRecipients.length > 0 ? defaultRecipients : null,
+      default_cc_recipients:
+        defaultCcRecipients && defaultCcRecipients.length > 0 ? defaultCcRecipients : null,
       created_by: createdBy,
       archived: false,
     })
     .select(
-      'id, name, category, description, subject, body_html, created_by, archived, created_at, updated_at',
+      'id, name, category, description, subject, body_html, default_recipients, default_cc_recipients, created_by, archived, created_at, updated_at',
     )
     .single()
 
