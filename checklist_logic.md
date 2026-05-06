@@ -43,7 +43,7 @@ Prerequisites can cross phases (a Phase 3 item can depend on a Phase 2 item). Th
 ## The catalog (canonical order)
 
 Replace the catalog in the original brief with this. 27 items total.
-
+Most of this is outdated
 ### Phase 1 · Labor rate approval
 
 | # | Owner | Item key | Label | Prerequisites |
