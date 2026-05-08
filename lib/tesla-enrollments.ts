@@ -107,6 +107,7 @@ async function ensureDefaultTeslaEnrollments(supabaseAdmin: SupabaseClient): Pro
 
   if (existingError) throw new Error(existingError.message)
 
+  // Include both active and unenrolled rows so an explicit unenrollment stays sticky.
   const existingLocationIds = new Set((existingRows ?? []).map(row => row.location_id as string))
   const { data: eligibleLocations, error: eligibleError } = await supabaseAdmin
     .from('locations')
@@ -129,14 +130,18 @@ async function ensureDefaultTeslaEnrollments(supabaseAdmin: SupabaseClient): Pro
 
   if (rowsToInsert.length === 0) return
 
+  // We can't use `.upsert(..., { onConflict: 'location_id,program_id' })` because the unique
+  // index on this table is partial (`WHERE unenrolled_at IS NULL`, see migration 031), and
+  // Postgres rejects ON CONFLICT against a partial index without a matching predicate. The
+  // existence pre-check above already dedupes; the only remaining duplicate-key risk is a race
+  // between concurrent calls, which we swallow per-row.
   const { error: insertError } = await supabaseAdmin
     .from('location_program_enrollments')
-    .upsert(rowsToInsert, {
-      onConflict: 'location_id,program_id',
-      ignoreDuplicates: true,
-    })
+    .insert(rowsToInsert)
 
-  if (insertError) throw new Error(insertError.message)
+  if (insertError && (insertError as { code?: string }).code !== '23505') {
+    throw new Error(insertError.message)
+  }
 }
 
 export async function listTeslaEnrollments(
