@@ -61,7 +61,13 @@ function isTypingTarget(el: EventTarget | null): boolean {
   return el.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select'
 }
 
-export default function GlobalSearch({ className = '' }: { className?: string }) {
+export default function GlobalSearch({
+  className = '',
+  triggerVariant = 'default',
+}: {
+  className?: string
+  triggerVariant?: 'default' | 'icon-only'
+}) {
   const router = useRouter()
   const pathname = usePathname()
 
@@ -278,8 +284,18 @@ export default function GlobalSearch({ className = '' }: { className?: string })
   const showNoResults = hasTypedQuery && !loading && allRows.length === 0
   const showRecent = !hasTypedQuery
 
-  return (
-    <>
+  const triggerButton =
+    triggerVariant === 'icon-only' ? (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`inline-flex items-center justify-center rounded-md px-2 py-2 text-onix-800 transition-colors hover:bg-arctic-100 hover:text-onix-950 ${className}`}
+        aria-label={`Open global search (${shortcutLabel})`}
+        title={`Search (${shortcutLabel})`}
+      >
+        <Search className="h-4 w-4 shrink-0" aria-hidden />
+      </button>
+    ) : (
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -292,6 +308,11 @@ export default function GlobalSearch({ className = '' }: { className?: string })
           {shortcutLabel}
         </kbd>
       </button>
+    )
+
+  return (
+    <>
+      {triggerButton}
 
       {open && (
         <div

@@ -17,11 +17,14 @@ const navItems = [
   { href: '/settings/email-templates', label: 'Email templates', icon: Mail },
 ]
 
-export default function InternalSidebarNav() {
+export default function InternalSidebarNav({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname()
 
   return (
-    <nav className="flex-1 px-3 py-4 space-y-1 text-sm">
+    <nav
+      id="internal-sidebar-nav"
+      className={`flex-1 space-y-1 py-4 text-sm ${collapsed ? 'px-1.5' : 'px-3'}`}
+    >
       {navItems.map(item => {
         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
         const Icon = item.icon
@@ -29,17 +32,25 @@ export default function InternalSidebarNav() {
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors hover:bg-arctic-100 hover:text-onix-950 ${
-              isActive ? 'font-semibold text-onix-950 bg-arctic-100' : 'font-normal text-onix-800'
-            }`}
+            title={collapsed ? item.label : undefined}
+            className={`flex items-center rounded-md transition-colors hover:bg-arctic-100 hover:text-onix-950 ${
+              collapsed ? 'justify-center px-2 py-2' : 'gap-2 px-3 py-2'
+            } ${isActive ? 'font-semibold text-onix-950 bg-arctic-100' : 'font-normal text-onix-800'}`}
           >
-            <Icon className={`h-4 w-4 ${isActive ? 'text-brand-700' : 'text-onix-600'}`} aria-hidden />
-            {item.label}
+            <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-brand-700' : 'text-onix-600'}`} aria-hidden />
+            <span className={collapsed ? 'sr-only' : ''}>{item.label}</span>
           </Link>
         )
       })}
-      <div className="pt-2 mt-2 border-t border-arctic-200">
-        <GlobalSearch className="w-full justify-between px-3 py-2 shadow-none" />
+      <div className="mt-2 border-t border-arctic-200 pt-2">
+        <GlobalSearch
+          className={
+            collapsed
+              ? 'w-full justify-center border-0 bg-transparent p-0 shadow-none'
+              : 'w-full justify-between px-3 py-2 shadow-none'
+          }
+          triggerVariant={collapsed ? 'icon-only' : 'default'}
+        />
       </div>
     </nav>
   )

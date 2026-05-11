@@ -135,7 +135,7 @@ export default function ShopsFilters({
             setAssigneeVal(raw)
             applyFilter({ assigned_to: raw || undefined })
           }}
-          className="rounded-xl border border-arctic-300 bg-white px-3 py-2 text-sm text-onix-800"
+          className="min-w-[11.5rem] rounded-xl border border-arctic-300 bg-white py-2 pl-3 pr-10 text-sm text-onix-800 leading-5 subpixel-antialiased"
         >
           <option value="">All assignees</option>
           {assignees.map(a => (
@@ -158,7 +158,7 @@ export default function ShopsFilters({
                 setDisqualifiedVal(raw)
                 applyFilter({ disqualified_reason: raw || undefined })
               }}
-              className="rounded-xl border border-arctic-300 bg-white px-3 py-2 text-sm text-onix-800"
+              className="min-w-[12rem] rounded-xl border border-arctic-300 bg-white py-2 pl-3 pr-10 text-sm text-onix-800 leading-5 subpixel-antialiased"
             >
               <option value="">All churned</option>
               {DISQUALIFIED_REASON_VALUES.map(key => (
