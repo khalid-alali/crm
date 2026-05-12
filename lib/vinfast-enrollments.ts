@@ -24,6 +24,7 @@ type LocationRow = {
   county: string | null
   status: string
   vf_onboarding_status: string | null
+  vf_operational_status: string | null
   capabilities_submitted_at: string | null
   account_id: string | null
   motherduck_shop_id: string | null
@@ -80,7 +81,6 @@ export type VinfastEnrollmentView = {
   hasShopSurvey: boolean
   hasTechSurvey: boolean
   vinfastActive: boolean
-  highSignalName: boolean
   checklist: {
     itemKey: string
     label: string
@@ -88,13 +88,10 @@ export type VinfastEnrollmentView = {
     notes: string | null
   }[]
   missingChecklistKeys: string[]
-}
-
-const HIGH_SIGNAL_NAME_RE = /\b(ev|electric|hybrid|voltage|tesla)\b/i
-
-function isHighSignalShopName(name: string | null | undefined): boolean {
-  if (!name) return false
-  return HIGH_SIGNAL_NAME_RE.test(name)
+  /** Post-launch ops label from `locations.vf_operational_status` (e.g. Onboarding Paused). */
+  vfOperationalStatus: string | null
+  /** From `locations.vf_onboarding_status` (e.g. PIP). */
+  vfOnboardingStatus: string | null
 }
 
 function normalizeVinfastStage(input: {
@@ -163,7 +160,7 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
     const { data, error } = await supabaseAdmin
       .from('locations')
       .select(
-        'id, name, city, state, county, status, vf_onboarding_status, capabilities_submitted_at, account_id, motherduck_shop_id',
+        'id, name, city, state, county, status, vf_onboarding_status, vf_operational_status, capabilities_submitted_at, account_id, motherduck_shop_id',
       )
       .in('id', ids)
     if (error) throw new Error(error.message)
@@ -279,9 +276,10 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
           )
         })(),
       ),
-      highSignalName: isHighSignalShopName(loc?.name ?? null),
       checklist,
       missingChecklistKeys: getMissingChecklistKeys(VINFAST_PROGRAM_ID, canonicalCompletedKeys),
+      vfOperationalStatus: (loc?.vf_operational_status as string | null) ?? null,
+      vfOnboardingStatus: (loc?.vf_onboarding_status as string | null) ?? null,
     }
   })
 }

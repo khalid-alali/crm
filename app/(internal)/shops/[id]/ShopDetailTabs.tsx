@@ -31,6 +31,7 @@ import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { LOCATION_SOURCES, formatLocationSource } from '@/lib/location-source'
 import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
+import type { LeadEnrichmentPreviewResult } from '@/lib/google-places-enrichment'
 import { DISQUALIFIED_REASON_LABELS, DISQUALIFIED_REASON_VALUES } from '@/lib/location-outcome-reasons'
 import TaskFormModal from '@/components/tasks/TaskFormModal'
 import TaskRow from '@/components/tasks/TaskRow'
@@ -324,8 +325,13 @@ export default function ShopDetailTabs({
   const [shopCacheLoading, setShopCacheLoading] = useState(false)
   const [shopCacheError, setShopCacheError] = useState<string | null>(null)
   const [shopCacheRow, setShopCacheRow] = useState<ShopStatusCachePayload | null>(null)
-  const [enrichLoading, setEnrichLoading] = useState(false)
   const [enrichFeedback, setEnrichFeedback] = useState<string | null>(null)
+  const [enrichModalOpen, setEnrichModalOpen] = useState(false)
+  const [enrichPreviewLoading, setEnrichPreviewLoading] = useState(false)
+  const [enrichPreviewData, setEnrichPreviewData] = useState<LeadEnrichmentPreviewResult | null>(null)
+  const [enrichPreviewError, setEnrichPreviewError] = useState<string | null>(null)
+  const [enrichConfirming, setEnrichConfirming] = useState(false)
+  const enrichBusy = enrichPreviewLoading || enrichConfirming
   const [tasks, setTasks] = useState<TaskWithLocation[]>([])
   const [tasksLoading, setTasksLoading] = useState(false)
   const [tasksError, setTasksError] = useState<string | null>(null)
@@ -387,6 +393,11 @@ export default function ShopDetailTabs({
     setInlineEdit(null)
     setInlineError(null)
     setEnrichFeedback(null)
+    setEnrichModalOpen(false)
+    setEnrichPreviewData(null)
+    setEnrichPreviewError(null)
+    setEnrichPreviewLoading(false)
+    setEnrichConfirming(false)
     setSelectedProgram('vinfast')
     setAutoCollapseDonePhases(true)
     setShowCompletedItems(false)
@@ -1226,8 +1237,39 @@ export default function ShopDetailTabs({
     )
   }
 
-  async function runLocationEnrich() {
-    setEnrichLoading(true)
+  async function openEnrichModal() {
+    if (inlineEdit === 'location') return
+    setEnrichModalOpen(true)
+    setEnrichPreviewData(null)
+    setEnrichPreviewError(null)
+    setEnrichFeedback(null)
+    setInlineError(null)
+    setEnrichPreviewLoading(true)
+    try {
+      const res = await fetch(`/api/locations/${shop.id}/enrich`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview: true }),
+      })
+      const data = (await res.json().catch(() => ({}))) as LeadEnrichmentPreviewResult & { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not load preview')
+      setEnrichPreviewData(data as LeadEnrichmentPreviewResult)
+    } catch (e: unknown) {
+      setEnrichPreviewError(e instanceof Error ? e.message : 'Could not load preview')
+    } finally {
+      setEnrichPreviewLoading(false)
+    }
+  }
+
+  function closeEnrichModal() {
+    if (enrichConfirming || enrichPreviewLoading) return
+    setEnrichModalOpen(false)
+    setEnrichPreviewData(null)
+    setEnrichPreviewError(null)
+  }
+
+  async function confirmEnrichFromModal() {
+    setEnrichConfirming(true)
     setEnrichFeedback(null)
     setInlineError(null)
     try {
@@ -1235,11 +1277,14 @@ export default function ShopDetailTabs({
       const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
       if (!res.ok) throw new Error(data.error ?? 'Enrichment failed')
       setEnrichFeedback(data.message ?? 'Done.')
+      setEnrichModalOpen(false)
+      setEnrichPreviewData(null)
+      setEnrichPreviewError(null)
       router.refresh()
     } catch (e: unknown) {
-      setEnrichFeedback(e instanceof Error ? e.message : 'Enrichment failed')
+      setEnrichPreviewError(e instanceof Error ? e.message : 'Enrichment failed')
     } finally {
-      setEnrichLoading(false)
+      setEnrichConfirming(false)
     }
   }
 
@@ -1740,12 +1785,12 @@ export default function ShopDetailTabs({
             Location
             <button
               type="button"
-              onClick={() => void runLocationEnrich()}
-              disabled={enrichLoading || inlineEdit === 'location'}
+              onClick={() => void openEnrichModal()}
+              disabled={enrichBusy || inlineEdit === 'location'}
               title="Enrich address and metadata from Google Places"
               className="inline-flex h-5 w-5 items-center justify-center rounded text-onix-400 hover:bg-arctic-100 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {enrichLoading ? (
+              {enrichBusy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
               ) : (
                 <Sparkles className="h-3.5 w-3.5" aria-hidden />
@@ -2766,6 +2811,136 @@ export default function ShopDetailTabs({
           )}
         </section>
       </div>
+
+      {enrichModalOpen && (
+        <div
+          role="presentation"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => {
+            if (!enrichConfirming && !enrichPreviewLoading) closeEnrichModal()
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="enrich-modal-title"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="border-b border-arctic-200 px-5 py-4">
+              <h2 id="enrich-modal-title" className="text-base font-semibold text-onix-950">
+                Enrich from Google Places
+              </h2>
+              <p className="mt-1 text-sm text-onix-600">
+                We match this shop to Google&apos;s listing, then update CRM fields. Review what would change before saving.
+              </p>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              {enrichPreviewLoading && (
+                <div className="flex items-center gap-2 text-sm text-onix-600">
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                  Loading preview from Google…
+                </div>
+              )}
+              {enrichPreviewError && (
+                <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{enrichPreviewError}</p>
+              )}
+              {!enrichPreviewLoading && enrichPreviewData && !enrichPreviewData.ok && (
+                <p
+                  className={`rounded-md border px-3 py-2 text-sm ${
+                    enrichPreviewData.status === 'failed'
+                      ? 'border-red-200 bg-red-50 text-red-800'
+                      : 'border-amber-200 bg-amber-50 text-amber-900'
+                  }`}
+                >
+                  {enrichPreviewData.message}
+                </p>
+              )}
+              {!enrichPreviewLoading && enrichPreviewData?.ok === true && (
+                <>
+                  {(enrichPreviewData.googlePlaceName || enrichPreviewData.googleFormattedAddress) && (
+                    <div className="space-y-1 rounded-md border border-arctic-200 bg-arctic-50 px-3 py-2 text-xs text-onix-600">
+                      {enrichPreviewData.googlePlaceName && (
+                        <p>
+                          <span className="font-medium text-onix-700">Matched Google name: </span>
+                          {enrichPreviewData.googlePlaceName}
+                        </p>
+                      )}
+                      {enrichPreviewData.googleFormattedAddress && (
+                        <p>
+                          <span className="font-medium text-onix-700">Matched Google address: </span>
+                          {enrichPreviewData.googleFormattedAddress}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-sm text-onix-700">{enrichPreviewData.message}</p>
+                  {enrichPreviewData.changes.length === 0 ? (
+                    <p className="text-sm text-onix-600">
+                      No visible field changes. Confirming will still refresh Google metadata on this location.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border border-arctic-200">
+                      <table className="w-full min-w-[280px] text-sm">
+                        <thead>
+                          <tr className="border-b border-arctic-200 bg-arctic-50 text-left text-xs font-medium uppercase tracking-wide text-onix-500">
+                            <th className="px-3 py-2">Field</th>
+                            <th className="px-3 py-2">Current</th>
+                            <th className="px-3 py-2">After save</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {enrichPreviewData.changes.map((row, idx) => (
+                            <tr key={idx} className="border-b border-arctic-100 last:border-0">
+                              <td className="px-3 py-2 font-medium text-onix-900">{row.label}</td>
+                              <td className="px-3 py-2 text-onix-600 whitespace-pre-wrap break-words max-w-[11rem]">{row.before}</td>
+                              <td className="px-3 py-2 text-onix-950 whitespace-pre-wrap break-words max-w-[11rem]">{row.after}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {enrichPreviewData.notes.length > 0 && (
+                    <ul className="list-disc space-y-1 pl-5 text-xs text-onix-600">
+                      {enrichPreviewData.notes.map((note, nIdx) => (
+                        <li key={nIdx}>{note}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-arctic-200 px-5 py-3">
+              <button
+                type="button"
+                disabled={enrichConfirming || enrichPreviewLoading}
+                onClick={() => closeEnrichModal()}
+                className="rounded-lg px-4 py-1.5 text-sm text-onix-600 hover:bg-arctic-100 disabled:opacity-50"
+              >
+                {enrichPreviewData && !enrichPreviewData.ok ? 'Close' : 'Cancel'}
+              </button>
+              {enrichPreviewData?.ok === true && (
+                <button
+                  type="button"
+                  disabled={enrichConfirming || enrichPreviewLoading}
+                  onClick={() => void confirmEnrichFromModal()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {enrichConfirming ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      Saving…
+                    </>
+                  ) : (
+                    'Confirm and save'
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {churnModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

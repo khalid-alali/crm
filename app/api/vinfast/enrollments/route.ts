@@ -5,6 +5,7 @@ import { listVinfastEnrollments } from '@/lib/vinfast-enrollments'
 import { supabaseAdmin } from '@/lib/supabase'
 import { enrollLocationInProgram } from '@/lib/program-enrollment-service'
 import { VINFAST_PROGRAM_ID } from '@/lib/program-config'
+import { VINFAST_DEFAULT_OPS_WHEN_NOT_READY } from '@/lib/vinfast-operational-status'
 
 export async function GET() {
   const session = await getAppSession()
@@ -71,6 +72,18 @@ export async function POST(req: Request) {
           body: 'Enrolled in VinFast program.',
           sent_by: actor ?? 'unknown',
         })
+        const { data: locRow } = await supabaseAdmin
+          .from('locations')
+          .select('vf_operational_status')
+          .eq('id', locationId)
+          .maybeSingle()
+        const cur = (locRow?.vf_operational_status as string | null) ?? null
+        if (!String(cur ?? '').trim()) {
+          await supabaseAdmin
+            .from('locations')
+            .update({ vf_operational_status: VINFAST_DEFAULT_OPS_WHEN_NOT_READY })
+            .eq('id', locationId)
+        }
       } else {
         alreadyActive++
       }

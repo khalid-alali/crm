@@ -1,14 +1,24 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
-import { enrichLeadLocation } from '@/lib/google-places-enrichment'
+import { enrichLeadLocation, previewLeadEnrichment } from '@/lib/google-places-enrichment'
 import { resolvePrimaryContact } from '@/lib/primary-contact'
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAppSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
+
+  let preview = false
+  try {
+    if (req.headers.get('content-type')?.includes('application/json')) {
+      const body = (await req.json()) as { preview?: boolean }
+      preview = Boolean(body?.preview)
+    }
+  } catch {
+    // non-JSON or empty body: treat as apply
+  }
 
   const { data: loc, error: locErr } = await supabaseAdmin
     .from('locations')
@@ -21,6 +31,16 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const primary = await resolvePrimaryContact(supabaseAdmin, loc.account_id, id)
   const submittedPhone = primary?.phone?.trim() ?? ''
+
+  if (preview) {
+    const previewResult = await previewLeadEnrichment(supabaseAdmin, {
+      locationId: id,
+      shopName: String(loc.name ?? '').trim() || 'Shop',
+      postalCode: loc.postal_code,
+      submittedPhone,
+    })
+    return NextResponse.json(previewResult)
+  }
 
   const result = await enrichLeadLocation(supabaseAdmin, {
     locationId: id,

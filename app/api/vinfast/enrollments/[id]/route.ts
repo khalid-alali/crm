@@ -5,6 +5,10 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { deriveProgramStage, isTeslaStage } from '@/lib/program-stage'
 import { VINFAST_PROGRAM_ID } from '@/lib/program-config'
 import { unenrollEnrollment } from '@/lib/program-enrollment-service'
+import {
+  VINFAST_DEFAULT_OPS_WHEN_ACTIVE,
+  VINFAST_DEFAULT_OPS_WHEN_NOT_READY,
+} from '@/lib/vinfast-operational-status'
 
 type PatchBody = {
   stage?: string
@@ -113,6 +117,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
+  if (body.stage !== undefined) {
+    const locUpdate: Record<string, string> = {}
+    if (body.stage === 'active') {
+      locUpdate.vf_operational_status = VINFAST_DEFAULT_OPS_WHEN_ACTIVE
+    } else if (body.stage === 'not_ready') {
+      locUpdate.vf_operational_status = VINFAST_DEFAULT_OPS_WHEN_NOT_READY
+    }
+    if (Object.keys(locUpdate).length > 0) {
+      const { error: locErr } = await supabaseAdmin
+        .from('locations')
+        .update(locUpdate)
+        .eq('id', enrollment.location_id)
+      if (locErr) {
+        console.error('VinFast stage default vf_operational_status:', locErr.message)
+      }
+    }
+  }
+
+  revalidatePath('/vinfast')
   revalidatePath('/shops')
   return NextResponse.json(updated)
 }

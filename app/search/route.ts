@@ -3,6 +3,9 @@ import { getAppSession } from '@/lib/app-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const MAX_PER_GROUP = 4
+/** Wider caps when `context=vinfast-enroll` (VinFast enroll modal); keeps global ⌘K results small. */
+const VINFAST_ENROLL_SHOP_CAP = 20
+const VINFAST_ENROLL_OTHER_CAP = 15
 
 type LocationRow = {
   id: string
@@ -50,26 +53,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(empty)
   }
 
+  const enrollContext = req.nextUrl.searchParams.get('context') === 'vinfast-enroll'
+  const shopCap = enrollContext ? VINFAST_ENROLL_SHOP_CAP : MAX_PER_GROUP
+  const contactFetchCap = enrollContext ? 40 : 20
+  const accountFetchCap = enrollContext ? 40 : 20
+  const otherResultCap = enrollContext ? VINFAST_ENROLL_OTHER_CAP : MAX_PER_GROUP
+
   const shopQuery = supabaseAdmin
     .from('locations')
     .select('id, name, status')
     .or(`name.ilike.%${q}%,motherduck_shop_id.ilike.%${q}%`)
     .order('updated_at', { ascending: false })
-    .limit(MAX_PER_GROUP)
+    .limit(shopCap)
 
   const contactsQuery = supabaseAdmin
     .from('contacts')
     .select('id, name, email, location_id, account_id')
     .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(contactFetchCap)
 
   const accountsQuery = supabaseAdmin
     .from('accounts')
     .select('id, business_name')
     .ilike('business_name', `%${q}%`)
     .order('business_name', { ascending: true })
-    .limit(20)
+    .limit(accountFetchCap)
 
   const [{ data: shopsData, error: shopsError }, { data: contactsData, error: contactsError }, { data: accountsData, error: accountsError }] =
     await Promise.all([shopQuery, contactsQuery, accountsQuery])
@@ -119,7 +128,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const shopResults = ((shopsData ?? []) as Array<{ id: string; name: string; status: string | null }>).slice(0, MAX_PER_GROUP)
+  const shopResults = ((shopsData ?? []) as Array<{ id: string; name: string; status: string | null }>).slice(0, shopCap)
 
   const contactResults: SearchResponse['contacts'] = []
   for (const contact of contacts) {
@@ -136,7 +145,7 @@ export async function GET(req: NextRequest) {
       shop_id: target.id,
       shop_name: target.name,
     })
-    if (contactResults.length >= MAX_PER_GROUP) break
+    if (contactResults.length >= otherResultCap) break
   }
 
   const accountResults: SearchResponse['accounts'] = []
@@ -150,7 +159,7 @@ export async function GET(req: NextRequest) {
       shop_id: target.id,
       shop_name: target.name,
     })
-    if (accountResults.length >= MAX_PER_GROUP) break
+    if (accountResults.length >= otherResultCap) break
   }
 
   return NextResponse.json({

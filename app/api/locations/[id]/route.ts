@@ -9,6 +9,7 @@ import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 import { revalidatePath } from 'next/cache'
 import { parseDisqualifiedReason } from '@/lib/location-outcome-reasons'
 import { parseShopBusinessTypesField } from '@/lib/shop-business-types'
+import { canonicalizeVfOperationalStatus } from '@/lib/vinfast-operational-status'
 
 const SHOP_TYPES = new Set(['generalist', 'specialist'])
 
@@ -97,6 +98,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     'standard_labor_rate',
     'warranty_labor_rate',
     'note',
+    'vf_operational_status',
+    'on_vf_website',
   ] as const
 
   const fields: Record<string, unknown> = {}
@@ -176,6 +179,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const v = fields.vf_onboarding_status
     fields.vf_onboarding_status =
       v == null || v === '' ? null : String(v).trim() || null
+  }
+  if ('vf_operational_status' in fields) {
+    const v = fields.vf_operational_status
+    if (v === null || v === '') {
+      fields.vf_operational_status = null
+    } else if (typeof v === 'string') {
+      const c = canonicalizeVfOperationalStatus(v)
+      if (!c) {
+        return NextResponse.json({ error: 'Invalid vf_operational_status' }, { status: 400 })
+      }
+      fields.vf_operational_status = c
+    } else {
+      return NextResponse.json({ error: 'Invalid vf_operational_status' }, { status: 400 })
+    }
+  }
+  if ('on_vf_website' in fields) {
+    fields.on_vf_website = Boolean(fields.on_vf_website)
   }
   if ('vf_go_live_week' in fields) {
     const v = fields.vf_go_live_week
@@ -347,6 +367,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   revalidatePath('/shops')
   revalidatePath(`/shops/${id}`)
   revalidatePath('/home')
+  if ('vf_operational_status' in fields || 'on_vf_website' in fields) {
+    revalidatePath('/vinfast')
+  }
 
   return NextResponse.json(location)
 }

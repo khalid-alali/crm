@@ -32,6 +32,8 @@
     "import:tech-competency-csv:apply": "npx tsx scripts/import-tech-competency-csv.ts --apply",
     "import:vinfast-shops-csv": "npx tsx scripts/import-vinfast-shops-csv.ts",
     "import:vinfast-shops-csv:apply": "npx tsx scripts/import-vinfast-shops-csv.ts --apply",
+    "import:vf-operational-csv": "npx tsx scripts/import-vf-operational-csv.ts",
+    "import:vf-operational-csv:apply": "npx tsx scripts/import-vf-operational-csv.ts --apply",
     "validate:bulk-import": "npx tsx scripts/validate-bulk-import.ts"
   },
   "dependencies": {

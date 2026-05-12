@@ -212,22 +212,49 @@ export type LeadEnrichmentResult = {
   contactPhone: string
 }
 
-/**
- * Text Search → Place Details → update `locations`, upsert `location_enrichment`.
- * Uses GOOGLE_MAPS_API_KEY (same as Geocoding). Never throws.
- */
-export async function enrichLeadLocation(
-  supabase: SupabaseClient,
-  input: LeadEnrichmentInput,
-): Promise<LeadEnrichmentResult> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim() ?? ''
-  const { locationId, shopName, postalCode, submittedPhone } = input
+type EnrichmentFailurePartial = Partial<{
+  place_id: string | null
+  formatted_address: string | null
+  google_rating: number | null
+  google_review_count: number | null
+  business_status: string | null
+  website: string | null
+  phone_places: string | null
+  geometry_lat: number | null
+  geometry_lng: number | null
+}>
 
-  const rawPayload: Record<string, unknown> = {
-    query: [shopName, postalCode].filter(Boolean).join(' ').trim(),
-  }
+export type LeadEnrichmentComputeFailure = {
+  ok: false
+  status: 'needs_review' | 'failed'
+  rawPayload: Record<string, unknown>
+  partial?: EnrichmentFailurePartial
+}
 
-  const fail = async (status: 'needs_review' | 'failed', payload: Record<string, unknown>, partial?: Partial<{
+export type LocationEnrichmentSnapshot = {
+  name: string | null
+  address_line1: string | null
+  city: string | null
+  state: string | null
+  postal_code: string | null
+  county: string | null
+  website: string | null
+  phone: string | null
+  lat: unknown
+  lng: unknown
+  enrichment_status: string | null
+  account_id: string | null
+}
+
+export type LeadEnrichmentComputeSuccess = {
+  ok: true
+  locationId: string
+  rawPayload: Record<string, unknown>
+  before: LocationEnrichmentSnapshot
+  locationPatch: Record<string, unknown>
+  enrichmentUpsert: {
+    location_id: string
+    enrichment_status: 'enriched'
     place_id: string | null
     formatted_address: string | null
     google_rating: number | null
@@ -237,20 +264,69 @@ export async function enrichLeadLocation(
     phone_places: string | null
     geometry_lat: number | null
     geometry_lng: number | null
-  }>) => {
-    await supabase.from('locations').update({ enrichment_status: status }).eq('id', locationId)
-    await upsertEnrichmentRow(supabase, {
-      location_id: locationId,
-      enrichment_status: status,
-      raw_payload: payload,
-      ...partial,
-    })
-    return { contactPhone: submittedPhone }
+    raw_payload: Record<string, unknown>
   }
+  contactPhone: string
+  submittedPhone: string
+  promotedPhone: string | null
+  placesPhone: string | null
+  wouldCreateStoreContact: boolean
+  storeContactPhone: string | null
+  /** Business / place title from Google (Place Details, then Text Search). */
+  googlePlaceName: string | null
+  googleFormattedAddress: string | null
+  coords: LatLng | null
+  /** Partial row if location update fails after compute */
+  persistFailurePartial: EnrichmentFailurePartial
+}
+
+export type LeadEnrichmentComputeResult = LeadEnrichmentComputeFailure | LeadEnrichmentComputeSuccess
+
+async function persistLeadEnrichmentFailure(
+  supabase: SupabaseClient,
+  locationId: string,
+  submittedPhone: string,
+  failure: LeadEnrichmentComputeFailure,
+): Promise<LeadEnrichmentResult> {
+  await supabase.from('locations').update({ enrichment_status: failure.status }).eq('id', locationId)
+  await upsertEnrichmentRow(supabase, {
+    location_id: locationId,
+    enrichment_status: failure.status,
+    raw_payload: failure.rawPayload,
+    ...failure.partial,
+  })
+  return { contactPhone: submittedPhone }
+}
+
+/**
+ * Google Places + geocode pipeline without writing to `locations` or `location_enrichment`.
+ * Used for preview UI and as the first phase of {@link enrichLeadLocation}.
+ */
+export async function computeLeadEnrichment(
+  supabase: SupabaseClient,
+  input: LeadEnrichmentInput,
+): Promise<LeadEnrichmentComputeResult> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim() ?? ''
+  const { locationId, shopName, postalCode, submittedPhone } = input
+
+  const rawPayload: Record<string, unknown> = {
+    query: [shopName, postalCode].filter(Boolean).join(' ').trim(),
+  }
+
+  const err = (
+    status: 'needs_review' | 'failed',
+    payload: Record<string, unknown>,
+    partial?: EnrichmentFailurePartial,
+  ): LeadEnrichmentComputeFailure => ({
+    ok: false,
+    status,
+    rawPayload: payload,
+    ...(partial !== undefined ? { partial } : {}),
+  })
 
   if (!apiKey) {
     rawPayload.error = 'GOOGLE_MAPS_API_KEY is not configured'
-    return fail('failed', rawPayload)
+    return err('failed', rawPayload)
   }
 
   const query = [shopName, postalCode].filter(Boolean).join(' ').trim() || shopName
@@ -259,7 +335,7 @@ export async function enrichLeadLocation(
     textJson = await googleTextSearch(query, apiKey)
   } catch (e) {
     rawPayload.text_search_error = String(e)
-    return fail('failed', rawPayload)
+    return err('failed', rawPayload)
   }
 
   rawPayload.text_search = textJson
@@ -267,16 +343,16 @@ export async function enrichLeadLocation(
   if (textJson.status !== 'OK' && textJson.status !== 'ZERO_RESULTS') {
     rawPayload.text_search_status = textJson.status
     rawPayload.text_search_error_message = textJson.error_message
-    return fail('failed', rawPayload)
+    return err('failed', rawPayload)
   }
   if (!textJson.results?.length) {
-    return fail('needs_review', rawPayload)
+    return err('needs_review', rawPayload)
   }
 
   const first = textJson.results[0]
   const placeId = first.place_id
   if (!placeId) {
-    return fail('needs_review', rawPayload)
+    return err('needs_review', rawPayload)
   }
 
   let detailsJson: DetailsResponse
@@ -284,7 +360,7 @@ export async function enrichLeadLocation(
     detailsJson = await googlePlaceDetails(placeId, apiKey)
   } catch (e) {
     rawPayload.place_details_error = String(e)
-    return fail('failed', rawPayload, { place_id: placeId })
+    return err('failed', rawPayload, { place_id: placeId })
   }
 
   rawPayload.place_details = detailsJson
@@ -292,7 +368,7 @@ export async function enrichLeadLocation(
   if (detailsJson.status !== 'OK') {
     rawPayload.place_details_status = detailsJson.status
     rawPayload.place_details_error_message = detailsJson.error_message
-    return fail('failed', rawPayload, {
+    return err('failed', rawPayload, {
       place_id: placeId,
       formatted_address: first.formatted_address ?? null,
       google_rating: first.rating ?? null,
@@ -303,7 +379,7 @@ export async function enrichLeadLocation(
     })
   }
   if (!detailsJson.result) {
-    return fail('needs_review', rawPayload, {
+    return err('needs_review', rawPayload, {
       place_id: placeId,
       formatted_address: first.formatted_address ?? null,
       google_rating: first.rating ?? null,
@@ -339,9 +415,24 @@ export async function enrichLeadLocation(
 
   const { data: existingLoc } = await supabase
     .from('locations')
-    .select('city, website, account_id, lat, lng')
+    .select('name, address_line1, city, state, postal_code, county, website, phone, account_id, lat, lng, enrichment_status')
     .eq('id', locationId)
     .maybeSingle()
+
+  const before: LocationEnrichmentSnapshot = {
+    name: existingLoc?.name ?? null,
+    address_line1: existingLoc?.address_line1 ?? null,
+    city: existingLoc?.city ?? null,
+    state: existingLoc?.state ?? null,
+    postal_code: existingLoc?.postal_code ?? null,
+    county: existingLoc?.county ?? null,
+    website: existingLoc?.website ?? null,
+    phone: existingLoc?.phone ?? null,
+    lat: existingLoc?.lat,
+    lng: existingLoc?.lng,
+    enrichment_status: existingLoc?.enrichment_status ?? null,
+    account_id: existingLoc?.account_id ?? null,
+  }
 
   const placesPhone = r.formatted_phone_number ?? r.international_phone_number ?? null
   const promotedPhone = pickPhoneForPromotion(submittedPhone, placesPhone)
@@ -375,37 +466,8 @@ export async function enrichLeadLocation(
     locationPatch.name = `Midas ${cityForDisplay}`
   }
 
-  const { error: upErr } = await supabase.from('locations').update(locationPatch).eq('id', locationId)
-  if (upErr) {
-    rawPayload.location_update_error = upErr.message
-    return fail('failed', rawPayload, {
-      place_id: r.place_id ?? placeId,
-      formatted_address: r.formatted_address ?? first.formatted_address ?? null,
-      google_rating: r.rating ?? first.rating ?? null,
-      google_review_count: r.user_ratings_total ?? first.user_ratings_total ?? null,
-      business_status: r.business_status ?? first.business_status ?? null,
-      website: r.website ?? null,
-      phone_places: placesPhone,
-      geometry_lat: coords?.lat ?? null,
-      geometry_lng: coords?.lng ?? null,
-    })
-  }
-
-  await upsertEnrichmentRow(supabase, {
-    location_id: locationId,
-    enrichment_status: 'enriched',
-    place_id: r.place_id ?? placeId,
-    formatted_address: r.formatted_address ?? first.formatted_address ?? null,
-    google_rating: r.rating ?? first.rating ?? null,
-    google_review_count: r.user_ratings_total ?? first.user_ratings_total ?? null,
-    business_status: r.business_status ?? first.business_status ?? null,
-    website: r.website ?? null,
-    phone_places: placesPhone,
-    geometry_lat: coords?.lat ?? null,
-    geometry_lng: coords?.lng ?? null,
-    raw_payload: rawPayload,
-  })
-
+  let wouldCreateStoreContact = false
+  let storeContactPhone: string | null = null
   if (placesPhone && placesPhoneDiffersFromSubmitted(submittedPhone, placesPhone)) {
     const b10 = digitsOnly(placesPhone).slice(-10)
     const { data: siblingContacts } = await supabase
@@ -416,25 +478,227 @@ export async function enrichLeadLocation(
       row => digitsOnly(row.phone ?? '').slice(-10) === b10 && digitsOnly(row.phone ?? '').length >= 10,
     )
     if (!alreadyHaveNumber) {
-      const storePhone = (r.formatted_phone_number ?? r.international_phone_number ?? placesPhone).trim()
-      const { error: storeContactErr } = await supabase.from('contacts').insert({
-        account_id: existingLoc?.account_id ?? null,
-        location_id: locationId,
-        name: 'Store contact',
-        phone: storePhone,
-        role: 'service_advisor',
-        is_primary: false,
-        notes: 'Auto-created from Google Places (store phone differs from form submission).',
-      })
-      if (storeContactErr) {
-        rawPayload.store_contact_insert_error = storeContactErr.message
-        await supabase
-          .from('location_enrichment')
-          .update({ raw_payload: rawPayload })
-          .eq('location_id', locationId)
-      }
+      wouldCreateStoreContact = true
+      storeContactPhone = (r.formatted_phone_number ?? r.international_phone_number ?? placesPhone).trim()
     }
   }
 
-  return { contactPhone }
+  const persistFailurePartial: EnrichmentFailurePartial = {
+    place_id: r.place_id ?? placeId,
+    formatted_address: r.formatted_address ?? first.formatted_address ?? null,
+    google_rating: r.rating ?? first.rating ?? null,
+    google_review_count: r.user_ratings_total ?? first.user_ratings_total ?? null,
+    business_status: r.business_status ?? first.business_status ?? null,
+    website: r.website ?? null,
+    phone_places: placesPhone,
+    geometry_lat: coords?.lat ?? null,
+    geometry_lng: coords?.lng ?? null,
+  }
+
+  const googlePlaceName = (r.name ?? first.name ?? '').trim() || null
+
+  return {
+    ok: true,
+    locationId,
+    rawPayload,
+    before,
+    locationPatch,
+    enrichmentUpsert: {
+      location_id: locationId,
+      enrichment_status: 'enriched',
+      place_id: r.place_id ?? placeId,
+      formatted_address: r.formatted_address ?? first.formatted_address ?? null,
+      google_rating: r.rating ?? first.rating ?? null,
+      google_review_count: r.user_ratings_total ?? first.user_ratings_total ?? null,
+      business_status: r.business_status ?? first.business_status ?? null,
+      website: r.website ?? null,
+      phone_places: placesPhone,
+      geometry_lat: coords?.lat ?? null,
+      geometry_lng: coords?.lng ?? null,
+      raw_payload: rawPayload,
+    },
+    contactPhone,
+    submittedPhone,
+    promotedPhone,
+    placesPhone,
+    wouldCreateStoreContact,
+    storeContactPhone,
+    googlePlaceName,
+    googleFormattedAddress: r.formatted_address ?? first.formatted_address ?? null,
+    coords,
+    persistFailurePartial,
+  }
+}
+
+export type LeadEnrichmentPreviewChange = {
+  label: string
+  before: string
+  after: string
+}
+
+export type LeadEnrichmentPreviewResult =
+  | { ok: false; status: 'needs_review' | 'failed'; message: string }
+  | {
+      ok: true
+      message: string
+      googlePlaceName: string | null
+      googleFormattedAddress: string | null
+      changes: LeadEnrichmentPreviewChange[]
+      notes: string[]
+    }
+
+function displayCell(v: unknown): string {
+  if (v == null || v === '') return '—'
+  return String(v).trim() || '—'
+}
+
+function formatCoordPair(lat: unknown, lng: unknown): string {
+  const la = lat == null || lat === '' ? NaN : Number(lat)
+  const ln = lng == null || lng === '' ? NaN : Number(lng)
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return '—'
+  return `${la.toFixed(5)}, ${ln.toFixed(5)}`
+}
+
+/** Build human-readable rows for the confirm modal (only fields that would change). */
+export function buildLeadEnrichmentPreviewChanges(computed: LeadEnrichmentComputeSuccess): LeadEnrichmentPreviewChange[] {
+  const { before, locationPatch } = computed
+  const changes: LeadEnrichmentPreviewChange[] = []
+  const b = before
+
+  const skipScalar = new Set(['lat', 'lng', 'geocoded_at', 'enrichment_status'])
+
+  if ('lat' in locationPatch && 'lng' in locationPatch) {
+    const afterLat = locationPatch.lat
+    const afterLng = locationPatch.lng
+    const beforeS = formatCoordPair(b.lat, b.lng)
+    const afterS = formatCoordPair(afterLat, afterLng)
+    if (beforeS !== afterS) {
+      changes.push({ label: 'Map coordinates', before: beforeS, after: afterS })
+    }
+  }
+
+  for (const [key, afterVal] of Object.entries(locationPatch)) {
+    if (skipScalar.has(key)) continue
+    const labelByKey: Record<string, string> = {
+      name: 'Shop name',
+      address_line1: 'Street address',
+      city: 'City',
+      state: 'State',
+      postal_code: 'Postal code',
+      county: 'County',
+      website: 'Website',
+      phone: 'Shop phone (location row)',
+    }
+    const label = labelByKey[key] ?? key
+    const beforeVal = (b as Record<string, unknown>)[key]
+    const beforeS = displayCell(beforeVal)
+    const afterS = displayCell(afterVal)
+    if (beforeS === afterS) continue
+    changes.push({ label, before: beforeS, after: afterS })
+  }
+
+  const primaryBefore = displayCell(computed.submittedPhone)
+  const primaryAfter = displayCell(computed.contactPhone)
+  if (primaryBefore !== primaryAfter) {
+    changes.push({ label: 'Primary contact phone', before: primaryBefore, after: primaryAfter })
+  }
+
+  return changes
+}
+
+export async function previewLeadEnrichment(
+  supabase: SupabaseClient,
+  input: LeadEnrichmentInput,
+): Promise<LeadEnrichmentPreviewResult> {
+  const computed = await computeLeadEnrichment(supabase, input)
+  if (!computed.ok) {
+    if (computed.status === 'needs_review') {
+      return {
+        ok: false,
+        status: 'needs_review',
+        message: 'No confident Google Places match for this shop. Nothing will be overwritten.',
+      }
+    }
+    const p = computed.rawPayload
+    let message = 'Enrichment failed (see location_enrichment in Supabase for details).'
+    if (typeof p.error === 'string') message = p.error
+    else if (typeof p.text_search_error === 'string') message = p.text_search_error
+    else if (typeof p.place_details_error === 'string') message = p.place_details_error
+    else if (typeof p.text_search_error_message === 'string' && typeof p.text_search_status === 'string') {
+      message = `Google Text Search (${p.text_search_status}): ${p.text_search_error_message}`
+    } else if (typeof p.place_details_error_message === 'string') {
+      message = `Google Place Details: ${p.place_details_error_message}`
+    }
+    return { ok: false, status: 'failed', message }
+  }
+
+  const changes = buildLeadEnrichmentPreviewChanges(computed)
+  const notes: string[] = []
+  if (computed.wouldCreateStoreContact && computed.storeContactPhone) {
+    notes.push(
+      'A new location contact “Store contact” will be added because the Google business phone differs from the primary contact.',
+    )
+  }
+
+  return {
+    ok: true,
+    message: 'Review updates from Google Places. Confirm to save them to this location.',
+    googlePlaceName: computed.googlePlaceName,
+    googleFormattedAddress: computed.googleFormattedAddress,
+    changes,
+    notes,
+  }
+}
+
+/**
+ * Text Search → Place Details → update `locations`, upsert `location_enrichment`.
+ * Uses GOOGLE_MAPS_API_KEY (same as Geocoding). Never throws.
+ */
+export async function enrichLeadLocation(
+  supabase: SupabaseClient,
+  input: LeadEnrichmentInput,
+): Promise<LeadEnrichmentResult> {
+  const { locationId, submittedPhone } = input
+
+  const computed = await computeLeadEnrichment(supabase, input)
+  if (!computed.ok) {
+    return persistLeadEnrichmentFailure(supabase, locationId, submittedPhone, computed)
+  }
+
+  const { rawPayload, locationPatch, enrichmentUpsert, persistFailurePartial } = computed
+
+  const { error: upErr } = await supabase.from('locations').update(locationPatch).eq('id', locationId)
+  if (upErr) {
+    rawPayload.location_update_error = upErr.message
+    await persistLeadEnrichmentFailure(supabase, locationId, submittedPhone, {
+      ok: false,
+      status: 'failed',
+      rawPayload,
+      partial: persistFailurePartial,
+    })
+    return { contactPhone: submittedPhone }
+  }
+
+  await upsertEnrichmentRow(supabase, enrichmentUpsert)
+
+  if (computed.wouldCreateStoreContact && computed.storeContactPhone) {
+    const { error: storeContactErr } = await supabase.from('contacts').insert({
+      account_id: computed.before.account_id ?? null,
+      location_id: locationId,
+      name: 'Store contact',
+      phone: computed.storeContactPhone,
+      role: 'service_advisor',
+      is_primary: false,
+      notes: 'Auto-created from Google Places (store phone differs from form submission).',
+    })
+    if (storeContactErr) {
+      rawPayload.store_contact_insert_error = storeContactErr.message
+      await supabase
+        .from('location_enrichment')
+        .update({ raw_payload: rawPayload })
+        .eq('location_id', locationId)
+    }
+  }
+
+  return { contactPhone: computed.contactPhone }
 }
