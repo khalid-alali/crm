@@ -379,9 +379,28 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const session = await getAppSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const { count: contractCount, error: contractCountError } = await supabaseAdmin
+    .from('contract_locations')
+    .select('contract_id', { head: true, count: 'exact' })
+    .eq('location_id', id)
+
+  if (contractCountError) {
+    return NextResponse.json({ error: contractCountError.message }, { status: 500 })
+  }
+
+  if ((contractCount ?? 0) > 0) {
+    return NextResponse.json(
+      { error: 'Cannot delete location with linked contracts. Remove contracts first.' },
+      { status: 409 },
+    )
+  }
+
   const { error } = await supabaseAdmin.from('locations').delete().eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  revalidatePath('/shops')
+  revalidatePath('/home')
 
   return NextResponse.json({ ok: true })
 }

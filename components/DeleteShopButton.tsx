@@ -79,8 +79,8 @@ export default function DeleteShopButton({
               {error && <p className="text-sm text-red-600">{error}</p>}
               <p className="text-sm text-onix-800">
                 Are you sure you want to delete <span className="font-medium">{shopName}</span>? This
-                permanently removes the shop, its program enrollments, activity log, and links to
-                contracts on this location. This cannot be undone.
+                permanently removes the shop, its program enrollments, and activity log. Shops with
+                linked contracts cannot be deleted. This cannot be undone.
               </p>
             </div>
             <div className="px-5 py-4 border-t border-arctic-100 flex justify-end gap-2">
