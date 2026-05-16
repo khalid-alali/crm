@@ -235,7 +235,8 @@ export async function POST(req: NextRequest) {
     .from('contract_locations')
     .select('location_id')
     .eq('contract_id', contract.id)
-  const locationIds = contractLocations?.map(cl => cl.location_id) ?? []
+  const linkedLocationIds = (contractLocations ?? []).map(cl => cl.location_id)
+  const locationIds = linkedLocationIds
 
   if (
     !skipRecallDuplicateActivity &&
@@ -310,14 +311,41 @@ export async function POST(req: NextRequest) {
       })
       .eq('id', contract.id)
 
-    if (locationIds.length > 0) {
+    let finalizeTargetIds = linkedLocationIds
+    if (contract.account_id) {
+      const { data: accountLocs } = await supabaseAdmin
+        .from('locations')
+        .select('id')
+        .eq('account_id', contract.account_id)
+      if (accountLocs && accountLocs.length > 0) {
+        finalizeTargetIds = accountLocs.map(l => l.id)
+      }
+    }
+
+    if (finalizeTargetIds.length > 0) {
       await supabaseAdmin
         .from('locations')
         .update({ status: 'contracted' })
-        .in('id', locationIds)
+        .in('id', finalizeTargetIds)
         .in('status', ['lead', 'contacted', 'dormant', 'in_review'])
 
-      for (const locationId of locationIds) {
+      if (standardRate != null) {
+        await supabaseAdmin
+          .from('locations')
+          .update({ standard_labor_rate: standardRate })
+          .in('id', finalizeTargetIds)
+          .is('standard_labor_rate', null)
+      }
+
+      if (warrantyRate != null) {
+        await supabaseAdmin
+          .from('locations')
+          .update({ warranty_labor_rate: warrantyRate })
+          .in('id', finalizeTargetIds)
+          .is('warranty_labor_rate', null)
+      }
+
+      for (const locationId of finalizeTargetIds) {
         await supabaseAdmin.from('activity_log').insert({
           location_id: locationId,
           type: 'contract',

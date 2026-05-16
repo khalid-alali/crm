@@ -12,6 +12,7 @@ type ImportErrorRow = {
 type ImportResult = {
   created: number
   skipped: number
+  contactsCreated?: number
   errors: ImportErrorRow[]
 }
 
@@ -52,6 +53,7 @@ export default function BulkLocationUploadModal({
       setResult({
         created: Number((data as ImportResult).created ?? 0),
         skipped: Number((data as ImportResult).skipped ?? 0),
+        contactsCreated: Number((data as ImportResult).contactsCreated ?? 0),
         errors: Array.isArray((data as ImportResult).errors) ? (data as ImportResult).errors : [],
       })
       router.refresh()
@@ -66,9 +68,16 @@ export default function BulkLocationUploadModal({
     <SimpleModal title="Bulk upload shops" onClose={onClose} preventClose={submitting}>
       <form onSubmit={onSubmit} className="space-y-3">
         <p className="text-xs text-onix-600">
-          Upload a CSV with headers: <span className="font-medium">Address</span>,{' '}
-          <span className="font-medium">State</span>, <span className="font-medium">Zip code</span>. Optional
-          headers: <span className="font-medium">Name</span>, <span className="font-medium">City</span>.
+          Required columns (any common header name works): <span className="font-medium">address</span>,{' '}
+          <span className="font-medium">state</span>, <span className="font-medium">ZIP</span> (
+          <span className="font-mono">Zip</span>, <span className="font-mono">Zip code</span>, etc.). Optional:{' '}
+          <span className="font-medium">shop name</span> (
+          <span className="font-mono">Name</span>, <span className="font-mono">LOCATION</span>, …),{' '}
+          <span className="font-medium">city</span>, <span className="font-medium">email</span>,{' '}
+          <span className="font-medium">phone</span> (
+          <span className="font-mono">Main Phone</span>, <span className="font-mono">Phone</span>, …). When email
+          and/or phone is present, a <span className="font-medium">location-level contact</span> is created for
+          that shop. Four-digit ZIPs (leading zero dropped) are padded when unambiguous.
         </p>
         <input
           type="file"
@@ -87,7 +96,13 @@ export default function BulkLocationUploadModal({
           <div className="rounded border border-arctic-200 bg-arctic-50 p-2.5 text-xs text-onix-700">
             <p>
               Created <span className="font-semibold">{result.created}</span> shops, skipped{' '}
-              <span className="font-semibold">{result.skipped}</span>.
+              <span className="font-semibold">{result.skipped}</span>
+              {result.contactsCreated != null && result.contactsCreated > 0 ? (
+                <>
+                  , location contacts <span className="font-semibold">{result.contactsCreated}</span>
+                </>
+              ) : null}
+              .
             </p>
             {result.errors.length > 0 && (
               <div className="mt-2">

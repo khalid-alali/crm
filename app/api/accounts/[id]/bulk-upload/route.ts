@@ -5,15 +5,10 @@ import { getAppSession } from '@/lib/app-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { detectChain } from '@/lib/chain-detect'
 import { geocodeAddress, stateFieldIsEmpty } from '@/lib/geocode'
-import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
+import { coerceUsZip5OrNull, getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 
-type CsvRow = {
-  Name?: string
-  Address?: string
-  City?: string
-  State?: string
-  'Zip code'?: string
-}
+/** Raw CSV row — headers vary by export (e.g. LOCATION, Zip, Main Phone). */
+type CsvRow = Record<string, string | undefined>
 
 type RowError = {
   row: number
@@ -21,7 +16,57 @@ type RowError = {
 }
 
 function compact(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
+  if (typeof value !== 'string') return ''
+  return value.replace(/\u00a0/g, ' ').trim()
+}
+
+function stripBom(s: string): string {
+  return s.replace(/^\uFEFF/, '')
+}
+
+function normalizeHeaderKey(h: string): string {
+  return stripBom(h)
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
+/** One logical field, first matching column wins. */
+function getFromNorm(norm: Record<string, string>, headerAliases: string[]): string {
+  for (const alias of headerAliases) {
+    const v = norm[normalizeHeaderKey(alias)]
+    if (v) return v
+  }
+  return ''
+}
+
+function rowToNormalized(csvRow: CsvRow): Record<string, string> {
+  const norm: Record<string, string> = {}
+  for (const [k, v] of Object.entries(csvRow)) {
+    norm[normalizeHeaderKey(k)] = compact(v)
+  }
+  return norm
+}
+
+/** US ZIP: accept 5, ZIP+4, 9 digits, or 4-digit (leading zero dropped in Excel). */
+function coerceZipForBulkUpload(raw: unknown): string {
+  const fromLib = coerceUsZip5OrNull(raw)
+  if (fromLib) return fromLib
+  const digits = compact(raw).replace(/\D/g, '')
+  if (digits.length === 4 && /^\d{4}$/.test(digits)) return digits.padStart(5, '0')
+  return normalizePostalCode(raw)
+}
+
+const REQUIRED_HEADER_GROUPS: string[][] = [
+  ['address', 'street', 'address line 1'],
+  ['state', 'st'],
+  ['zip code', 'zip', 'postal code', 'postcode'],
+]
+
+function csvHasRequiredColumns(fields: (string | undefined)[]): boolean {
+  const normHeaders = new Set(fields.filter(Boolean).map(f => normalizeHeaderKey(f!)))
+  return REQUIRED_HEADER_GROUPS.every(group => group.some(a => normHeaders.has(normalizeHeaderKey(a))))
 }
 
 function buildDedupKey(address: string, state: string, postalCode: string): string {
@@ -57,12 +102,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `Invalid CSV: ${parsed.errors[0]?.message ?? 'parse error'}` }, { status: 400 })
   }
 
-  const headers = (parsed.meta.fields ?? []).map(h => h.trim())
-  const requiredHeaders = ['Address', 'State', 'Zip code']
-  const missingHeaders = requiredHeaders.filter(h => !headers.includes(h))
-  if (missingHeaders.length > 0) {
+  const headers = parsed.meta.fields ?? []
+  if (!csvHasRequiredColumns(headers)) {
     return NextResponse.json(
-      { error: `Missing required header(s): ${missingHeaders.join(', ')}` },
+      {
+        error:
+          'CSV must include columns for address, state, and ZIP/postal code. Accepted examples: Address, State, Zip or Zip code.',
+      },
       { status: 400 },
     )
   }
@@ -78,8 +124,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .map(loc => {
         const address = compact(loc.address_line1)
         const state = compact(loc.state)
-        const postalCode = normalizePostalCode(loc.postal_code)
-        if (!address || !state || !postalCode) return null
+        const postalCode = coerceZipForBulkUpload(loc.postal_code)
+        if (!address || !state || !postalCode || getPostalCodeError(postalCode)) return null
         return buildDedupKey(address, state, postalCode)
       })
       .filter(Boolean) as string[],
@@ -87,17 +133,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   let created = 0
   let skipped = 0
+  let contactsCreated = 0
   const errors: RowError[] = []
 
   for (let i = 0; i < parsed.data.length; i += 1) {
-    const csvRow = parsed.data[i] ?? {}
+    const csvRow = (parsed.data[i] ?? {}) as CsvRow
     const rowNumber = i + 2
+    const norm = rowToNormalized(csvRow)
 
-    const address = compact(csvRow.Address)
-    const state = compact(csvRow.State).toUpperCase()
-    const postalCode = normalizePostalCode(csvRow['Zip code'])
-    const city = compact(csvRow.City) || null
-    const explicitName = compact(csvRow.Name)
+    const address = getFromNorm(norm, ['address', 'street', 'address line 1'])
+    const state = getFromNorm(norm, ['state', 'st']).toUpperCase()
+    const postalCodeRaw = getFromNorm(norm, ['zip code', 'zip', 'postal code', 'postcode'])
+    const postalCode = coerceZipForBulkUpload(postalCodeRaw)
+    const city = getFromNorm(norm, ['city']) || null
+    const explicitName = getFromNorm(norm, ['name', 'location', 'shop name', 'shop'])
+    const contactEmail = getFromNorm(norm, ['email', 'e-mail'])
+    const contactPhone = getFromNorm(norm, [
+      'main phone',
+      'phone',
+      'mobile',
+      'cell',
+      'telephone',
+      'published google number/marchex',
+    ])
 
     if (!address) {
       errors.push({ row: rowNumber, message: 'Address is required.' })
@@ -106,6 +164,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     if (!state) {
       errors.push({ row: rowNumber, message: 'State is required.' })
+      skipped += 1
+      continue
+    }
+    if (!postalCode) {
+      errors.push({ row: rowNumber, message: 'ZIP / postal code is required.' })
       skipped += 1
       continue
     }
@@ -168,6 +231,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       sent_by: session.user?.email ?? 'unknown',
     })
 
+    const emailTrim = contactEmail.trim()
+    const phoneTrim = contactPhone.trim()
+    if (emailTrim || phoneTrim) {
+      const { error: contactErr } = await supabaseAdmin.from('contacts').insert({
+        account_id: accountId,
+        location_id: location.id,
+        name: name || 'Shop contact',
+        email: emailTrim || null,
+        phone: phoneTrim || null,
+        role: 'other',
+        is_primary: false,
+      })
+      if (contactErr) {
+        errors.push({
+          row: rowNumber,
+          message: `Shop created, but contact was not saved: ${contactErr.message}`,
+        })
+      } else {
+        contactsCreated += 1
+      }
+    }
+
     existingKeys.add(dedupKey)
     created += 1
   }
@@ -175,5 +260,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   revalidatePath(`/accounts/${accountId}`)
   revalidatePath('/shops')
 
-  return NextResponse.json({ created, skipped, errors })
+  return NextResponse.json({ created, skipped, contactsCreated, errors })
 }

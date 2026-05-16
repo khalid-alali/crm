@@ -24,6 +24,7 @@ import SendContractModal, { type SendContractDraftPrefill } from '@/components/S
 import { contractStatusBadgeClass, contractStatusLabel } from '@/lib/contract-status-display'
 import AccountSelect from '@/components/AccountSelect'
 import LocationContactsSection from '@/components/LocationContactsSection'
+import ExpertAssistShopPanel from '@/components/expert-assist/ExpertAssistShopPanel'
 import { CapabilitiesSection } from '@/components/shop-detail/CapabilitiesSection'
 import ActivityFeed from '@/components/ActivityFeed'
 import StateSelect from '@/components/StateSelect'
@@ -56,7 +57,7 @@ const PROGRAM_CARD_CONFIG = [
 const VINFAST_WELCOME_TEMPLATE_ID = '8bb8f454-fc68-448c-96d8-ea25049a66f8'
 const VINFAST_IT_SETUP_TEMPLATE_ID = 'a4428cd1-9c51-459e-9819-d4d71bf52af3'
 const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive']
-const BASE_TABS = ['activity', 'tasks', 'contracts', 'programs', 'capabilities'] as const
+const BASE_TABS = ['activity', 'tasks', 'contracts', 'programs', 'capabilities', 'expert-assist'] as const
 type BaseTabKey = (typeof BASE_TABS)[number]
 type TabKey = BaseTabKey | 'admin'
 type EditField = 'name' | 'account' | 'location' | 'source' | 'notes' | 'commercial'
@@ -278,7 +279,7 @@ export default function ShopDetailTabs({
     const d = (defaultTab ?? 'activity').trim().toLowerCase()
     if (d === 'admin') return 'admin'
     if (d === 'activity') return 'activity'
-    if (d === 'tasks' || d === 'contracts' || d === 'programs' || d === 'capabilities') return d
+    if (d === 'tasks' || d === 'contracts' || d === 'programs' || d === 'capabilities' || d === 'expert-assist') return d
     return 'activity'
   })
   const [status, setStatus] = useState(shop.status)
@@ -1934,7 +1935,7 @@ export default function ShopDetailTabs({
                       : 'bg-white text-onix-600 hover:bg-arctic-100'
                   }`}
                 >
-                  {t}
+                  {t === 'expert-assist' ? 'Expert Assist' : t}
                   {t === 'programs' ? (
                     <span
                       className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-[11px] ${
@@ -2642,6 +2643,12 @@ export default function ShopDetailTabs({
                   {selectedProgramStats?.label} checklist is coming next. Use the VinFast card for full phased onboarding.
                 </div>
               )}
+            </div>
+          )}
+
+          {tab === 'expert-assist' && (
+            <div className="space-y-3">
+              <ExpertAssistShopPanel locationId={shop.id} />
             </div>
           )}
 

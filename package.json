@@ -15,6 +15,10 @@
     "reconcile:zoho": "npx tsx scripts/reconcile-zoho-signed-contracts.ts",
     "backfill:zoho-request-ids": "npx tsx scripts/backfill-zoho-request-ids-from-csv.ts",
     "backfill:zoho-pdfs": "npx tsx scripts/backfill-zoho-contract-pdfs.ts",
+    "backfill:contract-labor-rates:zoho": "npx tsx scripts/backfill-contract-labor-rates-from-zoho.ts",
+    "backfill:contract-labor-rates:zoho:apply": "npx tsx scripts/backfill-contract-labor-rates-from-zoho.ts --apply",
+    "backfill:location-labor-rates": "npx tsx scripts/backfill-location-labor-rates-from-contracts.ts",
+    "backfill:location-labor-rates:apply": "npx tsx scripts/backfill-location-labor-rates-from-contracts.ts --apply",
     "import:zoho": "npx tsx scripts/import.ts --zoho-only",
     "repair:zoho-location-names": "npx tsx scripts/repair-zoho-phone-location-names.ts",
     "link:orphan-contracts": "npx tsx scripts/link-orphan-contracts-to-locations.ts",
@@ -38,6 +42,8 @@
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",
+    "@stripe/react-stripe-js": "^6.3.0",
+    "@stripe/stripe-js": "^9.5.0",
     "@supabase/supabase-js": "^2",
     "@tanstack/react-virtual": "^3.13.24",
     "@tiptap/extension-link": "^3.22.3",
@@ -55,7 +61,9 @@
     "papaparse": "^5",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "resend": "^4"
+    "resend": "^6.12.3",
+    "stripe": "^22.1.1",
+    "twilio": "^6.0.2"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.11",
