@@ -156,6 +156,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       'telephone',
       'published google number/marchex',
     ])
+    const storeNumber =
+      getFromNorm(norm, [
+        'shop #',
+        'shop number',
+        'store number',
+        'store_number',
+        'store no',
+        'shop no',
+      ]) || null
 
     if (!address) {
       errors.push({ row: rowNumber, message: 'Address is required.' })
@@ -195,6 +204,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       postal_code: postalCode,
       status: 'lead',
       chain_name: detectChain(name),
+      ...(storeNumber ? { store_number: storeNumber } : {}),
     }
 
     const coords = await geocodeAddress({

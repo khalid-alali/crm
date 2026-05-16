@@ -3,9 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  BatteryCharging,
   ChartColumn,
-  CarFront,
   House,
   ListTodo,
   Mail,
@@ -15,14 +13,15 @@ import {
   Users,
 } from 'lucide-react'
 import GlobalSearch from '@/components/GlobalSearch'
+import { TeslaMark, VinfastMark } from '@/components/SidebarBrandIcons'
 
 const navItems = [
   { href: '/home', label: 'Home', icon: House },
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/shops', label: 'Shops', icon: Store },
   { href: '/consults', label: 'Consults', icon: MessageSquare },
-  { href: '/tesla', label: 'Tesla', icon: CarFront },
-  { href: '/vinfast', label: 'VinFast', icon: BatteryCharging },
+  { href: '/tesla', label: 'Tesla', icon: TeslaMark },
+  { href: '/vinfast', label: 'VinFast', icon: VinfastMark },
   { href: '/accounts', label: 'Accounts', icon: Users },
   { href: '/map', label: 'Map', icon: MapPinned },
   { href: '/analytics', label: 'Analytics', icon: ChartColumn },

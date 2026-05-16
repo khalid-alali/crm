@@ -97,6 +97,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     'website',
     'standard_labor_rate',
     'warranty_labor_rate',
+    'store_number',
     'note',
     'vf_operational_status',
     'on_vf_website',
@@ -141,6 +142,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if ('website' in fields) {
     const w = typeof fields.website === 'string' ? fields.website.trim() : ''
     fields.website = w === '' ? null : w
+  }
+
+  if ('store_number' in fields) {
+    const s = typeof fields.store_number === 'string' ? fields.store_number.trim() : ''
+    fields.store_number = s === '' ? null : s
   }
 
   if ('note' in fields) {
