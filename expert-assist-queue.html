@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expert Assist — Consults</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-muted: #f5f4ef;
+    --border: #e8e6df;
+    --border-strong: #d6d3c9;
+    --text: #1a1a17;
+    --text-muted: #6b6862;
+    --text-faint: #9a9690;
+
+    --accent: #1a1a17;
+    --action: #b8410d;            /* orange — needs response */
+    --action-bg: #fef3eb;
+    --action-border: #f4d4b8;
+
+    --waiting: #8a7a4a;            /* muted gold — awaiting shop */
+    --waiting-bg: #faf6ea;
+
+    --new: #2d5a3f;                /* green — new, unstarted */
+    --new-bg: #ecf3ee;
+
+    --warn: #a8501a;               /* approaching billing tier */
+    --warn-bg: #fdf0e3;
+
+    --danger: #9c2a2a;             /* over billing tier */
+    --danger-bg: #fbeaea;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter Tight', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 40px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  .breadcrumb {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .breadcrumb a {
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb .sep { margin: 0 6px; color: var(--text-faint); }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+
+  .page-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 38px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+
+  .live-counts {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .count {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+  }
+  .count-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .count.action .count-num { color: var(--action); }
+  .count-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 11px;
+  }
+  .pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--action);
+    box-shadow: 0 0 0 0 rgba(184, 65, 13, 0.5);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(184, 65, 13, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(184, 65, 13, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(184, 65, 13, 0); }
+  }
+
+  /* ---------- Pending approval (exception block) ---------- */
+  .pending-block {
+    background: #fff8f0;
+    border: 1px solid #f0d9b8;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .pending-icon {
+    width: 32px; height: 32px;
+    background: #f5e0c0;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .pending-body { flex: 1; }
+  .pending-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+  .pending-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .pending-cta {
+    background: var(--text);
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .pending-cta:hover { background: #000; }
+
+  /* ---------- Filter chips ---------- */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .chip {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .chip:hover { border-color: var(--border-strong); color: var(--text); }
+  .chip.active {
+    background: var(--text);
+    color: #fff;
+    border-color: var(--text);
+  }
+  .chip-count {
+    background: rgba(0,0,0,0.08);
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .chip.active .chip-count { background: rgba(255,255,255,0.18); }
+
+  .search {
+    margin-left: auto;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    width: 220px;
+    font-family: inherit;
+    color: var(--text);
+  }
+  .search::placeholder { color: var(--text-faint); }
+
+  /* ---------- Group headers ---------- */
+  .group-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 28px 0 10px;
+    padding: 0 4px;
+  }
+  .group-header:first-of-type { margin-top: 8px; }
+  .group-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  .group-title.action { color: var(--action); }
+  .group-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+  .group-desc {
+    margin-left: 8px;
+    font-size: 12px;
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  /* ---------- Table ---------- */
+  .case-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .case-table thead th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    background: var(--surface-muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .case-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.08s;
+  }
+  .case-table tbody tr:last-child { border-bottom: none; }
+  .case-table tbody tr:hover { background: var(--surface-muted); }
+  .case-table td {
+    padding: 14px;
+    vertical-align: middle;
+  }
+
+  /* needs-response row treatment */
+  .row-action td:first-child {
+    border-left: 3px solid var(--action);
+    padding-left: 11px;
+  }
+  .row-action .case-id,
+  .row-action .shop-name,
+  .row-action .question { font-weight: 500; }
+  .row-await td:first-child {
+    border-left: 3px solid transparent;
+    padding-left: 11px;
+  }
+  .row-await .question,
+  .row-await .shop-name { color: var(--text-muted); }
+
+  /* columns */
+  .case-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .shop-name {
+    font-size: 14px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .vehicle {
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .vehicle-make { color: var(--text); font-weight: 500; }
+  .question {
+    font-size: 13px;
+    color: var(--text);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .waiting {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .row-action .waiting { color: var(--action); font-weight: 500; }
+  .created {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .timer {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .timer.warn { color: var(--warn); font-weight: 500; }
+  .timer.danger { color: var(--danger); font-weight: 600; }
+  .timer-dash { color: var(--text-faint); }
+
+  /* status pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+  .pill::before {
+    content: '';
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .pill-new {
+    color: var(--new);
+    background: var(--new-bg);
+  }
+  .pill-progress {
+    color: var(--action);
+    background: var(--action-bg);
+  }
+  .pill-shop-replied {
+    color: var(--action);
+    background: var(--action-bg);
+  }
+  .pill-await-shop {
+    color: var(--waiting);
+    background: var(--waiting-bg);
+  }
+
+  /* empty state for awaiting group */
+  .empty-mini {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 13px;
+    background: var(--surface);
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+  }
+
+  /* footer hint */
+  .page-foot {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--text-faint);
+    text-align: center;
+  }
+
+  /* small svgs */
+  svg { display: block; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Breadcrumb + title -->
+  <div class="breadcrumb">
+    <a href="#">Home</a><span class="sep">/</span><a href="#">Consults</a>
+  </div>
+
+  <div class="page-header">
+    <h1 class="page-title">Expert Assist</h1>
+    <div class="live-counts">
+      <div class="count action">
+        <span class="pulse"></span>
+        <span class="count-num">3</span>
+        <span class="count-label">Need response</span>
+      </div>
+      <div class="count">
+        <span class="count-num">2</span>
+        <span class="count-label">Awaiting shop</span>
+      </div>
+      <div class="count">
+        <span class="count-num">1.4m</span>
+        <span class="count-label">Avg response</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending approval — shown only because count > 0 -->
+  <div class="pending-block">
+    <div class="pending-icon">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1.5v2M8 12.5v2M3.5 8h-2M14.5 8h-2M5 5l-1.5-1.5M12.5 12.5L11 11M11 5l1.5-1.5M3.5 12.5L5 11" stroke="#8a5a1a" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="pending-body">
+      <div class="pending-title">2 numbers awaiting shop approval</div>
+      <div class="pending-sub">New contacts claimed a shop code. Verify before billing routes activate.</div>
+    </div>
+    <button class="pending-cta">Review →</button>
+  </div>
+
+  <!-- Filter chips -->
+  <div class="filter-bar">
+    <button class="chip active">All <span class="chip-count">5</span></button>
+    <button class="chip">Need response <span class="chip-count">3</span></button>
+    <button class="chip">Awaiting shop <span class="chip-count">2</span></button>
+    <button class="chip">Over 20m timer <span class="chip-count">1</span></button>
+    <input class="search" type="text" placeholder="Search shop, case #, VIN…">
+  </div>
+
+  <!-- Needs response group -->
+  <div class="group-header">
+    <span class="group-title action">Need response</span>
+    <span class="group-count">3</span>
+    <span class="group-desc">Sorted by longest waiting first</span>
+  </div>
+
+  <table class="case-table">
+    <thead>
+      <tr>
+        <th style="width:90px">Case</th>
+        <th style="width:130px">Status</th>
+        <th>Shop</th>
+        <th>Vehicle</th>
+        <th>Question</th>
+        <th style="width:90px">Waiting</th>
+        <th style="width:100px">Created</th>
+        <th style="width:80px">Timer</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="row-action">
+        <td class="case-id">EA-1247</td>
+        <td><span class="pill pill-shop-replied">Shop replied</span></td>
+        <td class="shop-name">Khalid's Hybrid Garage</td>
+        <td class="vehicle"><span class="vehicle-make">Tesla Model 3</span> · 2022</td>
+        <td class="question">AC not cooling, cabin compressor cycles every 30s, no DTCs visible</td>
+        <td class="waiting">29m</td>
+        <td class="created">2:52 PM</td>
+        <td class="timer warn">18:42</td>
+      </tr>
+      <tr class="row-action">
+        <td class="case-id">EA-1249</td>
+        <td><span class="pill pill-new">New</span></td>
+        <td class="shop-name">Westside Auto</td>
+        <td class="vehicle"><span class="vehicle-make">Tesla Model Y</span> · 2023</td>
+        <td class="question">Need labor time + part # for rear lower control arm bushing</td>
+        <td class="waiting">6m</td>
+        <td class="created">3:15 PM</td>
+        <td class="timer timer-dash">—</td>
+      </tr>
+      <tr class="row-action">
+        <td class="case-id">EA-1250</td>
+        <td><span class="pill pill-shop-replied">Shop replied</span></td>
+        <td class="shop-name">Pacific Coast Motors</td>
+        <td class="vehicle"><span class="vehicle-make">Tesla Model S</span> · 2019</td>
+        <td class="question">Sent photo of HV connector — is this the right one to order?</td>
+        <td class="waiting">3m</td>
+        <td class="created">2:38 PM</td>
+        <td class="timer">07:15</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Awaiting shop group -->
+  <div class="group-header">
+    <span class="group-title">Awaiting shop</span>
+    <span class="group-count">2</span>
+    <span class="group-desc">Ball is in their court — most recent activity first</span>
+  </div>
+
+  <table class="case-table">
+    <thead>
+      <tr>
+        <th style="width:90px">Case</th>
+        <th style="width:130px">Status</th>
+        <th>Shop</th>
+        <th>Vehicle</th>
+        <th>Question</th>
+        <th style="width:90px">Waiting</th>
+        <th style="width:100px">Created</th>
+        <th style="width:80px">Timer</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="row-await">
+        <td class="case-id">EA-1248</td>
+        <td><span class="pill pill-await-shop">Awaiting shop</span></td>
+        <td class="shop-name">Foothill Tire & Auto</td>
+        <td class="vehicle"><span class="vehicle-make">Tesla Model 3</span> · 2021</td>
+        <td class="question">Asked for VIN + photo of fault screen, waiting on reply</td>
+        <td class="waiting">14m</td>
+        <td class="created">2:44 PM</td>
+        <td class="timer">11:03</td>
+      </tr>
+      <tr class="row-await">
+        <td class="case-id">EA-1246</td>
+        <td><span class="pill pill-await-shop">Awaiting shop</span></td>
+        <td class="shop-name">Sunrise Service Center</td>
+        <td class="vehicle"><span class="vehicle-make">Tesla Model Y</span> · 2024</td>
+        <td class="question">Sent reprogramming procedure — confirming once tech is back at car</td>
+        <td class="waiting">47m</td>
+        <td class="created">2:11 PM</td>
+        <td class="timer">15:22</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-foot">
+    Auto-refresh every 12s · Last updated 3:21 PM
+  </div>
+
+</div>
+
+</body>
+</html>

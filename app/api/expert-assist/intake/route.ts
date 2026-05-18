@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CONSULT_MEDIA_BUCKET, consultMediaObjectPath } from '@/lib/expert-assist/constants'
 import { assertShopCanRunConsults } from '@/lib/expert-assist/billing-gates'
 import { insertConsultCaseEvent } from '@/lib/expert-assist/events'
-import { openCaseWithRecentActivity } from '@/lib/expert-assist/inbound-sms'
 import { normalizeSmsAddress } from '@/lib/expert-assist/phone'
 import { postExpertAssistSlack } from '@/lib/expert-assist/slack'
 import { decodeVinNhtsa, extractVinFromText } from '@/lib/expert-assist/vin-decode'
@@ -269,42 +268,6 @@ export async function POST(req: NextRequest) {
   const decoded = vinFromFields ? await decodeVinNhtsa(vinFromFields) : null
 
   try {
-    const appendId = await openCaseWithRecentActivity(contact.contactId)
-    if (appendId) {
-      let mediaPaths: string[] = []
-      if (files.length) mediaPaths = await uploadIntakeFiles(appendId, files)
-      await insertInboundWebMessage({
-        caseId: appendId,
-        body: questionBody,
-        mediaPaths,
-        from: phone,
-      })
-      const { data: existingCase } = await supabaseAdmin
-        .from('consult_cases')
-        .select('vin')
-        .eq('id', appendId)
-        .maybeSingle()
-      const hasVin = Boolean((existingCase as { vin: string | null } | null)?.vin)
-      if (!hasVin && vinFromFields) {
-        await supabaseAdmin
-          .from('consult_cases')
-          .update({
-            vin: vinFromFields,
-            year: decoded?.year ?? null,
-            model: decoded?.model ?? null,
-            trim: decoded?.trim ?? null,
-          })
-          .eq('id', appendId)
-      }
-      await insertConsultCaseEvent({
-        caseId: appendId,
-        eventType: 'note_added',
-        actorType: 'shop',
-        metadata: { source: 'web_intake', sms_consent: true },
-      })
-      return withCors(origin, NextResponse.json({ ok: true, case_id: appendId, appended: true }))
-    }
-
     const { data: newCase, error: cErr } = await supabaseAdmin
       .from('consult_cases')
       .insert({

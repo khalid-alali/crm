@@ -4,6 +4,11 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
 import { loadStripe, type StripeElementsOptions } from '@stripe/stripe-js'
+import {
+  formatUsPhoneDashed,
+  stripPhoneToNationalDigits,
+  validateUsPhoneOptional,
+} from '@/lib/portal-phone-email'
 
 type ExpertAssistPayload = {
   location: {
@@ -84,8 +89,11 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
     consult_billing_contact_name: '',
     consult_internal_notes: '',
   })
-  const [newPhone, setNewPhone] = useState('')
+  const [newPhoneDigits, setNewPhoneDigits] = useState('')
+  const [newPhoneFocused, setNewPhoneFocused] = useState(false)
   const [newName, setNewName] = useState('')
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(false)
 
   const reload = useCallback(async () => {
     setError(null)
@@ -146,12 +154,17 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
     clientSecret ? { clientSecret, appearance: { theme: 'stripe' } } : null
 
   async function addContact() {
-    if (!newPhone.trim()) return
+    const digits = stripPhoneToNationalDigits(newPhoneDigits)
+    const phoneErr = validateUsPhoneOptional(digits)
+    if (phoneErr) {
+      window.alert(phoneErr)
+      return
+    }
     const res = await fetch(`/api/locations/${locationId}/expert-assist/contacts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        phone_number: newPhone,
+        phone_number: digits,
         display_name: newName.trim() || null,
         approve_directly: true,
       }),
@@ -161,7 +174,7 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
       window.alert(j.error ?? 'Failed to add contact')
       return
     }
-    setNewPhone('')
+    setNewPhoneDigits('')
     setNewName('')
     void reload()
   }
@@ -175,8 +188,49 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
 
   const loc = payload.location
 
+  async function copyInviteLink() {
+    setInviteLoading(true)
+    try {
+      const res = await fetch('/api/expert-assist/generate-invite-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationId }),
+      })
+      const j = (await res.json()) as { inviteUrl?: string; error?: string }
+      if (!res.ok || !j.inviteUrl) {
+        window.alert(j.error ?? 'Could not generate invite link')
+        return
+      }
+      setInviteUrl(j.inviteUrl)
+      await navigator.clipboard.writeText(j.inviteUrl)
+      window.alert('Invite link copied to clipboard')
+    } catch {
+      window.alert('Could not copy invite link')
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
   return (
     <div className="max-w-3xl space-y-8">
+      <div className="rounded-lg border border-arctic-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-onix-900">Shop invite link</h3>
+        <p className="mt-1 text-sm text-onix-600">
+          Send this to the shop for Expert Assist setup, Toolbox referrals, and consult intake.
+        </p>
+        {inviteUrl ?
+          <p className="mt-2 break-all font-mono text-xs text-onix-700">{inviteUrl}</p>
+        : null}
+        <button
+          type="button"
+          disabled={inviteLoading}
+          onClick={() => void copyInviteLink()}
+          className="mt-3 rounded-lg border border-arctic-300 px-3 py-1.5 text-sm hover:bg-arctic-50 disabled:opacity-50"
+        >
+          {inviteLoading ? 'Generating…' : 'Copy invite link'}
+        </button>
+      </div>
+
       <div>
         <h3 className="text-sm font-semibold text-onix-900">Settings</h3>
         <div className="mt-3 space-y-3 rounded-lg border border-arctic-200 bg-white p-4">
@@ -280,7 +334,7 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
             <tbody>
               {payload.contacts.map(c => (
                 <tr key={c.id} className="border-b border-arctic-100">
-                  <td className="px-3 py-2 font-mono text-xs">{c.phone_number}</td>
+                  <td className="px-3 py-2 tabular-nums">{formatUsPhoneDashed(c.phone_number)}</td>
                   <td className="px-3 py-2">{c.display_name ?? '—'}</td>
                   <td className="px-3 py-2">{c.status}</td>
                   <td className="px-3 py-2">{c.added_via}</td>
@@ -311,12 +365,22 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
           </table>
           <div className="flex flex-wrap items-end gap-2 border-t border-arctic-200 p-3">
             <label className="text-xs">
-              Phone (E.164)
+              Phone
               <input
-                value={newPhone}
-                onChange={e => setNewPhone(e.target.value)}
-                className="mt-0.5 block w-40 rounded border border-arctic-200 px-2 py-1 text-sm"
-                placeholder="+1…"
+                type="tel"
+                inputMode="numeric"
+                value={
+                  newPhoneFocused ? newPhoneDigits : formatUsPhoneDashed(newPhoneDigits)
+                }
+                onFocus={() => setNewPhoneFocused(true)}
+                onChange={e => setNewPhoneDigits(stripPhoneToNationalDigits(e.target.value))}
+                onBlur={() => {
+                  setNewPhoneFocused(false)
+                  setNewPhoneDigits(stripPhoneToNationalDigits(newPhoneDigits))
+                }}
+                className="mt-0.5 block w-40 rounded border border-arctic-200 px-2 py-1 text-sm tabular-nums"
+                placeholder="555-555-5555"
+                autoComplete="tel"
               />
             </label>
             <label className="text-xs">

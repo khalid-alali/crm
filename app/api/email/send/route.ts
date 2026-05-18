@@ -5,6 +5,7 @@ import { getAppSession } from '@/lib/app-auth'
 import { htmlToPlainText } from '@/lib/email-html'
 import { SEED_ONBOARDING_TEMPLATE_ID } from '@/lib/email-template-ids'
 import { injectCapabilitiesIntoEmail } from '@/lib/inject-capabilities-email'
+import { injectExpertAssistIntoEmail } from '@/lib/inject-expert-assist-email'
 import { normalizeRecipientList } from '@/lib/email-recipients'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -83,11 +84,14 @@ export async function POST(req: NextRequest) {
 
   if (useHtml) {
     try {
-      const injected = injectCapabilitiesIntoEmail(req, locationId, subjectOut, bodyOut)
-      subjectOut = injected.subject
-      bodyOut = injected.bodyHtml
+      const capabilitiesInjected = injectCapabilitiesIntoEmail(req, locationId, subjectOut, bodyOut)
+      subjectOut = capabilitiesInjected.subject
+      bodyOut = capabilitiesInjected.bodyHtml
+      const expertInjected = await injectExpertAssistIntoEmail(req, locationId, subjectOut, bodyOut)
+      subjectOut = expertInjected.subject
+      bodyOut = expertInjected.bodyHtml
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Could not build portal link'
+      const msg = e instanceof Error ? e.message : 'Could not build email links'
       return NextResponse.json({ error: msg }, { status: 500 })
     }
   }

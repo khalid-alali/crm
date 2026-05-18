@@ -13,6 +13,15 @@ export function formatUsPhoneDisplay(digits: string): string {
   return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
 }
 
+/** US national display as 555-555-5555 (partial while typing). */
+export function formatUsPhoneDashed(digits: string): string {
+  const d = stripPhoneToNationalDigits(digits)
+  if (d.length === 0) return ''
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0, 3)}-${d.slice(3)}`
+  return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`
+}
+
 /** Empty is OK (optional phone). Otherwise exactly 10 digits. */
 export function validateUsPhoneOptional(digits: string): string | null {
   const d = stripPhoneToNationalDigits(digits)

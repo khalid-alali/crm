@@ -1,0 +1,55 @@
+/**
+ * Expert Assist design tokens — shared by queue + case detail.
+ * Scoped under .ea-surface so the rest of the CRM keeps onix/arctic/brand.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&family=Inter+Tight:wght@400;500;600;700&display=swap');
+
+.ea-surface {
+  --ea-bg: #fafaf7;
+  --ea-surface: #ffffff;
+  --ea-surface-muted: #f5f4ef;
+  --ea-surface-sunken: #f0eee7;
+  --ea-border: #e8e6df;
+  --ea-border-strong: #d6d3c9;
+  --ea-text: #1a1a17;
+  --ea-text-muted: #6b6862;
+  --ea-text-faint: #9a9690;
+
+  --ea-action: #b8410d;
+  --ea-action-bg: #fef3eb;
+  --ea-action-border: #f4d4b8;
+
+  --ea-new: #2d5a3f;
+  --ea-new-bg: #ecf3ee;
+
+  --ea-waiting: #8a7a4a;
+  --ea-waiting-bg: #faf6ea;
+
+  --ea-warn: #a8501a;
+  --ea-warn-bg: #fdf0e3;
+
+  --ea-danger: #9c2a2a;
+  --ea-danger-bg: #fbeaea;
+
+  --ea-inbound-border: #e8e6df;
+  --ea-outbound-bg: #1a1a17;
+  --ea-outbound-text: #fafaf7;
+
+  --ea-font-body: 'Inter Tight', system-ui, sans-serif;
+  --ea-font-display: 'Instrument Serif', Georgia, serif;
+  --ea-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  font-family: var(--ea-font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ea-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ea-surface .ea-font-display {
+  font-family: var(--ea-font-display);
+}
+
+.ea-surface .ea-font-mono {
+  font-family: var(--ea-font-mono);
+}

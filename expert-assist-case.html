@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expert Assist — Case EA-1247</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-muted: #f5f4ef;
+    --surface-sunken: #f0eee7;
+    --border: #e8e6df;
+    --border-strong: #d6d3c9;
+    --text: #1a1a17;
+    --text-muted: #6b6862;
+    --text-faint: #9a9690;
+
+    --accent: #1a1a17;
+    --action: #b8410d;
+    --action-bg: #fef3eb;
+    --new: #2d5a3f;
+    --new-bg: #ecf3ee;
+    --waiting: #8a7a4a;
+    --waiting-bg: #faf6ea;
+    --warn: #a8501a;
+    --warn-bg: #fdf0e3;
+    --danger: #9c2a2a;
+    --danger-bg: #fbeaea;
+
+    --inbound-bg: #ffffff;
+    --inbound-border: #e8e6df;
+    --outbound-bg: #1a1a17;
+    --outbound-text: #fafaf7;
+    --system-bg: #f5f4ef;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter Tight', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ---------- App shell ---------- */
+  .shell {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+
+  /* Top bar */
+  .topbar {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+  .breadcrumb {
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .breadcrumb a {
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb .sep { color: var(--text-faint); }
+  .breadcrumb .current { color: var(--text); font-weight: 500; }
+
+  .topbar-meta {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .topbar-meta strong { color: var(--text); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+
+  .nav-arrows {
+    display: flex;
+    gap: 4px;
+  }
+  .nav-btn {
+    width: 28px; height: 28px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 6px;
+    display: grid; place-items: center;
+    cursor: pointer;
+    color: var(--text-muted);
+  }
+  .nav-btn:hover { border-color: var(--border-strong); color: var(--text); }
+
+  /* ---------- Main grid ---------- */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    overflow: hidden;
+  }
+
+  /* ---------- Left column: transcript + composer ---------- */
+  .work {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+
+  .work-header {
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .case-headline {
+    flex: 1;
+  }
+  .case-id-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .case-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .pill::before {
+    content: '';
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .pill-shop-replied {
+    color: var(--action);
+    background: var(--action-bg);
+  }
+  .case-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  .case-subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .case-subtitle strong { color: var(--text); font-weight: 500; }
+  .case-subtitle .dot { margin: 0 8px; color: var(--text-faint); }
+
+  /* Transcript */
+  .transcript {
+    overflow-y: auto;
+    padding: 24px 28px;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .transcript::-webkit-scrollbar { width: 10px; }
+  .transcript::-webkit-scrollbar-track { background: transparent; }
+  .transcript::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; }
+
+  .day-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+  }
+  .day-divider::before,
+  .day-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .day-divider span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 78%;
+  }
+  .msg-meta {
+    font-size: 11px;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+  }
+  .msg-meta strong { color: var(--text-muted); font-weight: 500; }
+  .msg-bubble {
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  /* Inbound (shop → expert) */
+  .msg-inbound { align-self: flex-start; }
+  .msg-inbound .msg-bubble {
+    background: var(--inbound-bg);
+    border: 1px solid var(--inbound-border);
+    border-bottom-left-radius: 4px;
+    color: var(--text);
+  }
+
+  /* Outbound (expert → shop) */
+  .msg-outbound { align-self: flex-end; align-items: flex-end; }
+  .msg-outbound .msg-bubble {
+    background: var(--outbound-bg);
+    color: var(--outbound-text);
+    border-bottom-right-radius: 4px;
+  }
+  .msg-outbound .msg-meta { justify-content: flex-end; }
+
+  /* System events */
+  .msg-system {
+    align-self: center;
+    max-width: 100%;
+  }
+  .msg-system .msg-bubble {
+    background: transparent;
+    border: 1px dashed var(--border-strong);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .msg-system svg { color: var(--text-faint); }
+
+  /* Image attachment */
+  .msg-attachment {
+    margin-top: 6px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    max-width: 280px;
+    background: var(--surface-sunken);
+    aspect-ratio: 4 / 3;
+    display: grid;
+    place-items: center;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .msg-attachment:hover { opacity: 0.85; }
+  .msg-attachment svg { width: 28px; height: 28px; }
+  .msg-attachment-label {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  /* Read receipts */
+  .receipt {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  /* ---------- Composer ---------- */
+  .composer {
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 14px 28px 20px;
+    flex-shrink: 0;
+  }
+  .canned {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .canned-chip {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.1s;
+  }
+  .canned-chip:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+    background: var(--surface-muted);
+  }
+  .canned-chip svg { width: 12px; height: 12px; }
+
+  .composer-box {
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--surface);
+    transition: border-color 0.15s;
+  }
+  .composer-box:focus-within {
+    border-color: var(--text);
+    box-shadow: 0 0 0 3px rgba(26,26,23,0.06);
+  }
+  .composer-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 12px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text);
+    resize: none;
+    outline: none;
+    min-height: 60px;
+    line-height: 1.5;
+  }
+  .composer-input::placeholder { color: var(--text-faint); }
+  .composer-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px 8px 12px;
+    gap: 4px;
+  }
+  .composer-tool {
+    width: 28px; height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: grid; place-items: center;
+    color: var(--text-muted);
+    transition: all 0.1s;
+  }
+  .composer-tool:hover {
+    background: var(--surface-muted);
+    color: var(--text);
+  }
+  .composer-hint {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-left: 4px;
+  }
+  .composer-hint kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 1px 5px;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted);
+  }
+  .send-btn {
+    margin-left: auto;
+    background: var(--text);
+    color: #fff;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .send-btn:hover { background: #000; }
+  .send-btn:disabled {
+    background: var(--border-strong);
+    color: var(--text-faint);
+    cursor: not-allowed;
+  }
+
+  /* ---------- Right column: context rail ---------- */
+  .rail {
+    background: var(--surface);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .rail::-webkit-scrollbar { width: 8px; }
+  .rail::-webkit-scrollbar-track { background: transparent; }
+  .rail::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Timer — top priority, sticky */
+  .timer-block {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px;
+    z-index: 5;
+  }
+  .timer-block.running {
+    background: linear-gradient(180deg, #fef3eb 0%, #ffffff 100%);
+    border-bottom-color: var(--action-border, #f4d4b8);
+  }
+  .timer-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .rec-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--action);
+    animation: blink 1.4s infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .timer-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 36px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .timer-block.running .timer-display { color: var(--action); }
+  .timer-billing {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .timer-billing strong { color: var(--text); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+  .timer-billing.warn strong { color: var(--warn); }
+
+  .timer-progress {
+    height: 4px;
+    background: var(--surface-sunken);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 10px 0 14px;
+    position: relative;
+  }
+  .timer-progress-fill {
+    height: 100%;
+    background: var(--action);
+    width: 93%;
+    transition: width 0.3s;
+  }
+  .timer-progress-mark {
+    position: absolute;
+    left: 100%;
+    top: -2px;
+    width: 1px;
+    height: 8px;
+    background: var(--text-muted);
+  }
+  .timer-progress-mark::after {
+    content: '20m';
+    position: absolute;
+    top: 10px;
+    right: -8px;
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .timer-controls {
+    display: flex;
+    gap: 6px;
+  }
+  .timer-btn {
+    flex: 1;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    color: var(--text);
+    transition: all 0.1s;
+  }
+  .timer-btn:hover { border-color: var(--border-strong); background: var(--surface-muted); }
+  .timer-btn.primary {
+    background: var(--text);
+    color: #fff;
+    border-color: var(--text);
+  }
+  .timer-btn.primary:hover { background: #000; }
+  .timer-btn svg { width: 12px; height: 12px; }
+
+  /* Rail sections */
+  .rail-section {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .rail-section:last-child { border-bottom: none; }
+  .section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .field-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .field-row + .field-row { border-top: 1px solid var(--surface-muted); margin-top: 4px; padding-top: 8px; }
+  .field-label {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .field-value {
+    color: var(--text);
+    text-align: right;
+    font-weight: 500;
+  }
+  .field-value a {
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--text-muted);
+  }
+  .field-value a:hover { border-bottom-style: solid; }
+  .field-value.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+  .vehicle-card {
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 4px;
+  }
+  .vehicle-headline {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .vehicle-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .vehicle-vin-input {
+    margin-top: 8px;
+    width: 100%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .vehicle-vin-input::placeholder { color: var(--text-faint); }
+
+  .notes-area {
+    width: 100%;
+    border: 1px solid var(--border);
+    background: var(--surface-muted);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+  }
+  .notes-area:focus {
+    outline: none;
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .notes-area::placeholder { color: var(--text-faint); }
+  .notes-foot {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Close case section */
+  .close-section {
+    background: var(--surface-muted);
+    margin-top: auto;
+    padding: 20px 24px 24px;
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+  }
+  .close-section .section-label { color: var(--text); }
+  .outcome-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .outcome-opt {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text);
+    font-family: inherit;
+    transition: all 0.1s;
+    line-height: 1.3;
+  }
+  .outcome-opt:hover { border-color: var(--border-strong); }
+  .outcome-opt.selected {
+    border-color: var(--text);
+    background: var(--text);
+    color: #fff;
+  }
+  .outcome-opt strong { display: block; font-weight: 600; }
+  .outcome-opt span { font-size: 11px; opacity: 0.7; display: block; margin-top: 1px; }
+
+  .close-summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .close-summary-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 2px 0;
+  }
+  .close-summary-row.total {
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .close-summary-row .label { color: var(--text-muted); }
+  .close-summary-row .value { font-family: 'JetBrains Mono', monospace; }
+
+  .close-btn {
+    width: 100%;
+    background: var(--text);
+    color: #fff;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.1s;
+  }
+  .close-btn:hover { background: #000; }
+  .close-foot {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 8px;
+    line-height: 1.4;
+  }
+
+  /* Misc */
+  svg { display: block; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="breadcrumb">
+      <a href="#">Home</a>
+      <span class="sep">/</span>
+      <a href="#">Consults</a>
+      <span class="sep">/</span>
+      <span class="current">EA-1247</span>
+    </div>
+    <div class="topbar-meta">
+      <span>Case <strong>EA-1247</strong></span>
+      <span>Created <strong>2:52 PM</strong></span>
+      <span>Waiting <strong style="color: var(--action);">29m</strong></span>
+      <div class="nav-arrows">
+        <button class="nav-btn" title="Previous case (J)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="nav-btn" title="Next case (K)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- Left: working area -->
+    <div class="work">
+
+      <!-- Case headline -->
+      <div class="work-header">
+        <div class="case-headline">
+          <div class="case-id-row">
+            <span class="case-id">EA-1247</span>
+            <span class="pill pill-shop-replied">Shop replied · needs response</span>
+          </div>
+          <h1 class="case-title">AC not cooling on 2022 Model 3</h1>
+          <div class="case-subtitle">
+            <strong>Khalid's Hybrid Garage</strong>
+            <span class="dot">·</span>
+            Lead tech Marco
+            <span class="dot">·</span>
+            Inbound 2:52 PM
+          </div>
+        </div>
+      </div>
+
+      <!-- Transcript -->
+      <div class="transcript">
+
+        <div class="day-divider"><span>Today, May 17</span></div>
+
+        <!-- Inbound: initial question -->
+        <div class="msg msg-inbound">
+          <div class="msg-meta">
+            <strong>Marco · Khalid's Hybrid Garage</strong>
+            <span>2:52 PM</span>
+          </div>
+          <div class="msg-bubble">2022 Model 3, customer says AC not cooling. Compressor cycles every 30s, no DTCs visible in service mode. Already checked refrigerant pressure, looks normal. Where do I look next?</div>
+        </div>
+
+        <!-- System event: case created + timer started -->
+        <div class="msg msg-system">
+          <div class="msg-bubble">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Case opened · Timer started 2:53 PM
+          </div>
+        </div>
+
+        <!-- Outbound: expert callback -->
+        <div class="msg msg-outbound">
+          <div class="msg-bubble">Got it — calling you now. While I dial, can you also pull the cabin sensor readings from service menu &gt; HVAC? Want to rule out a stuck mixing flap before we go after the compressor.</div>
+          <div class="msg-meta">
+            <span>2:54 PM</span>
+            <span class="receipt">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8l3 3 5-5M7 11l5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Delivered · Read
+            </span>
+          </div>
+        </div>
+
+        <!-- System: call started -->
+        <div class="msg msg-system">
+          <div class="msg-bubble">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 4a1 1 0 011-1h2l1 3-1.5 1A8 8 0 009 11.5l1-1.5 3 1v2a1 1 0 01-1 1A10 10 0 013 4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            Call connected · 14m 22s
+          </div>
+        </div>
+
+        <!-- Inbound: photo + follow-up -->
+        <div class="msg msg-inbound">
+          <div class="msg-meta">
+            <strong>Marco · Khalid's Hybrid Garage</strong>
+            <span>3:14 PM</span>
+          </div>
+          <div class="msg-bubble">Pulled the cabin sensor — getting 84°F on driver side, 62°F on passenger. Big delta. Here's the screen.</div>
+          <div class="msg-attachment">
+            <div style="text-align: center;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M8 5l1.5-2h5L16 5" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+              <div class="msg-attachment-label">IMG_2847.jpg · 1.2 MB</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inbound: latest message (the one we need to respond to) -->
+        <div class="msg msg-inbound">
+          <div class="msg-meta">
+            <strong>Marco · Khalid's Hybrid Garage</strong>
+            <span>3:18 PM</span>
+          </div>
+          <div class="msg-bubble">So the mixing flap actuator is what we want to look at next? Need a labor time estimate for the RO before I call the customer back.</div>
+        </div>
+
+      </div>
+
+      <!-- Composer -->
+      <div class="composer">
+        <div class="canned">
+          <button class="canned-chip">
+            <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Ask for VIN
+          </button>
+          <button class="canned-chip">
+            <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/></svg>
+            Send photo of fault screen
+          </button>
+          <button class="canned-chip">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Refer to Toolbox
+          </button>
+          <button class="canned-chip">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Wrapping up — anything else?
+          </button>
+        </div>
+
+        <div class="composer-box">
+          <textarea class="composer-input" placeholder="Reply to Marco at Khalid's Hybrid Garage…">Yes — flap actuator is the next stop. On the 2022 Model 3 it's part # 1107739-00-G, list is ~$140. Labor on it is 1.4 hours for R&amp;R, add 0.3 for HVAC system test after. So 1.7 total. Customer should be looking at ~$420 all-in. Let me know if you want me to send the procedure.</textarea>
+          <div class="composer-toolbar">
+            <button class="composer-tool" title="Attach photo">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11 7L7 11a2 2 0 01-2.8-2.8l5-5a3 3 0 014.2 4.2L8.5 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="composer-tool" title="Insert template">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h10M3 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="composer-tool" title="Save as template">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2h6l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5"/><path d="M6 9h4M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <span class="composer-hint"><kbd>⌘</kbd> <kbd>↵</kbd> to send</span>
+            <button class="send-btn">
+              Send
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8l12-5-5 12-2-5-5-2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right: context rail -->
+    <aside class="rail">
+
+      <!-- Timer (sticky, running state) -->
+      <div class="timer-block running">
+        <div class="timer-label">
+          <span class="rec-dot"></span>
+          Timer running
+        </div>
+        <div class="timer-display">18:42</div>
+        <div class="timer-billing warn">
+          <span>Billable so far</span>
+          <strong>$60.00</strong>
+        </div>
+        <div class="timer-billing">
+          <span>Approaching 20m</span>
+          <strong>→ $150/hr after</strong>
+        </div>
+        <div class="timer-progress" title="20-minute minimum">
+          <div class="timer-progress-fill"></div>
+          <div class="timer-progress-mark"></div>
+        </div>
+        <div class="timer-controls">
+          <button class="timer-btn">
+            <svg viewBox="0 0 16 16" fill="none"><rect x="5" y="4" width="2" height="8" fill="currentColor"/><rect x="9" y="4" width="2" height="8" fill="currentColor"/></svg>
+            Pause
+          </button>
+          <button class="timer-btn">
+            <svg viewBox="0 0 16 16" fill="none"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/></svg>
+            Stop
+          </button>
+        </div>
+      </div>
+
+      <!-- Case meta -->
+      <div class="rail-section">
+        <div class="section-label">Case</div>
+        <div class="field-row">
+          <span class="field-label">Status</span>
+          <span class="field-value">Shop replied</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Created</span>
+          <span class="field-value">2:52 PM today</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Waiting on you</span>
+          <span class="field-value" style="color: var(--action);">29 min</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Activity</span>
+          <span class="field-value">4 messages · 1 call</span>
+        </div>
+      </div>
+
+      <!-- Vehicle -->
+      <div class="rail-section">
+        <div class="section-label">Vehicle</div>
+        <div class="vehicle-card">
+          <div class="vehicle-headline">2022 Tesla Model 3</div>
+          <div class="vehicle-sub">Long Range AWD · Parsed from inbound</div>
+        </div>
+        <input class="vehicle-vin-input" placeholder="VIN (not yet provided)" />
+      </div>
+
+      <!-- Shop -->
+      <div class="rail-section">
+        <div class="section-label">Shop</div>
+        <div class="field-row">
+          <span class="field-label">Name</span>
+          <span class="field-value"><a href="#">Khalid's Hybrid Garage</a></span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Shop code</span>
+          <span class="field-value mono">KHALIDS</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Contact</span>
+          <span class="field-value">Marco (tech)</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Phone</span>
+          <span class="field-value mono">+1 415 555 0199</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Prior consults</span>
+          <span class="field-value">7 · last 3d ago</span>
+        </div>
+      </div>
+
+      <!-- Internal notes -->
+      <div class="rail-section">
+        <div class="section-label">Internal notes</div>
+        <textarea class="notes-area" placeholder="Notes only you see. Captures context for billing, future cases, or Toolbox handoff…">Cabin sensor delta confirms mixing flap. Quoted 1.7 hrs labor. Marco may call back re: procedure — keep timer running until close.</textarea>
+        <div class="notes-foot">
+          <span>Auto-saved 2s ago</span>
+          <span>Not visible to shop</span>
+        </div>
+      </div>
+
+      <!-- Close / Outcome -->
+      <div class="rail-section close-section">
+        <div class="section-label">Close case</div>
+
+        <div class="outcome-grid">
+          <button class="outcome-opt selected">
+            <strong>Resolved</strong>
+            <span>Question answered</span>
+          </button>
+          <button class="outcome-opt">
+            <strong>Toolbox referral</strong>
+            <span>Needs full diag</span>
+          </button>
+          <button class="outcome-opt">
+            <strong>No contact</strong>
+            <span>Shop went dark</span>
+          </button>
+          <button class="outcome-opt">
+            <strong>Out of scope</strong>
+            <span>Not a Tesla issue</span>
+          </button>
+        </div>
+
+        <div class="close-summary">
+          <div class="close-summary-row">
+            <span class="label">Time tracked</span>
+            <span class="value">18:42</span>
+          </div>
+          <div class="close-summary-row">
+            <span class="label">Base (≤20 min)</span>
+            <span class="value">$60.00</span>
+          </div>
+          <div class="close-summary-row">
+            <span class="label">Overage</span>
+            <span class="value">$0.00</span>
+          </div>
+          <div class="close-summary-row total">
+            <span class="label">Charge to card on file</span>
+            <span class="value">$60.00</span>
+          </div>
+        </div>
+
+        <button class="close-btn">
+          Close & charge $60.00
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="close-foot">
+          Charges <strong style="color: var(--text);">•••• 4242</strong>. Receipt to billing@khalidsgarage.com.<br>
+          Shop gets SMS confirmation.
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+</div>
+
+</body>
+</html>

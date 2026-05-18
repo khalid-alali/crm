@@ -7,7 +7,9 @@ import { EMAIL_TEMPLATE_CATEGORIES, EMAIL_TEMPLATE_CATEGORY_LABELS } from '@/lib
 import { EMAIL_MERGE_PLACEHOLDER_TOKENS } from '@/lib/email-template-placeholder-tokens'
 import {
   emailContentReferencesCapabilitiesLink,
+  emailContentReferencesExpertAssistLink,
   replaceLegacyCapabilitiesPreviewUrls,
+  replaceLegacyExpertAssistPreviewUrls,
 } from '@/lib/email-template-placeholders'
 import RecipientPicker, { type RecipientContact } from '@/components/email/RecipientPicker'
 
@@ -92,6 +94,11 @@ export default function EmailModal({
 
   const showCapabilitiesHint = useMemo(
     () => (step === 2 ? emailContentReferencesCapabilitiesLink(subject, body) : false),
+    [step, subject, body],
+  )
+
+  const showExpertAssistHint = useMemo(
+    () => (step === 2 ? emailContentReferencesExpertAssistLink(subject, body) : false),
     [step, subject, body],
   )
 
@@ -251,8 +258,10 @@ export default function EmailModal({
       const templateTo = normalizeRecipientList(data.defaultRecipients)
       const templateCc = normalizeRecipientList(data.defaultCcRecipients)
       setEmailTemplateId(selection.id)
-      setSubject(replaceLegacyCapabilitiesPreviewUrls(data.subject ?? ''))
-      setBody(replaceLegacyCapabilitiesPreviewUrls(data.bodyHtml ?? '<p></p>'))
+      const normalizeEmailHtml = (s: string) =>
+        replaceLegacyExpertAssistPreviewUrls(replaceLegacyCapabilitiesPreviewUrls(s))
+      setSubject(normalizeEmailHtml(data.subject ?? ''))
+      setBody(normalizeEmailHtml(data.bodyHtml ?? '<p></p>'))
       setToList(templateTo.length > 0 ? templateTo : (contactEmail.trim() ? [contactEmail.trim().toLowerCase()] : []))
       setCcList(templateCc)
       setCcOpen(templateCc.length > 0)
@@ -615,8 +624,9 @@ export default function EmailModal({
                               ))}
                             </div>
                             <p className="mt-2 text-[10px] leading-snug text-onix-500">
-                              For <span className="font-mono text-onix-700">{'{{capabilities_link}}'}</span>, use
-                              the body toolbar <strong>Link</strong> button and pick the placeholder there.
+                              For <span className="font-mono text-onix-700">{'{{capabilities_link}}'}</span> or{' '}
+                              <span className="font-mono text-onix-700">{'{{expert_assist_link}}'}</span>, use the
+                              body toolbar <strong>Link</strong> button and pick the placeholder there.
                             </p>
                           </div>
                         )}
@@ -624,6 +634,12 @@ export default function EmailModal({
                     </div>
                     <EmailBodyEditor ref={bodyEditorRef} value={body} onChange={setBody} compact={false} />
                   </div>
+                  {showExpertAssistHint && (
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-sky-500 align-middle" />
+                      The Expert Assist intake link for this shop will be inserted when you send.
+                    </div>
+                  )}
                   {showCapabilitiesHint && (
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
                       <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle" />

@@ -6,7 +6,10 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import { Bold, Italic, Link2, List, ListOrdered } from 'lucide-react'
-import { CAPABILITIES_LINK_PLACEHOLDER } from '@/lib/email-template-placeholder-tokens'
+import {
+  CAPABILITIES_LINK_PLACEHOLDER,
+  EXPERT_ASSIST_LINK_PLACEHOLDER,
+} from '@/lib/email-template-placeholder-tokens'
 
 export type EmailBodyEditorHandle = {
   insertText: (text: string) => void
@@ -168,13 +171,20 @@ function EmailEditorToolbar({ editor }: { editor: Editor }) {
           <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-onix-500">
             Or insert a placeholder
           </p>
-          <div className="mt-1.5">
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={() => setLinkUrl(CAPABILITIES_LINK_PLACEHOLDER)}
               className="rounded-full bg-emerald-50 px-2.5 py-1 font-mono text-[11px] text-emerald-900 hover:bg-emerald-100"
             >
               {CAPABILITIES_LINK_PLACEHOLDER}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLinkUrl(EXPERT_ASSIST_LINK_PLACEHOLDER)}
+              className="rounded-full bg-sky-50 px-2.5 py-1 font-mono text-[11px] text-sky-900 hover:bg-sky-100"
+            >
+              {EXPERT_ASSIST_LINK_PLACEHOLDER}
             </button>
           </div>
           <div className="mt-3 flex justify-end gap-2">

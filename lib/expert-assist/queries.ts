@@ -82,8 +82,26 @@ async function loadCasesForStatuses(statuses: ConsultCaseStatus[]): Promise<Cons
   const contactsById = new Map((contactsRes.data ?? []).map(c => [c.id, c]))
 
   const merged = mergeQueueRows(cases, shopsById, contactsById)
-  await attachLatestMessages(merged)
+  await Promise.all([attachLatestMessages(merged), attachFirstInboundPreviews(merged)])
   return merged
+}
+
+async function attachFirstInboundPreviews(rows: ConsultQueueRow[]): Promise<void> {
+  const ids = rows.map(r => r.id)
+  if (ids.length === 0) return
+
+  const { data, error } = await supabaseAdmin.rpc('consult_first_inbound_preview_for_cases', { p_ids: ids })
+
+  if (error) {
+    console.warn('consult_first_inbound_preview_for_cases', error.message)
+    return
+  }
+
+  const list = (data ?? []) as { case_id: string; body_preview: string }[]
+  const map = new Map(list.map(d => [d.case_id, d.body_preview]))
+  for (const r of rows) {
+    r.first_inbound_preview = map.get(r.id) ?? null
+  }
 }
 
 async function attachLatestMessages(rows: ConsultQueueRow[]): Promise<void> {
@@ -117,6 +135,27 @@ export async function fetchOpenCasesQueue(): Promise<ConsultQueueRow[]> {
   return loadCasesForStatuses(['open'])
 }
 
+export type ConsultCaseShopContext = {
+  consult_short_code: string | null
+  consult_billing_email: string | null
+  consult_stripe_card_last4: string | null
+  prior_consult_count: number
+  last_prior_consult_at: string | null
+}
+
+export async function fetchConsultCaseNeighbors(caseId: string): Promise<{
+  prevId: string | null
+  nextId: string | null
+}> {
+  const open = await fetchOpenCasesQueue()
+  const ids = open.map(r => r.id)
+  const idx = ids.indexOf(caseId)
+  return {
+    prevId: idx > 0 ? ids[idx - 1]! : null,
+    nextId: idx >= 0 && idx < ids.length - 1 ? ids[idx + 1]! : null,
+  }
+}
+
 export async function fetchConsultCaseDetail(caseId: string): Promise<{
   case: ConsultQueueRow & {
     expert_notes: string | null
@@ -125,6 +164,7 @@ export async function fetchConsultCaseDetail(caseId: string): Promise<{
     originating_contact_id: string | null
   }
   messages: ConsultMessageRow[]
+  shopContext: ConsultCaseShopContext | null
 } | null> {
   const { data: c, error } = await supabaseAdmin.from('consult_cases').select('*').eq('id', caseId).maybeSingle()
 
@@ -135,9 +175,31 @@ export async function fetchConsultCaseDetail(caseId: string): Promise<{
   const shopsById = new Map<string, { id: string; name: string }>()
   const contactsById = new Map<string, { display_name: string | null; phone_number: string; status: string }>()
 
+  let shopContext: ConsultCaseShopContext | null = null
   if (row.shop_id) {
-    const { data: shop } = await supabaseAdmin.from('locations').select('id, name').eq('id', row.shop_id).maybeSingle()
-    if (shop) shopsById.set(shop.id, shop)
+    const { data: shop } = await supabaseAdmin
+      .from('locations')
+      .select('id, name, consult_short_code, consult_billing_email, consult_stripe_card_last4')
+      .eq('id', row.shop_id)
+      .maybeSingle()
+    if (shop) {
+      shopsById.set(shop.id, { id: shop.id, name: shop.name })
+      const { count, data: priorRows } = await supabaseAdmin
+        .from('consult_cases')
+        .select('created_at')
+        .eq('shop_id', row.shop_id)
+        .neq('id', caseId)
+        .in('status', ['closed', 'billing_failed'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+      shopContext = {
+        consult_short_code: (shop as { consult_short_code: string | null }).consult_short_code,
+        consult_billing_email: (shop as { consult_billing_email: string | null }).consult_billing_email,
+        consult_stripe_card_last4: (shop as { consult_stripe_card_last4: string | null }).consult_stripe_card_last4,
+        prior_consult_count: count ?? 0,
+        last_prior_consult_at: (priorRows?.[0] as { created_at: string } | undefined)?.created_at ?? null,
+      }
+    }
   }
   if (row.originating_contact_id) {
     const { data: contact } = await supabaseAdmin
@@ -178,5 +240,6 @@ export async function fetchConsultCaseDetail(caseId: string): Promise<{
       originating_contact_id: row.originating_contact_id,
     },
     messages: rawMessages,
+    shopContext,
   }
 }

@@ -42,10 +42,45 @@ export async function POST(req: NextRequest) {
             consult_stripe_payment_method_id: pmId,
             consult_billing_status: 'active',
             consult_stripe_card_last4: last4,
+            consult_enabled: true,
+            consult_stripe_checkout_session_id: null,
           })
           .eq('id', locationId)
 
         revalidatePath(`/shops/${locationId}`)
+      }
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session
+      if (session.mode === 'setup') {
+        const locationId = session.metadata?.location_id?.trim()
+        const customerId =
+          typeof session.customer === 'string' ? session.customer : session.customer?.id
+        const setupIntentId =
+          typeof session.setup_intent === 'string' ? session.setup_intent : session.setup_intent?.id
+        if (locationId && customerId && setupIntentId) {
+          const si = await stripe.setupIntents.retrieve(setupIntentId)
+          const pmId = typeof si.payment_method === 'string' ? si.payment_method : si.payment_method?.id
+          if (pmId && si.status === 'succeeded') {
+            await stripe.customers.update(customerId, {
+              invoice_settings: { default_payment_method: pmId },
+            })
+            const pm = await stripe.paymentMethods.retrieve(pmId)
+            await supabaseAdmin
+              .from('locations')
+              .update({
+                consult_stripe_customer_id: customerId,
+                consult_stripe_payment_method_id: pmId,
+                consult_billing_status: 'active',
+                consult_stripe_card_last4: pm.card?.last4 ?? null,
+                consult_enabled: true,
+                consult_stripe_checkout_session_id: null,
+              })
+              .eq('id', locationId)
+            revalidatePath(`/shops/${locationId}`)
+          }
+        }
       }
     }
 

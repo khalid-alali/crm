@@ -5,7 +5,8 @@ import {
   emailMergeWarningsForVinfastPlaceholders,
   mergeContextToStaticMap,
 } from '@/lib/email-template-merge'
-import { CAPABILITIES_LINK_DISPLAY_SENTINEL } from '@/lib/email-template-ids'
+import { CAPABILITIES_LINK_DISPLAY_SENTINEL, EXPERT_ASSIST_LINK_DISPLAY_SENTINEL } from '@/lib/email-template-ids'
+import { buildExpertAssistIntakeHref, expertAssistIntakePublicUrl } from '@/lib/expert-assist/intake-link'
 import { subjectAndBodyWithPlaceholders } from '@/lib/email-template-placeholders'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -46,12 +47,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
 
   const staticMap = mergeContextToStaticMap(mergeCtx)
-  const rendered = subjectAndBodyWithPlaceholders(
-    template.subject,
-    template.body_html,
-    staticMap,
-    CAPABILITIES_LINK_DISPLAY_SENTINEL,
-  )
+  const intakeBase = expertAssistIntakePublicUrl(req)
+  const expertAssistPreview =
+    intakeBase ?
+      buildExpertAssistIntakeHref(intakeBase, 'preview')
+    : EXPERT_ASSIST_LINK_DISPLAY_SENTINEL
+  const rendered = subjectAndBodyWithPlaceholders(template.subject, template.body_html, staticMap, {
+    capabilities: CAPABILITIES_LINK_DISPLAY_SENTINEL,
+    expertAssist: expertAssistPreview,
+  })
 
   const warnings = emailMergeWarningsForVinfastPlaceholders(
     template.subject,

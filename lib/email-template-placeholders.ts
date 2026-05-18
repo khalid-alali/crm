@@ -1,7 +1,10 @@
 import {
   CAPABILITIES_LINK_DISPLAY_SENTINEL,
   CAPABILITIES_LINK_PREVIEW_TOKEN,
+  EXPERT_ASSIST_LINK_DISPLAY_SENTINEL,
+  EXPERT_ASSIST_LINK_PREVIEW_SHOP_ID,
 } from '@/lib/email-template-ids'
+import { buildExpertAssistIntakeHref } from '@/lib/expert-assist/intake-link'
 
 export type CapabilitiesLinkMode = 'preview' | 'real'
 
@@ -24,20 +27,29 @@ export function buildCapabilitiesHref(baseUrl: string, mode: CapabilitiesLinkMod
   return `${base}/portal/${jwtToken.trim()}`
 }
 
+export type EmailTemplateLinkHrefs = {
+  capabilities?: string
+  expertAssist?: string
+}
+
 /**
  * Replace `{{token}}` placeholders. Static keys come from `staticMap`.
- * `capabilitiesHref` is used for `capabilities_link` and legacy `portal_url`.
+ * `capabilities` is used for `capabilities_link` and legacy `portal_url`.
+ * `expertAssist`, when set, fills `expert_assist_link`.
  */
 export function replaceEmailTemplatePlaceholders(
   text: string,
   staticMap: Record<string, string>,
-  capabilitiesHref: string,
+  linkHrefs: string | EmailTemplateLinkHrefs,
 ): string {
-  const map: Record<string, string> = {
-    ...staticMap,
-    capabilities_link: capabilitiesHref,
-    portal_url: capabilitiesHref,
+  const hrefs: EmailTemplateLinkHrefs =
+    typeof linkHrefs === 'string' ? { capabilities: linkHrefs } : linkHrefs
+  const map: Record<string, string> = { ...staticMap }
+  if (hrefs.capabilities) {
+    map.capabilities_link = hrefs.capabilities
+    map.portal_url = hrefs.capabilities
   }
+  if (hrefs.expertAssist) map.expert_assist_link = hrefs.expertAssist
   return replacePlaceholderTokens(text, map)
 }
 
@@ -45,11 +57,11 @@ export function subjectAndBodyWithPlaceholders(
   subject: string,
   bodyHtml: string,
   staticMap: Record<string, string>,
-  capabilitiesHref: string,
+  linkHrefs: string | EmailTemplateLinkHrefs,
 ): { subject: string; bodyHtml: string } {
   return {
-    subject: replaceEmailTemplatePlaceholders(subject, staticMap, capabilitiesHref),
-    bodyHtml: replaceEmailTemplatePlaceholders(bodyHtml, staticMap, capabilitiesHref),
+    subject: replaceEmailTemplatePlaceholders(subject, staticMap, linkHrefs),
+    bodyHtml: replaceEmailTemplatePlaceholders(bodyHtml, staticMap, linkHrefs),
   }
 }
 
@@ -83,5 +95,38 @@ export function emailContentReferencesCapabilitiesLink(subject: string, bodyHtml
     /\{\{\s*portal_url\s*\}\}/i.test(s) ||
     s.includes(CAPABILITIES_LINK_DISPLAY_SENTINEL) ||
     s.includes(`/portal/${CAPABILITIES_LINK_PREVIEW_TOKEN}`)
+  )
+}
+
+export function replaceExpertAssistPreviewWithReal(
+  text: string,
+  previewHref: string,
+  realHref: string,
+): string {
+  if (!previewHref) return text
+  return text.split(previewHref).join(realHref)
+}
+
+/** Normalize older render output that used a real preview intake URL into the display sentinel. */
+export function replaceLegacyExpertAssistPreviewUrls(text: string, intakeBaseUrl?: string): string {
+  const esc = EXPERT_ASSIST_LINK_PREVIEW_SHOP_ID.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let out = text
+  if (intakeBaseUrl?.trim()) {
+    const previewHref = buildExpertAssistIntakeHref(intakeBaseUrl, 'preview')
+    out = out.split(previewHref).join(EXPERT_ASSIST_LINK_DISPLAY_SENTINEL)
+  }
+  out = out.replace(
+    new RegExp(`https?:\\/\\/[^\\s"'<>]*[?&]shop=${esc}(?:&[^\\s"'<>#]*)?`, 'gi'),
+    EXPERT_ASSIST_LINK_DISPLAY_SENTINEL,
+  )
+  return out
+}
+
+export function emailContentReferencesExpertAssistLink(subject: string, bodyHtml: string): boolean {
+  const s = `${subject}\0${bodyHtml}`
+  return (
+    /\{\{\s*expert_assist_link\s*\}\}/i.test(s) ||
+    s.includes(EXPERT_ASSIST_LINK_DISPLAY_SENTINEL) ||
+    s.includes(EXPERT_ASSIST_LINK_PREVIEW_SHOP_ID)
   )
 }

@@ -1,16 +1,13 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { twilioStatusCallbackUrl } from '@/lib/expert-assist/constants'
+import { resolveTwilioMmsMediaUrls } from '@/lib/expert-assist/mms-media-url'
 import { getTwilioRestClient } from '@/lib/expert-assist/twilio-client'
-
-function messagingOpts(): { messagingServiceSid?: string; from?: string } {
-  const msid = process.env.TWILIO_MESSAGING_SERVICE_SID?.trim()
-  if (msid) return { messagingServiceSid: msid }
-  const from = process.env.TWILIO_FROM_NUMBER?.trim()
-  if (from) return { from }
-  throw new Error('Set TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM_NUMBER')
-}
+import { resolveTwilioMessagingOpts } from '@/lib/expert-assist/twilio-messaging'
 
 export type ConsultLogDirection = 'system' | 'outbound'
+
+/** Signed URLs Twilio fetches when sending MMS (must be publicly reachable). */
+const TWILIO_MMS_URL_TTL_SEC = 3600
 
 export async function sendTwilioSmsWithoutLog(to: string, body: string): Promise<void> {
   const statusCb = twilioStatusCallbackUrl()
@@ -18,7 +15,7 @@ export async function sendTwilioSmsWithoutLog(to: string, body: string): Promise
     to,
     body,
     statusCallback: statusCb || undefined,
-    ...messagingOpts(),
+    ...resolveTwilioMessagingOpts(),
   })
 }
 
@@ -28,17 +25,25 @@ export async function sendConsultSms(params: {
   caseId: string
   logDirection: ConsultLogDirection
   fromNumber?: string | null
+  /** Supabase Storage paths in consult-media bucket. */
+  mediaPaths?: string[]
 }): Promise<{ messageId: string; twilioSid: string | null }> {
   const statusCb = twilioStatusCallbackUrl()
-  const opts = messagingOpts()
+  const opts = resolveTwilioMessagingOpts()
+  const mediaPaths = params.mediaPaths ?? []
+  const bodyText = params.body.trim()
+
+  if (!bodyText && mediaPaths.length === 0) {
+    throw new Error('Message must include text or an image')
+  }
 
   const { data: inserted, error: insErr } = await supabaseAdmin
     .from('consult_messages')
     .insert({
       case_id: params.caseId,
       direction: params.logDirection,
-      body: params.body,
-      media_urls: [],
+      body: bodyText || null,
+      media_urls: mediaPaths,
       from_number: params.fromNumber ?? null,
       to_number: params.to,
       delivery_status: 'queued',
@@ -50,10 +55,21 @@ export async function sendConsultSms(params: {
 
   const messageId = inserted.id as string
 
+  let twilioMediaUrls: string[] = []
+  if (mediaPaths.length) {
+    try {
+      twilioMediaUrls = await resolveTwilioMmsMediaUrls(mediaPaths, TWILIO_MMS_URL_TTL_SEC)
+    } catch (prepErr) {
+      await supabaseAdmin.from('consult_messages').update({ delivery_status: 'failed' }).eq('id', messageId)
+      throw prepErr
+    }
+  }
+
   try {
     const msg = await getTwilioRestClient().messages.create({
       to: params.to,
-      body: params.body,
+      body: bodyText || undefined,
+      mediaUrl: twilioMediaUrls.length ? twilioMediaUrls : undefined,
       statusCallback: statusCb || undefined,
       ...opts,
     })

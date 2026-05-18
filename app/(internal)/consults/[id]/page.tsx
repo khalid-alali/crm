@@ -1,18 +1,18 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronRight } from 'lucide-react'
-import ConsultCaseDetail from '@/components/expert-assist/ConsultCaseDetail'
-import { fetchConsultCaseDetail } from '@/lib/expert-assist/queries'
+import ConsultCaseDetailView from '@/components/expert-assist/ConsultCaseDetailView'
+import { fetchConsultCaseDetail, fetchConsultCaseNeighbors } from '@/lib/expert-assist/queries'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ConsultCasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   let detail: Awaited<ReturnType<typeof fetchConsultCaseDetail>> = null
+  let neighbors: Awaited<ReturnType<typeof fetchConsultCaseNeighbors>> = { prevId: null, nextId: null }
   let loadError: string | null = null
 
   try {
-    detail = await fetchConsultCaseDetail(id)
+    ;[detail, neighbors] = await Promise.all([fetchConsultCaseDetail(id), fetchConsultCaseNeighbors(id)])
   } catch (e) {
     loadError = e instanceof Error ? e.message : String(e)
   }
@@ -32,22 +32,15 @@ export default async function ConsultCasePage({ params }: { params: Promise<{ id
   if (!detail) notFound()
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
-      <header className="shrink-0 border-b border-arctic-200 bg-white px-6 py-3">
-        <nav className="mb-2 flex items-center gap-1 text-xs text-onix-500">
-          <Link href="/home" className="hover:text-brand-700 hover:underline">
-            Home
-          </Link>
-          <ChevronRight className="h-3 w-3" aria-hidden />
-          <Link href="/consults" className="hover:text-brand-700 hover:underline">
-            Consults
-          </Link>
-          <ChevronRight className="h-3 w-3" aria-hidden />
-          <span className="truncate text-onix-700">Case · {detail.case.shop?.name ?? detail.case.originating_phone_number}</span>
-        </nav>
-        <h1 className="text-lg font-semibold text-onix-950">Consult case</h1>
-      </header>
-      <ConsultCaseDetail caseId={id} caseRow={detail.case} messages={detail.messages} />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <ConsultCaseDetailView
+        caseId={id}
+        caseRow={detail.case}
+        messages={detail.messages}
+        shopContext={detail.shopContext}
+        prevCaseId={neighbors.prevId}
+        nextCaseId={neighbors.nextId}
+      />
     </div>
   )
 }

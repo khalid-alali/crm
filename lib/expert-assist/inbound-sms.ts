@@ -1,4 +1,5 @@
 import { insertConsultCaseEvent } from '@/lib/expert-assist/events'
+import { hasInboundMedia } from '@/lib/expert-assist/consult-media'
 import { shopAllowsInboundConsultSms } from '@/lib/expert-assist/billing-gates'
 import { decodeVinNhtsa, extractVinFromText } from '@/lib/expert-assist/vin-decode'
 import { normalizeShopShortCode, normalizeSmsAddress } from '@/lib/expert-assist/phone'
@@ -243,7 +244,7 @@ export async function handleInboundSms(form: Record<string, string>): Promise<vo
   }
 
   const pendingApprovalCase = await findAwaitingApprovalCase(from)
-  if (pendingApprovalCase && body) {
+  if (pendingApprovalCase && (body || hasInboundMedia(form))) {
     const paths = await collectMediaPaths(pendingApprovalCase.id, form)
     await insertInboundMessage({
       caseId: pendingApprovalCase.id,

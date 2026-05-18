@@ -29,26 +29,17 @@ export default async function ConsultsQueuePage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="shrink-0 border-b border-arctic-200 bg-white px-6 py-4">
-        <nav className="mb-1 flex items-center gap-1 text-xs text-onix-500">
+      <header className="shrink-0 border-b border-arctic-200 bg-white px-6 py-3">
+        <nav className="flex items-center gap-1 text-xs text-onix-500">
           <Link href="/home" className="hover:text-brand-700 hover:underline">
             Home
           </Link>
           <ChevronRight className="h-3 w-3" aria-hidden />
           <span className="text-onix-700">Consults</span>
         </nav>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-onix-950">Expert Assist</h1>
-            <p className="mt-0.5 text-sm text-onix-600">
-              Pending approval and open cases refresh every ~12s. Configure Twilio webhooks and env per
-              expert-assist.env.example.
-            </p>
-          </div>
-        </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto p-6">
+      <div className="min-h-0 flex-1 overflow-auto px-10 pt-8 pb-20">
         <ConsultQueueTables pending={pending} open={open} schemaError={schemaError} />
       </div>
     </div>

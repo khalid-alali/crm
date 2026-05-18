@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { CONSULT_MEDIA_BUCKET, consultMediaObjectPath } from '@/lib/expert-assist/constants'
+import { validateConsultMmsUpload } from '@/lib/expert-assist/consult-media'
 import { getTwilioBasicAuthHeader } from '@/lib/expert-assist/twilio-client'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -46,6 +47,28 @@ export async function downloadTwilioMediaToConsultStorage(params: {
     console.error('consult media upload', error.message)
     return null
   }
+
+  return objectPath
+}
+
+/** Upload expert-composed MMS image; returns storage path for consult_messages.media_urls. */
+export async function uploadConsultOutboundMedia(params: {
+  caseId: string
+  buffer: Buffer
+  contentType: string
+}): Promise<string> {
+  const err = validateConsultMmsUpload(params.contentType, params.buffer.byteLength)
+  if (err) throw new Error(err)
+
+  const ct = params.contentType.split(';')[0]?.trim() || 'application/octet-stream'
+  const ext = extFromContentType(ct, 'jpg')
+  const objectPath = consultMediaObjectPath(params.caseId, `${randomUUID()}.${ext}`)
+
+  const { error } = await supabaseAdmin.storage.from(CONSULT_MEDIA_BUCKET).upload(objectPath, params.buffer, {
+    contentType: ct,
+    upsert: false,
+  })
+  if (error) throw new Error(error.message)
 
   return objectPath
 }

@@ -63,6 +63,16 @@ describe('replaceEmailTemplatePlaceholders', () => {
     const out = replaceEmailTemplatePlaceholders('<a href="{{portal_url}}">x</a>', {}, href)
     expect(out).toBe('<a href="https://app.example.com/portal/preview">x</a>')
   })
+
+  it('substitutes expert_assist_link when provided', () => {
+    const intake = 'https://intake.example.com/?shop=uuid&name=Acme'
+    const out = replaceEmailTemplatePlaceholders(
+      '<a href="{{expert_assist_link}}">Start consult</a>',
+      {},
+      { expertAssist: intake },
+    )
+    expect(out).toBe(`<a href="${intake}">Start consult</a>`)
+  })
 })
 
 describe('buildCapabilitiesHref', () => {

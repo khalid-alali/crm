@@ -55,6 +55,8 @@ export type ConsultQueueRow = {
   delivery_attention?: boolean
   last_message_direction?: string | null
   last_message_at?: string | null
+  /** First inbound SMS body (trimmed); queue Question column. */
+  first_inbound_preview?: string | null
   shop?: { id: string; name: string } | null
   contact?: { display_name: string | null; phone_number: string; status: string } | null
 }
