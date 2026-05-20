@@ -1,6 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  groupAccountContactsForDisplay,
+  type AccountContactDisplayGroup,
+} from '@/lib/account-contacts-display'
 import { CONTACT_ROLE_LABELS, CONTACT_ROLES, type ContactRole } from '@/lib/contact-roles'
 import { crmInputNoAutofillProps, crmSelectNoAutofillProps } from '@/lib/crm-no-autofill'
 import SimpleModal from '@/components/SimpleModal'
@@ -61,7 +65,15 @@ export default function AccountContactsPanel({
     void load()
   }, [load])
 
-  const byRole = (role: ContactRole) => contacts.filter(c => c.role === role)
+  const groupsByRole = useMemo(() => {
+    const map = new Map<ContactRole, AccountContactDisplayGroup[]>()
+    for (const role of CONTACT_ROLES) {
+      const roleContacts = contacts.filter(c => c.role === role)
+      if (roleContacts.length === 0) continue
+      map.set(role, groupAccountContactsForDisplay(roleContacts, locations))
+    }
+    return map
+  }, [contacts, locations])
 
   function closeModal() {
     setModalOpen(false)
@@ -162,43 +174,68 @@ export default function AccountContactsPanel({
     await load()
   }
 
-  function renderCard(c: Contact) {
-    const loc = c.location_id ? locations.find(l => l.id === c.location_id) : null
-    const needsNameReview = !c.name?.trim() && !!c.email?.trim()
-    const r = CONTACT_ROLES.includes(c.role as ContactRole) ? (c.role as ContactRole) : 'other'
+  function renderCard(group: AccountContactDisplayGroup, role: ContactRole) {
+    const c = group.representative
+    const isPrimary = group.contacts.some(contact => contact.is_primary)
+    const needsNameReview = group.contacts.some(
+      contact => !contact.name?.trim() && !!contact.email?.trim(),
+    )
 
     return (
-      <div key={c.id} className="rounded-lg border border-arctic-200 bg-white px-3 py-2 text-sm">
+      <div key={group.key} className="rounded-lg border border-arctic-200 bg-white px-3 py-2 text-sm">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium text-onix-900">{c.name?.trim() || c.email || '—'}</span>
               <span className="rounded bg-arctic-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-onix-600">
-                {CONTACT_ROLE_LABELS[r]}
+                {CONTACT_ROLE_LABELS[role]}
               </span>
-              {c.is_primary && (
+              {isPrimary && (
                 <span className="text-[10px] font-medium uppercase text-brand-600">Primary</span>
               )}
             </div>
-            {loc && <div className="mt-0.5 text-xs text-onix-500">Location: {loc.name}</div>}
             {needsNameReview && (
               <div className="mt-1 text-[10px] font-medium text-amber-700">Review: no display name (email only)</div>
             )}
-            {c.email && (
-              <a href={`mailto:${c.email}`} className="mt-1 block truncate text-xs text-brand-700 hover:underline">
-                {c.email}
-              </a>
+            {(c.email || c.phone) && (
+              <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-brand-700">
+                {c.email && (
+                  <a href={`mailto:${c.email}`} className="hover:underline">
+                    {c.email}
+                  </a>
+                )}
+                {c.email && c.phone && <span className="text-onix-400">·</span>}
+                {c.phone && (
+                  <a href={`tel:${c.phone.replace(/[^\d+]/g, '')}`} className="hover:underline">
+                    {c.phone}
+                  </a>
+                )}
+              </div>
             )}
-            {c.phone && (
-              <a href={`tel:${c.phone.replace(/[^\d+]/g, '')}`} className="mt-0.5 block text-xs text-brand-700 hover:underline">
-                {c.phone}
-              </a>
+            {group.locationLabels.length > 0 && (
+              <div className="mt-2">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-onix-500">Locations</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {group.locationLabels.map(label => (
+                    <span
+                      key={label}
+                      className="rounded-full bg-arctic-100 px-2 py-0.5 text-[10px] font-medium text-onix-700"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
+
           </div>
           <div className="flex shrink-0 gap-1">
             <button
               type="button"
-              onClick={() => openEdit(c)}
+              onClick={() => {
+                const full = contacts.find(contact => contact.id === c.id)
+                if (full) openEdit(full)
+              }}
               className="rounded p-1 text-onix-400 hover:bg-arctic-100 hover:text-onix-700"
               aria-label="Edit"
             >
@@ -342,14 +379,14 @@ export default function AccountContactsPanel({
           <p className="text-xs text-onix-500">Loading…</p>
         ) : (
           CONTACT_ROLES.map(role => {
-            const list = byRole(role)
-            if (list.length === 0) return null
+            const list = groupsByRole.get(role)
+            if (!list || list.length === 0) return null
             return (
               <div key={role}>
                 <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-onix-400">
                   {CONTACT_ROLE_LABELS[role]}
                 </div>
-                <div className="space-y-2">{list.map(renderCard)}</div>
+                <div className="space-y-2">{list.map(group => renderCard(group, role))}</div>
               </div>
             )
           })

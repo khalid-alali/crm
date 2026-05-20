@@ -1,3 +1,4 @@
+import { activeLocations } from '@/lib/locations-active'
 import { supabaseAdmin } from '@/lib/supabase'
 import { attachPrimaryContactsToLocations } from '@/lib/primary-contact'
 import { BDR_ASSIGNEES } from '@/lib/bdr-assignees'
@@ -85,17 +86,16 @@ export default async function ShopsPage({
       sp.disqualified_reason,
   )
 
-  const metaQuery = supabaseAdmin.from('locations').select('status, chain_name')
+  const metaQuery = activeLocations(supabaseAdmin, 'status, chain_name')
 
   let shops: unknown[] = []
   let counts: Record<string, number>
   let chains: string[]
 
   if (hasListFilters) {
-    let listQuery = supabaseAdmin
-      .from('locations')
-      .select(PIPELINE_LOCATION_SELECT)
-      .order('updated_at', { ascending: false })
+    let listQuery = activeLocations(supabaseAdmin, PIPELINE_LOCATION_SELECT).order('updated_at', {
+      ascending: false,
+    })
     if (sp.status) {
       listQuery = listQuery.eq('status', sp.status)
       if (sp.status === 'inactive' && sp.disqualified_reason) {
@@ -120,9 +120,7 @@ export default async function ShopsPage({
     counts = meta.counts
     chains = meta.chains
   } else {
-    const { data: shopRows } = await supabaseAdmin
-      .from('locations')
-      .select(PIPELINE_LOCATION_SELECT)
+    const { data: shopRows } = await activeLocations(supabaseAdmin, PIPELINE_LOCATION_SELECT)
       // "All" view should hide churned (inactive) by default.
       .neq('status', 'inactive')
       .order('updated_at', { ascending: false })

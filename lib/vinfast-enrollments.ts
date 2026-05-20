@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { activeLocations } from '@/lib/locations-active'
 import { VINFAST_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
 import { rowForCanonicalKey, type VinfastChecklistRow } from '@/lib/vinfast-checklist'
 import { getMissingChecklistKeys, isTeslaStage, type TeslaStage } from '@/lib/program-stage'
@@ -157,12 +158,10 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
 
   const locationsData: LocationRow[] = []
   for (const ids of chunk(locationIds, BATCH_SIZE)) {
-    const { data, error } = await supabaseAdmin
-      .from('locations')
-      .select(
-        'id, name, city, state, county, status, vf_onboarding_status, vf_operational_status, capabilities_submitted_at, account_id, motherduck_shop_id',
-      )
-      .in('id', ids)
+    const { data, error } = await activeLocations(
+      supabaseAdmin,
+      'id, name, city, state, county, status, vf_onboarding_status, vf_operational_status, capabilities_submitted_at, account_id, motherduck_shop_id',
+    ).in('id', ids)
     if (error) throw new Error(error.message)
     locationsData.push(...((data ?? []) as LocationRow[]))
   }

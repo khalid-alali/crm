@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { activeLocations } from '@/lib/locations-active'
 import {
   TESLA_PROGRAM_ID,
   TESLA_FIXLANE_ACCOUNT_READY_KEY,
@@ -109,18 +110,16 @@ async function ensureDefaultTeslaEnrollments(supabaseAdmin: SupabaseClient): Pro
 
   // Include both active and unenrolled rows so an explicit unenrollment stays sticky.
   const existingLocationIds = new Set((existingRows ?? []).map(row => row.location_id as string))
-  const { data: eligibleLocations, error: eligibleError } = await supabaseAdmin
-    .from('locations')
-    .select('id')
+  const { data: eligibleLocations, error: eligibleError } = await activeLocations(supabaseAdmin, 'id')
     .in('status', ['contracted', 'active'])
 
   if (eligibleError) throw new Error(eligibleError.message)
 
   const now = new Date().toISOString()
   const rowsToInsert = (eligibleLocations ?? [])
-    .map(row => row.id as string)
-    .filter(locationId => !existingLocationIds.has(locationId))
-    .map(locationId => ({
+    .map((row: { id: string }) => row.id)
+    .filter((locationId: string) => !existingLocationIds.has(locationId))
+    .map((locationId: string) => ({
       location_id: locationId,
       program_id: TESLA_PROGRAM_ID,
       stage: 'not_ready',
@@ -166,6 +165,7 @@ export async function listTeslaEnrollments(
     `,
     )
     .eq('program_id', TESLA_PROGRAM_ID)
+    .is('unenrolled_at', null)
     .order('updated_at', { ascending: false })
 
   if (enrollmentsError) {
@@ -178,17 +178,19 @@ export async function listTeslaEnrollments(
   const enrollmentIds = enrollments.map(row => row.id)
   const locationIds = enrollments.map(row => row.location_id)
 
-  const { data: locationsData, error: locationsError } = await supabaseAdmin
-    .from('locations')
-    .select(
-      'id, name, status, city, state, county, capabilities_submitted_at, high_priority_target, account_id, motherduck_shop_id',
-    )
-    .in('id', locationIds)
+  const { data: locationsData, error: locationsError } = await activeLocations(
+    supabaseAdmin,
+    'id, name, status, city, state, county, capabilities_submitted_at, high_priority_target, account_id, motherduck_shop_id',
+  ).in('id', locationIds)
 
   if (locationsError) throw new Error(locationsError.message)
 
   const accountIds = Array.from(
-    new Set((locationsData ?? []).map(row => row.account_id).filter((id): id is string => Boolean(id))),
+    new Set(
+      (locationsData ?? [])
+        .map((row: LocationRow) => row.account_id)
+        .filter((id: string | null): id is string => Boolean(id)),
+    ),
   )
 
   const { data: accountsData, error: accountsError } = accountIds.length
@@ -200,8 +202,8 @@ export async function listTeslaEnrollments(
   const cacheKeys = Array.from(
     new Set(
       (locationsData ?? [])
-        .map(row => row.motherduck_shop_id)
-        .filter((id): id is string => Boolean(id))
+        .map((row: LocationRow) => row.motherduck_shop_id)
+        .filter((id: string | null): id is string => Boolean(id))
         .concat(locationIds),
     ),
   )

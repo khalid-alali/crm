@@ -12,8 +12,10 @@ import {
   Pause,
   Send,
   Square,
+  Video,
   X,
 } from 'lucide-react'
+import type { LensSessionRow } from '@/lib/expert-assist/lens-sessions'
 import {
   CONSULT_MMS_ALLOWED_CONTENT_TYPES,
   CONSULT_MMS_MAX_BYTES,
@@ -53,11 +55,19 @@ import { MessageBubble, pillClass, type CaseDetailModel } from './ConsultCaseDet
 
 const CLOSE_UNDO_MS = 5000
 
+function defaultScheduleLocalValue(): string {
+  const d = new Date(Date.now() + 30 * 60 * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export default function ConsultCaseDetailView({
   caseId,
   caseRow,
   messages,
   shopContext,
+  lensSessions,
+  lensEnabled,
   prevCaseId,
   nextCaseId,
 }: {
@@ -65,6 +75,8 @@ export default function ConsultCaseDetailView({
   caseRow: CaseDetailModel
   messages: ConsultMessageRow[]
   shopContext: ConsultCaseShopContext | null
+  lensSessions: LensSessionRow[]
+  lensEnabled: boolean
   prevCaseId: string | null
   nextCaseId: string | null
 }) {
@@ -82,6 +94,8 @@ export default function ConsultCaseDetailView({
   const [vinSaved, setVinSaved] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [closeToast, setCloseToast] = useState<{ amountLabel: string; secondsLeft: number } | null>(null)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState(defaultScheduleLocalValue)
   const closeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const closeAbortRef = useRef<AbortController | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
@@ -299,6 +313,42 @@ export default function ConsultCaseDetailView({
       refresh()
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'Save failed')
+    }
+  }
+
+  async function startMeetNow() {
+    setBusy('lens-meet')
+    try {
+      const data = (await postJson(`/api/consults/${caseId}/lens/meet-now`)) as {
+        technician_url?: string
+      }
+      if (data.technician_url) window.open(data.technician_url, '_blank', 'noopener,noreferrer')
+      refresh()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Video session failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function submitSchedule() {
+    const local = scheduleAt.trim()
+    if (!local) return
+    const iso = new Date(local).toISOString()
+    setBusy('lens-schedule')
+    try {
+      const data = (await postJson(`/api/consults/${caseId}/lens/schedule`, {
+        scheduled_start_at: iso,
+      })) as { technician_url?: string }
+      setScheduleOpen(false)
+      if (data.technician_url) {
+        window.open(data.technician_url, '_blank', 'noopener,noreferrer')
+      }
+      refresh()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Schedule failed')
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -664,6 +714,113 @@ export default function ConsultCaseDetailView({
                 }
               </div>
             </div>
+
+            {isOpen && lensEnabled ?
+              <div className="ea-video-block">
+                <div className="ea-timer-label">
+                  <Video size={12} aria-hidden />
+                  Live video (Zoho Lens)
+                </div>
+                <p className="ea-video-hint">
+                  Join link goes to the shop SMS number. Start the consult timer when they join.
+                </p>
+                <div className="ea-video-controls">
+                  <button
+                    type="button"
+                    className="ea-timer-btn ea-primary"
+                    disabled={busy !== null}
+                    onClick={() => void startMeetNow()}
+                  >
+                    {busy === 'lens-meet' ? 'Starting…' : 'Meet now'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ea-timer-btn"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      setScheduleAt(defaultScheduleLocalValue())
+                      setScheduleOpen(true)
+                    }}
+                  >
+                    Schedule
+                  </button>
+                </div>
+                {lensSessions.length > 0 ?
+                  <ul className="ea-video-sessions">
+                    {lensSessions.slice(0, 3).map(s => (
+                      <li key={s.id}>
+                        <span className="ea-video-session-meta">
+                          {s.mode === 'instant' ? 'Meet now' : 'Scheduled'}
+                          {s.scheduled_start_at ?
+                            ` · ${new Date(s.scheduled_start_at).toLocaleString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}`
+                          : ''}
+                          {' · '}
+                          {s.status}
+                        </span>
+                        <a
+                          href={s.technician_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ea-video-session-link"
+                        >
+                          Open session
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                : null}
+              </div>
+            : null}
+
+            {scheduleOpen ?
+              <div
+                className="ea-schedule-backdrop"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="ea-schedule-title"
+              >
+                <div className="ea-schedule-modal">
+                  <h3 id="ea-schedule-title" className="text-sm font-semibold">
+                    Schedule video call
+                  </h3>
+                  <p className="mt-1 text-xs" style={{ color: 'var(--ea-text-muted)' }}>
+                    Shop gets an SMS with the join link. Zoho also emails the shop billing address.
+                  </p>
+                  <label className="ea-schedule-label">
+                    Start time
+                    <input
+                      type="datetime-local"
+                      className="ea-schedule-input"
+                      value={scheduleAt}
+                      onChange={e => setScheduleAt(e.target.value)}
+                    />
+                  </label>
+                  <div className="ea-schedule-actions">
+                    <button
+                      type="button"
+                      className="ea-timer-btn"
+                      disabled={busy !== null}
+                      onClick={() => setScheduleOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="ea-timer-btn ea-primary"
+                      disabled={busy !== null}
+                      onClick={() => void submitSchedule()}
+                    >
+                      {busy === 'lens-schedule' ? 'Scheduling…' : 'Schedule & open'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            : null}
 
             <section className="ea-rail-section">
               <h2 className="ea-section-label">Case</h2>

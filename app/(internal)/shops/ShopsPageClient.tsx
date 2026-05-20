@@ -11,6 +11,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
+import LocationMergeModal from '@/components/LocationMergeModal'
 import ShopTable, { type ShopRow } from '@/components/ShopTable'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 
@@ -63,6 +64,7 @@ export default function ShopsPageClient({ title, shops, pipelineStatusFilter, ch
   const [bulkApplying, setBulkApplying] = useState(false)
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [bulkVinfastApplying, setBulkVinfastApplying] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
 
   const filtered = useMemo(
     () => shops.filter(s => shopMatchesQuery(s, query)),
@@ -270,6 +272,17 @@ export default function ShopsPageClient({ title, shops, pipelineStatusFilter, ch
             >
               {bulkVinfastApplying ? 'Enrolling…' : 'Enroll in VinFast'}
             </button>
+            <button
+              type="button"
+              disabled={selectedIds.size !== 2}
+              onClick={() => {
+                setBulkError(null)
+                setMergeOpen(true)
+              }}
+              className="rounded-lg border border-onix-300 bg-white px-3 py-1.5 font-medium text-onix-800 hover:bg-arctic-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Merge
+            </button>
           </div>
         )}
       </div>
@@ -332,6 +345,19 @@ export default function ShopsPageClient({ title, shops, pipelineStatusFilter, ch
             </div>
           </div>
         </div>
+      )}
+
+      {mergeOpen && selectedIds.size === 2 && (
+        <LocationMergeModal
+          locationAId={Array.from(selectedIds)[0]!}
+          locationBId={Array.from(selectedIds)[1]!}
+          onClose={() => setMergeOpen(false)}
+          onMerged={() => {
+            setMergeOpen(false)
+            setSelectedIds(new Set())
+            router.refresh()
+          }}
+        />
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAppSession } from '@/lib/app-auth'
+import { activeLocations } from '@/lib/locations-active'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const MAX_PER_GROUP = 4
@@ -59,9 +60,7 @@ export async function GET(req: NextRequest) {
   const accountFetchCap = enrollContext ? 40 : 20
   const otherResultCap = enrollContext ? VINFAST_ENROLL_OTHER_CAP : MAX_PER_GROUP
 
-  const shopQuery = supabaseAdmin
-    .from('locations')
-    .select('id, name, status')
+  const shopQuery = activeLocations(supabaseAdmin, 'id, name, status')
     .or(`name.ilike.%${q}%,motherduck_shop_id.ilike.%${q}%`)
     .order('updated_at', { ascending: false })
     .limit(shopCap)
@@ -97,15 +96,11 @@ export async function GET(req: NextRequest) {
 
   const [directLocationsRes, fallbackLocationsRes] = await Promise.all([
     directLocationIds.length
-      ? supabaseAdmin
-          .from('locations')
-          .select('id, name, account_id, status, motherduck_shop_id, updated_at')
+      ? activeLocations(supabaseAdmin, 'id, name, account_id, status, motherduck_shop_id, updated_at')
           .in('id', directLocationIds)
       : Promise.resolve({ data: [], error: null }),
     accountIds.length
-      ? supabaseAdmin
-          .from('locations')
-          .select('id, name, account_id, status, motherduck_shop_id, updated_at')
+      ? activeLocations(supabaseAdmin, 'id, name, account_id, status, motherduck_shop_id, updated_at')
           .in('account_id', accountIds)
           .order('updated_at', { ascending: false })
       : Promise.resolve({ data: [], error: null }),

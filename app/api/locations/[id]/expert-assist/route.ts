@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { getAppSession } from '@/lib/app-auth'
 import { assertShopBillingReady } from '@/lib/expert-assist/billing-gates'
 import { normalizeShopShortCode } from '@/lib/expert-assist/phone'
+import { ensureToolboxCasePartner } from '@/lib/expert-assist/toolbox-partner'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
@@ -12,6 +13,7 @@ const LOCATION_CONSULT_SELECT = `
   name,
   consult_enabled,
   consult_short_code,
+  toolbox_case_partner,
   consult_billing_email,
   consult_billing_contact_name,
   consult_internal_notes,
@@ -51,6 +53,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     .limit(80)
 
   if (e3) return NextResponse.json({ error: e3.message }, { status: 500 })
+
+  try {
+    loc.toolbox_case_partner = await ensureToolboxCasePartner(id, loc.name)
+  } catch (e) {
+    console.error('ensureToolboxCasePartner', e)
+  }
 
   return NextResponse.json({
     location: loc,

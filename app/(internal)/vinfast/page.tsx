@@ -1,4 +1,5 @@
 import VinfastBoard from '@/components/vinfast/VinfastBoard'
+import { activeLocations } from '@/lib/locations-active'
 import { attachPrimaryContactsToLocations } from '@/lib/primary-contact'
 import { supabaseAdmin } from '@/lib/supabase'
 import { listVinfastEnrollments } from '@/lib/vinfast-enrollments'
@@ -11,9 +12,7 @@ export default async function VinfastPage() {
 
   const { data: locRows } =
     locationIds.length > 0
-      ? await supabaseAdmin
-          .from('locations')
-          .select('id, name, chain_name, city, state, county, status, lat, lng, address_line1, account_id')
+      ? await activeLocations(supabaseAdmin, 'id, name, chain_name, city, state, county, status, lat, lng, address_line1, account_id')
           .in('id', locationIds)
       : { data: [] as { id: string; account_id: string | null }[] }
 

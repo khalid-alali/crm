@@ -215,14 +215,7 @@ export default function GlobalSearch({
           group: 'Accounts',
           title: account.name,
           subtitle: account.shop_name,
-          href: `/shops/${account.shop_id}`,
-          recentShop: {
-            id: account.shop_id,
-            name: account.shop_name,
-            status: null,
-            city: null,
-            state: null,
-          },
+          href: `/accounts/${account.id}`,
         }))
       : []
 

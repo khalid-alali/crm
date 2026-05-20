@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ConsultCaseDetailView from '@/components/expert-assist/ConsultCaseDetailView'
+import { fetchConsultLensSessions } from '@/lib/expert-assist/lens-sessions'
 import { fetchConsultCaseDetail, fetchConsultCaseNeighbors } from '@/lib/expert-assist/queries'
 
 export const dynamic = 'force-dynamic'
@@ -31,6 +32,15 @@ export default async function ConsultCasePage({ params }: { params: Promise<{ id
 
   if (!detail) notFound()
 
+  let lensSessions: Awaited<ReturnType<typeof fetchConsultLensSessions>> = []
+  try {
+    lensSessions = await fetchConsultLensSessions(id)
+  } catch {
+    lensSessions = []
+  }
+
+  const lensEnabled = Boolean(process.env.ZOHO_LENS_DEPARTMENT_ID?.trim())
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <ConsultCaseDetailView
@@ -38,6 +48,8 @@ export default async function ConsultCasePage({ params }: { params: Promise<{ id
         caseRow={detail.case}
         messages={detail.messages}
         shopContext={detail.shopContext}
+        lensSessions={lensSessions}
+        lensEnabled={lensEnabled}
         prevCaseId={neighbors.prevId}
         nextCaseId={neighbors.nextId}
       />

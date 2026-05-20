@@ -7,6 +7,10 @@ import { SEED_ONBOARDING_TEMPLATE_ID } from '@/lib/email-template-ids'
 import { injectCapabilitiesIntoEmail } from '@/lib/inject-capabilities-email'
 import { injectExpertAssistIntoEmail } from '@/lib/inject-expert-assist-email'
 import { normalizeRecipientList } from '@/lib/email-recipients'
+import {
+  firstNameLocalFromSessionUser,
+  notificationsFrom,
+} from '@/lib/resend-notifications'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -107,11 +111,12 @@ export async function POST(req: NextRequest) {
   }
 
   const replyTo = sessionEmail.replace(/@repairwise\.pro$/i, '@fixlane.com')
-  if (!replyTo) {
-    return NextResponse.json({ error: 'Session has no email' }, { status: 400 })
-  }
-
-  const from = 'khalid@notifications.fixlane.com'
+  const displayName =
+    session.user?.name?.trim() || sessionEmail.split('@')[0] || 'RepairWise'
+  const from = notificationsFrom(
+    displayName,
+    firstNameLocalFromSessionUser(session.user ?? {}),
+  )
 
   const { error: sendError } = await resend.emails.send({
     from,

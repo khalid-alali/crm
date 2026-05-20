@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { shopConsultThreadUrl } from '@/lib/expert-assist/shop-consult-url'
 import { useCallback, useEffect, useState } from 'react'
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
 import { loadStripe, type StripeElementsOptions } from '@stripe/stripe-js'
@@ -16,6 +17,7 @@ type ExpertAssistPayload = {
     name: string
     consult_enabled: boolean | null
     consult_short_code: string | null
+    toolbox_case_partner: string | null
     consult_billing_email: string | null
     consult_billing_contact_name: string | null
     consult_internal_notes: string | null
@@ -94,6 +96,7 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
   const [newName, setNewName] = useState('')
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [inviteLoading, setInviteLoading] = useState(false)
+  const [revokeLoading, setRevokeLoading] = useState(false)
 
   const reload = useCallback(async () => {
     setError(null)
@@ -221,14 +224,44 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
         {inviteUrl ?
           <p className="mt-2 break-all font-mono text-xs text-onix-700">{inviteUrl}</p>
         : null}
-        <button
-          type="button"
-          disabled={inviteLoading}
-          onClick={() => void copyInviteLink()}
-          className="mt-3 rounded-lg border border-arctic-300 px-3 py-1.5 text-sm hover:bg-arctic-50 disabled:opacity-50"
-        >
-          {inviteLoading ? 'Generating…' : 'Copy invite link'}
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={inviteLoading}
+            onClick={() => void copyInviteLink()}
+            className="rounded-lg border border-arctic-300 px-3 py-1.5 text-sm hover:bg-arctic-50 disabled:opacity-50"
+          >
+            {inviteLoading ? 'Generating…' : 'Copy invite link'}
+          </button>
+          <button
+            type="button"
+            disabled={revokeLoading}
+            onClick={() => {
+              void (async () => {
+                if (!window.confirm('Revoke this shop invite link? Existing URLs will stop working.')) return
+                setRevokeLoading(true)
+                try {
+                  const res = await fetch(`/api/locations/${locationId}/expert-assist/revoke-invite`, {
+                    method: 'POST',
+                  })
+                  const j = (await res.json()) as { error?: string }
+                  if (!res.ok) {
+                    window.alert(j.error ?? 'Revoke failed')
+                    return
+                  }
+                  setInviteUrl(null)
+                  window.alert('Invite link revoked. Generate a new link when ready.')
+                  void reload()
+                } finally {
+                  setRevokeLoading(false)
+                }
+              })()
+            }}
+            className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            {revokeLoading ? 'Revoking…' : 'Revoke invite link'}
+          </button>
+        </div>
       </div>
 
       <div>
@@ -243,7 +276,7 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
             Expert Assist enabled (requires active billing below)
           </label>
           <label className="block text-sm">
-            <span className="text-onix-600">Short code</span>
+            <span className="text-onix-600">Expert Assist short code (SMS)</span>
             <input
               value={draft.consult_short_code}
               onChange={e => setDraft(d => ({ ...d, consult_short_code: e.target.value }))}
@@ -282,6 +315,18 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
           >
             Save settings
           </button>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-onix-900">Toolbox referral</h3>
+        <p className="mt-1 text-xs text-onix-500">
+          Auto-generated from shop name (<span className="font-mono">?casePartner=</span>). Spaces removed; if the
+          name is taken, last 4 characters of shop id are appended. Shops cannot edit this.
+        </p>
+        <div className="mt-3 rounded-lg border border-arctic-200 bg-white p-4 text-sm">
+          <p className="text-onix-600">Referral code</p>
+          <p className="mt-1 font-mono text-lg font-medium text-onix-900">{loc.toolbox_case_partner ?? '—'}</p>
         </div>
       </div>
 
@@ -411,13 +456,14 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
                 <th className="px-3 py-2">Opened</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Billed</th>
+                <th className="px-3 py-2">Shop web</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
               {payload.cases.length === 0 ?
                 <tr>
-                  <td colSpan={4} className="px-3 py-4 text-center text-onix-500">
+                  <td colSpan={5} className="px-3 py-4 text-center text-onix-500">
                     No cases yet.
                   </td>
                 </tr>
@@ -427,6 +473,21 @@ export default function ExpertAssistShopPanel({ locationId }: { locationId: stri
                     <td className="px-3 py-2">{cs.status}</td>
                     <td className="px-3 py-2">
                       {cs.billed_amount_cents != null ? `$${(cs.billed_amount_cents / 100).toFixed(2)}` : '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      {cs.status === 'open' ?
+                        <button
+                          type="button"
+                          className="text-xs text-brand-700 hover:underline"
+                          onClick={() => {
+                            const url = shopConsultThreadUrl(locationId, cs.id)
+                            void navigator.clipboard.writeText(url)
+                            window.alert('Shop web consult link copied')
+                          }}
+                        >
+                          Copy web link
+                        </button>
+                      : <span className="text-xs text-onix-400">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Link href={`/consults/${cs.id}`} className="text-brand-700 hover:underline">

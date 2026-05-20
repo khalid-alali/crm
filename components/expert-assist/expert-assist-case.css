@@ -656,6 +656,103 @@
   background: #000;
 }
 
+.ea-case .ea-video-block {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--ea-border);
+  background: var(--ea-surface);
+}
+
+.ea-case .ea-video-hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ea-text-muted);
+  margin: 0 0 12px;
+}
+
+.ea-case .ea-video-controls {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ea-case .ea-video-sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ea-case .ea-video-sessions li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.ea-case .ea-video-session-meta {
+  color: var(--ea-text-muted);
+}
+
+.ea-case .ea-video-session-link {
+  color: var(--ea-action);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.ea-case .ea-video-session-link:hover {
+  text-decoration: underline;
+}
+
+.ea-case .ea-schedule-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 15, 15, 0.45);
+  padding: 16px;
+}
+
+.ea-case .ea-schedule-modal {
+  width: 100%;
+  max-width: 360px;
+  background: var(--ea-surface);
+  border: 1px solid var(--ea-border);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.ea-case .ea-schedule-label {
+  display: block;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ea-text);
+}
+
+.ea-case .ea-schedule-input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--ea-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--ea-text);
+  background: var(--ea-surface);
+}
+
+.ea-case .ea-schedule-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 .ea-case .ea-rail-section {
   padding: 18px 24px;
   border-bottom: 1px solid var(--ea-border);

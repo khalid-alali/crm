@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import SimpleModal from '@/components/SimpleModal'
 
@@ -16,6 +16,57 @@ type ImportResult = {
   errors: ImportErrorRow[]
 }
 
+type PreviewResult = {
+  wouldCreate: number
+  wouldSkip: number
+  contactsWouldCreate: number
+  errors: ImportErrorRow[]
+}
+
+function UploadSummary({
+  createCount,
+  skipCount,
+  contactCount,
+  errors,
+  createLabel,
+}: {
+  createCount: number
+  skipCount: number
+  contactCount: number
+  errors: ImportErrorRow[]
+  createLabel: string
+}) {
+  return (
+    <>
+      <p>
+        {createLabel} <span className="font-semibold">{createCount}</span> shops, skipped{' '}
+        <span className="font-semibold">{skipCount}</span>
+        {contactCount > 0 ? (
+          <>
+            , location contacts <span className="font-semibold">{contactCount}</span>
+          </>
+        ) : null}
+        .
+      </p>
+      {errors.length > 0 && (
+        <div>
+          <p className="mt-2 font-medium text-red-700">Row errors</p>
+          <ul className="mt-1 max-h-28 list-disc space-y-0.5 overflow-y-auto pl-4 text-red-700">
+            {errors.slice(0, 20).map(err => (
+              <li key={`${err.row}-${err.message}`}>
+                Row {err.row}: {err.message}
+              </li>
+            ))}
+          </ul>
+          {errors.length > 20 && (
+            <p className="mt-1 text-[11px] text-red-600">Showing first 20 of {errors.length} errors.</p>
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
 export default function BulkLocationUploadModal({
   accountId,
   onClose,
@@ -26,10 +77,52 @@ export default function BulkLocationUploadModal({
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
 
-  const canSubmit = useMemo(() => Boolean(file) && !submitting, [file, submitting])
+  const loadPreview = useCallback(
+    async (selected: File) => {
+      setPreviewing(true)
+      setError(null)
+      setPreview(null)
+      try {
+        const fd = new FormData()
+        fd.append('file', selected)
+        const res = await fetch(`/api/accounts/${accountId}/bulk-upload/preview`, {
+          method: 'POST',
+          body: fd,
+        })
+        const data = (await res.json().catch(() => ({}))) as PreviewResult & { error?: string }
+        if (!res.ok) throw new Error(data.error ?? 'Could not preview CSV')
+        setPreview({
+          wouldCreate: Number(data.wouldCreate ?? 0),
+          wouldSkip: Number(data.wouldSkip ?? 0),
+          contactsWouldCreate: Number(data.contactsWouldCreate ?? 0),
+          errors: Array.isArray(data.errors) ? data.errors : [],
+        })
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Could not preview CSV')
+      } finally {
+        setPreviewing(false)
+      }
+    },
+    [accountId],
+  )
+
+  useEffect(() => {
+    if (!file) {
+      setPreview(null)
+      return
+    }
+    void loadPreview(file)
+  }, [file, loadPreview])
+
+  const canSubmit = useMemo(
+    () => Boolean(file) && !submitting && !previewing && preview != null && !error,
+    [file, submitting, previewing, preview, error],
+  )
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -90,35 +183,30 @@ export default function BulkLocationUploadModal({
           className="w-full rounded border border-arctic-300 px-2 py-1.5 text-sm"
         />
         {file && <p className="text-xs text-onix-500">Selected: {file.name}</p>}
+        {previewing && <p className="text-xs text-onix-500">Analyzing CSV…</p>}
         {error && <p className="text-xs text-red-600">{error}</p>}
+
+        {preview && !result && (
+          <div className="rounded border border-arctic-200 bg-arctic-50 p-2.5 text-xs text-onix-700">
+            <UploadSummary
+              createCount={preview.wouldCreate}
+              skipCount={preview.wouldSkip}
+              contactCount={preview.contactsWouldCreate}
+              errors={preview.errors}
+              createLabel="Created"
+            />
+          </div>
+        )}
 
         {result && (
           <div className="rounded border border-arctic-200 bg-arctic-50 p-2.5 text-xs text-onix-700">
-            <p>
-              Created <span className="font-semibold">{result.created}</span> shops, skipped{' '}
-              <span className="font-semibold">{result.skipped}</span>
-              {result.contactsCreated != null && result.contactsCreated > 0 ? (
-                <>
-                  , location contacts <span className="font-semibold">{result.contactsCreated}</span>
-                </>
-              ) : null}
-              .
-            </p>
-            {result.errors.length > 0 && (
-              <div className="mt-2">
-                <p className="font-medium text-red-700">Row errors</p>
-                <ul className="mt-1 max-h-28 list-disc space-y-0.5 overflow-y-auto pl-4 text-red-700">
-                  {result.errors.slice(0, 20).map(err => (
-                    <li key={`${err.row}-${err.message}`}>
-                      Row {err.row}: {err.message}
-                    </li>
-                  ))}
-                </ul>
-                {result.errors.length > 20 && (
-                  <p className="mt-1 text-[11px] text-red-600">Showing first 20 of {result.errors.length} errors.</p>
-                )}
-              </div>
-            )}
+            <UploadSummary
+              createCount={result.created}
+              skipCount={result.skipped}
+              contactCount={result.contactsCreated ?? 0}
+              errors={result.errors}
+              createLabel="Created"
+            />
           </div>
         )}
 
@@ -131,13 +219,15 @@ export default function BulkLocationUploadModal({
           >
             Close
           </button>
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="rounded bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-          >
-            {submitting ? 'Importing…' : 'Import CSV'}
-          </button>
+          {!result && (
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="rounded bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              {submitting ? 'Importing…' : 'Import CSV'}
+            </button>
+          )}
         </div>
       </form>
     </SimpleModal>

@@ -64,7 +64,7 @@ PORTAL_PUBLIC_BASE_URL=
 
 Four concepts that must not be conflated:
 
-1. **`locations`** — one row per physical shop. Always the atomic unit. Never merge locations.
+1. **`locations`** — one row per physical shop. Always the atomic unit. Duplicate hygiene: merge two locations from the pipeline (soft-delete secondary; see `location_merge_scope.md`). **Reads for lists/map/search:** use `activeLocations(supabaseAdmin, 'col1, col2')` from `lib/locations-active.ts`. **Reads/writes by id** (including merged rows): use `locationsTable(supabaseAdmin)`.
 2. **`accounts`** — business entities (legal or operating name). May control many locations. This is the real FK for contracts, not location.
 3. **`contacts`** — people tied to an account and optionally scoped to one location (roles include `owner`, GM, billing, etc.). Email flows use the resolved primary contact (`lib/primary-contact.ts`).
 4. **`chain_name`** — a plain text field on `locations` for brand/franchise (Midas, AAMCO). Display and filter only. No separate chains table. Never a FK.

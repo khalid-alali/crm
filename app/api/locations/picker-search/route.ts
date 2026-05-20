@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAppSession } from '@/lib/app-auth'
+import { activeLocations } from '@/lib/locations-active'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export type PickerLocation = {
@@ -32,9 +33,7 @@ export async function GET(req: NextRequest) {
   }
 
   const pattern = `%${q}%`
-  const { data, error } = await supabaseAdmin
-    .from('locations')
-    .select('id, name, chain_name, city, state')
+  const { data, error } = await activeLocations(supabaseAdmin, 'id, name, chain_name, city, state')
     .or(`name.ilike.${pattern},chain_name.ilike.${pattern}`)
     .order('name', { ascending: true })
     .limit(50)

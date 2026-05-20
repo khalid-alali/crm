@@ -1,3 +1,4 @@
+import { activeLocations } from '@/lib/locations-active'
 import { supabaseAdmin } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 import { getAppSession } from '@/lib/app-auth'
@@ -21,9 +22,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
 
   if (!account) notFound()
 
-  const { data: locations } = await supabaseAdmin
-    .from('locations')
-    .select('id, name, chain_name, city, state, status, program_enrollments(program, status)')
+  const { data: locations } = await activeLocations(supabaseAdmin, 'id, name, chain_name, city, state, status, program_enrollments(program, status)')
     .eq('account_id', id)
     .order('name')
 

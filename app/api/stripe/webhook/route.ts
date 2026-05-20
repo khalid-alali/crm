@@ -84,6 +84,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object as Stripe.Invoice
+      const customerId =
+        typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+      if (customerId) {
+        await supabaseAdmin
+          .from('locations')
+          .update({ consult_billing_status: 'payment_failed' })
+          .eq('consult_stripe_customer_id', customerId)
+      }
+    }
+
     if (event.type === 'payment_method.detached') {
       const pm = event.data.object as Stripe.PaymentMethod
       const pmId = pm.id

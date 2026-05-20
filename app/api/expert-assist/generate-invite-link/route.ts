@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAppSession } from '@/lib/app-auth'
-import { signExpertAssistShopToken } from '@/lib/expert-assist-shop-token'
+import { expertAssistSurfacesPathShopId } from '@/lib/expert-assist-shop-token'
 import { expertAssistSurfacesBaseUrl } from '@/lib/expert-assist-surfaces-base-url'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -23,16 +23,9 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!loc) return NextResponse.json({ error: 'Location not found' }, { status: 404 })
 
-  let token: string
-  try {
-    token = signExpertAssistShopToken(locationId)
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Token signing failed'
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-
+  const pathShopId = expertAssistSurfacesPathShopId(locationId)
   const base = expertAssistSurfacesBaseUrl(req)
-  const inviteUrl = `${base}/s/${encodeURIComponent(token)}`
+  const inviteUrl = `${base}/s/${encodeURIComponent(pathShopId)}`
 
-  return NextResponse.json({ token, inviteUrl })
+  return NextResponse.json({ token: pathShopId, inviteUrl, locationId: pathShopId })
 }

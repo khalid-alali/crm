@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { activeLocations } from '@/lib/locations-active'
 import { supabaseAdmin } from '@/lib/supabase'
 import { verifyWebhookToken, getDocumentFields } from '@/lib/zohosign'
 import { laborRateFromSignedFields, warrantyRateFromSignedFields } from '@/lib/zoho-sign-contract-fields'
@@ -313,12 +314,10 @@ export async function POST(req: NextRequest) {
 
     let finalizeTargetIds = linkedLocationIds
     if (contract.account_id) {
-      const { data: accountLocs } = await supabaseAdmin
-        .from('locations')
-        .select('id')
+      const { data: accountLocs } = await activeLocations(supabaseAdmin, 'id')
         .eq('account_id', contract.account_id)
       if (accountLocs && accountLocs.length > 0) {
-        finalizeTargetIds = accountLocs.map(l => l.id)
+        finalizeTargetIds = accountLocs.map((l: { id: string }) => l.id)
       }
     }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
+import { activeLocations } from '@/lib/locations-active'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   const found: { id: string; status: string }[] = []
   for (const part of chunk(ids, CHUNK)) {
-    const { data, error } = await supabaseAdmin.from('locations').select('id, status').in('id', part)
+    const { data, error } = await activeLocations(supabaseAdmin, 'id, status').in('id', part)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     for (const row of data ?? []) {
       if (row && typeof row.id === 'string' && typeof row.status === 'string') {

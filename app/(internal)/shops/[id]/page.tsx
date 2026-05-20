@@ -1,5 +1,6 @@
+import { activeLocations, locationsTable } from '@/lib/locations-active'
 import { supabaseAdmin } from '@/lib/supabase'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getAppSession } from '@/lib/app-auth'
 import { canDeleteContracts } from '@/lib/contract-permissions'
 import ShopDetailTabs from './ShopDetailTabs'
@@ -12,14 +13,13 @@ export default async function ShopDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; merged_from?: string }>
 }) {
   const { id } = await params
-  const { tab } = await searchParams
+  const { tab, merged_from: mergedFrom } = await searchParams
   const session = await getAppSession()
 
-  const { data: shop } = await supabaseAdmin
-    .from('locations')
+  const { data: shop } = await locationsTable(supabaseAdmin)
     .select(`
       *,
       accounts(id, business_name),
@@ -40,6 +40,24 @@ export default async function ShopDetailPage({
 
   if (!shop) notFound()
 
+  if (shop.deleted_at && shop.merged_into) {
+    redirect(`/shops/${shop.merged_into}?merged_from=${id}`)
+  }
+
+  let mergedFromBanner: { name: string; mergedAt: string } | null = null
+  if (mergedFrom) {
+    const { data: mergedSource } = await locationsTable(supabaseAdmin)
+      .select('name, deleted_at')
+      .eq('id', mergedFrom)
+      .maybeSingle()
+    if (mergedSource?.name) {
+      mergedFromBanner = {
+        name: mergedSource.name,
+        mergedAt: mergedSource.deleted_at ?? '',
+      }
+    }
+  }
+
   if (shop.contract_locations?.length) {
     await Promise.all(
       shop.contract_locations.map(async (cl: any) => {
@@ -59,9 +77,7 @@ export default async function ShopDetailPage({
   }[] = []
 
   if (shop.account_id) {
-    const { data: siblings } = await supabaseAdmin
-      .from('locations')
-      .select('id, name, chain_name, city, state, status')
+    const { data: siblings } = await activeLocations(supabaseAdmin, 'id, name, chain_name, city, state, status')
       .eq('account_id', shop.account_id)
       .order('name')
     siblingLocations = siblings ?? []
@@ -84,6 +100,15 @@ export default async function ShopDetailPage({
 
   return (
     <div className="p-6">
+      {mergedFromBanner && (
+        <div className="mb-4 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-onix-800">
+          This location was merged from <strong>{mergedFromBanner.name}</strong>
+          {mergedFromBanner.mergedAt
+            ? ` on ${new Date(mergedFromBanner.mergedAt).toLocaleDateString()}`
+            : ''}
+          . You are viewing the surviving record.
+        </div>
+      )}
       <TrackRecentShopVisit
         shop={{
           id: shop.id,

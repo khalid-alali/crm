@@ -12,6 +12,8 @@ export type ConsultAuditEventType =
   | 'charged'
   | 'charge_failed'
   | 'note_added'
+  | 'lens_session_created'
+  | 'lens_session_scheduled'
 
 export async function insertConsultCaseEvent(params: {
   caseId: string
