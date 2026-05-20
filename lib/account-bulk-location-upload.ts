@@ -9,6 +9,8 @@ export type BulkUploadRowError = {
   message: string
 }
 
+export type BulkUploadContactKind = 'email' | 'phone' | 'both' | null
+
 export type BulkUploadPreviewRow = {
   row: number
   name: string
@@ -16,18 +18,32 @@ export type BulkUploadPreviewRow = {
   city: string | null
   state: string
   postalCode: string
-  hasContact: boolean
+  contactKind: BulkUploadContactKind
   outcome: 'create' | 'skip_duplicate' | 'skip_error'
   message?: string
 }
 
 export type BulkUploadPreview = {
+  totalRows: number
   wouldCreate: number
   wouldSkip: number
   contactsWouldCreate: number
   errors: BulkUploadRowError[]
   rows: BulkUploadPreviewRow[]
 }
+
+/** Shown in the bulk upload UI — must match parser aliases below. */
+export const BULK_UPLOAD_REQUIRED_COLUMNS = ['address', 'state', 'zip'] as const
+export const BULK_UPLOAD_OPTIONAL_COLUMNS = ['name', 'city', 'email', 'phone', 'shop number'] as const
+
+const SHOP_NUMBER_HEADER_ALIASES = [
+  'shop #',
+  'shop number',
+  'store number',
+  'store_number',
+  'store no',
+  'shop no',
+]
 
 export type BulkUploadCommitResult = BulkUploadPreview & {
   created: number
@@ -59,6 +75,36 @@ function getFromNorm(norm: Record<string, string>, headerAliases: string[]): str
     if (v) return v
   }
   return ''
+}
+
+/**
+ * Shop-number column: exactly 10 digits → phone (when no dedicated phone column).
+ * Fewer than 10 digits → locations.store_number. Other values stay as store_number text.
+ */
+export function classifyShopNumberColumnValue(raw: string): {
+  contactPhone: string
+  storeNumber: string | null
+} {
+  const trimmed = compact(raw)
+  if (!trimmed) return { contactPhone: '', storeNumber: null }
+
+  const digits = trimmed.replace(/\D/g, '')
+  if (digits.length === 10) {
+    return { contactPhone: digits, storeNumber: null }
+  }
+  if (digits.length > 0 && digits.length < 10) {
+    return { contactPhone: '', storeNumber: trimmed }
+  }
+  return { contactPhone: '', storeNumber: trimmed }
+}
+
+export function bulkUploadContactKind(email: string, phone: string): BulkUploadContactKind {
+  const hasEmail = Boolean(email.trim())
+  const hasPhone = Boolean(phone.trim())
+  if (hasEmail && hasPhone) return 'both'
+  if (hasEmail) return 'email'
+  if (hasPhone) return 'phone'
+  return null
 }
 
 function rowToNormalized(csvRow: BulkUploadCsvRow): Record<string, string> {
@@ -137,7 +183,7 @@ function normalizeBulkRow(csvRow: BulkUploadCsvRow, rowNumber: number): Normaliz
   const city = getFromNorm(norm, ['city']) || null
   const explicitName = getFromNorm(norm, ['name', 'location', 'shop name', 'shop'])
   const contactEmail = getFromNorm(norm, ['email', 'e-mail'])
-  const contactPhone = getFromNorm(norm, [
+  let contactPhone = getFromNorm(norm, [
     'main phone',
     'phone',
     'mobile',
@@ -145,15 +191,17 @@ function normalizeBulkRow(csvRow: BulkUploadCsvRow, rowNumber: number): Normaliz
     'telephone',
     'published google number/marchex',
   ])
-  const storeNumber =
-    getFromNorm(norm, [
-      'shop #',
-      'shop number',
-      'store number',
-      'store_number',
-      'store no',
-      'shop no',
-    ]) || null
+  const shopNumberRaw = getFromNorm(norm, SHOP_NUMBER_HEADER_ALIASES)
+  let storeNumber: string | null = null
+  if (shopNumberRaw) {
+    const fromShopCol = classifyShopNumberColumnValue(shopNumberRaw)
+    if (!contactPhone.trim() && fromShopCol.contactPhone) {
+      contactPhone = fromShopCol.contactPhone
+    }
+    if (fromShopCol.storeNumber) {
+      storeNumber = fromShopCol.storeNumber
+    }
+  }
 
   if (!address) return { row: rowNumber, message: 'Address is required.' }
   if (!state) return { row: rowNumber, message: 'State is required.' }
@@ -201,7 +249,7 @@ export function previewBulkLocationUpload(
         city: null,
         state: '',
         postalCode: '',
-        hasContact: false,
+        contactKind: null,
         outcome: 'skip_error',
         message: normalized.message,
       })
@@ -209,7 +257,7 @@ export function previewBulkLocationUpload(
     }
 
     const dedupKey = buildBulkUploadDedupKey(normalized.address, normalized.state, normalized.postalCode)
-    const hasContact = Boolean(normalized.contactEmail.trim() || normalized.contactPhone.trim())
+    const contactKind = bulkUploadContactKind(normalized.contactEmail, normalized.contactPhone)
 
     if (seenKeys.has(dedupKey)) {
       wouldSkip += 1
@@ -220,7 +268,7 @@ export function previewBulkLocationUpload(
         city: normalized.city,
         state: normalized.state,
         postalCode: normalized.postalCode,
-        hasContact,
+        contactKind,
         outcome: 'skip_duplicate',
         message: 'Duplicate address on this account (or repeated in CSV).',
       })
@@ -229,7 +277,7 @@ export function previewBulkLocationUpload(
 
     seenKeys.add(dedupKey)
     wouldCreate += 1
-    if (hasContact) contactsWouldCreate += 1
+    if (contactKind) contactsWouldCreate += 1
     rows.push({
       row: rowNumber,
       name: normalized.name,
@@ -237,12 +285,19 @@ export function previewBulkLocationUpload(
       city: normalized.city,
       state: normalized.state,
       postalCode: normalized.postalCode,
-      hasContact,
+      contactKind,
       outcome: 'create',
     })
   }
 
-  return { wouldCreate, wouldSkip, contactsWouldCreate, errors, rows }
+  return {
+    totalRows: parsed.data.length,
+    wouldCreate,
+    wouldSkip,
+    contactsWouldCreate,
+    errors,
+    rows,
+  }
 }
 
 export function buildExistingBulkUploadKeys(

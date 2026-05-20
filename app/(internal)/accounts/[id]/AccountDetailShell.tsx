@@ -563,7 +563,11 @@ export default function AccountDetailShell({
         </div>
       </div>
       {showBulkUpload && (
-        <BulkLocationUploadModal accountId={account.id} onClose={() => setShowBulkUpload(false)} />
+        <BulkLocationUploadModal
+          accountId={account.id}
+          accountName={account.business_name ?? ''}
+          onClose={() => setShowBulkUpload(false)}
+        />
       )}
     </div>
   )
