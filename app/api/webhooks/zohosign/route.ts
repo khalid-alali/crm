@@ -313,13 +313,22 @@ export async function POST(req: NextRequest) {
       .eq('id', contract.id)
 
     let finalizeTargetIds = linkedLocationIds
+    let accountLocationIds: string[] = []
     if (contract.account_id) {
       const { data: accountLocs } = await activeLocations(supabaseAdmin, 'id')
         .eq('account_id', contract.account_id)
-      if (accountLocs && accountLocs.length > 0) {
-        finalizeTargetIds = accountLocs.map((l: { id: string }) => l.id)
+      accountLocationIds = (accountLocs ?? []).map((l: { id: string }) => l.id)
+      if (accountLocationIds.length > 0) {
+        finalizeTargetIds = accountLocationIds
       }
     }
+
+    // Account-level signed rates apply to a location only when the account has one shop.
+    // Multi-location accounts: only explicit contract_locations links get null rate backfill.
+    const laborRateTargetIds =
+      contract.account_id && accountLocationIds.length === 1
+        ? accountLocationIds
+        : linkedLocationIds
 
     if (finalizeTargetIds.length > 0) {
       await supabaseAdmin
@@ -328,19 +337,19 @@ export async function POST(req: NextRequest) {
         .in('id', finalizeTargetIds)
         .in('status', ['lead', 'contacted', 'dormant', 'in_review'])
 
-      if (standardRate != null) {
+      if (standardRate != null && laborRateTargetIds.length > 0) {
         await supabaseAdmin
           .from('locations')
           .update({ standard_labor_rate: standardRate })
-          .in('id', finalizeTargetIds)
+          .in('id', laborRateTargetIds)
           .is('standard_labor_rate', null)
       }
 
-      if (warrantyRate != null) {
+      if (warrantyRate != null && laborRateTargetIds.length > 0) {
         await supabaseAdmin
           .from('locations')
           .update({ warranty_labor_rate: warrantyRate })
-          .in('id', finalizeTargetIds)
+          .in('id', laborRateTargetIds)
           .is('warranty_labor_rate', null)
       }
 

@@ -461,7 +461,7 @@ The Zoho Sign request ID is stored in `contracts.zoho_sign_request_id`. If your 
 - `request_status === 'completed'` → `signed`
 - `request_status === 'recalled'` → `declined`
 - `action_status === 'VIEWED'` → `viewed`
-- On `signed`: fetch field values from Zoho Sign API → write `legal_entity_name`, `standard_labor_rate`, `warranty_labor_rate` → update linked `locations.status` to `contracted` → log to `comms_log` → send onboarding email via Resend
+- On `signed`: fetch field values from Zoho Sign API → write `legal_entity_name`, `standard_labor_rate`, `warranty_labor_rate` on the contract → update linked `locations.status` to `contracted` → backfill null `locations.standard_labor_rate` / `warranty_labor_rate` only on `contract_locations` links, except when the contract’s account has exactly one active location (then that shop gets the signed rates) → log to `comms_log` → send onboarding email via Resend
 
 ---
 

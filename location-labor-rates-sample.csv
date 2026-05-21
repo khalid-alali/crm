@@ -1,0 +1,2 @@
+location_id,location_name,city,state,current_standard_labor_rate,current_warranty_labor_rate,zoho_standard_labor_rate,zoho_warranty_labor_rate,zoho_standard_source,zoho_warranty_source,zoho_sign_request_id,crm_contract_id,crm_contract_status,match_method,match_score,linked_contract_count
+18d8898e-72fc-4af1-8dea-3885c713bfb0,Haven Auto Repair,Rancho Cucamonga,CA,,,198,180,Labor Rate,Warranty Rate,425061000000597099,59417301-3659-4dc4-b95b-006e079d10ab,signed,zoho_request_id,999,2
