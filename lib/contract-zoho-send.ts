@@ -1,3 +1,5 @@
+import { STATUSES_BEFORE_PROSPECT } from '@/lib/location-pipeline-status'
+import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { supabaseAdmin } from '@/lib/supabase'
 import { createAndSendDocument } from '@/lib/zohosign'
 import { buildZohoSignContractFieldTextData } from '@/lib/zoho-sign-contract-fields'
@@ -105,5 +107,41 @@ export async function sendContractViaZoho(
       body: activityContractBody,
       sent_by: options.sentBy,
     })
+  }
+
+  const linkedIds = (contractLocations ?? []).map(cl => cl.location_id)
+  if (linkedIds.length > 0) {
+    const { data: toProspect, error: prospectLoadErr } = await supabaseAdmin
+      .from('locations')
+      .select('id, status')
+      .in('id', linkedIds)
+      .in('status', [...STATUSES_BEFORE_PROSPECT])
+
+    if (prospectLoadErr) {
+      throw new Error(`Contract sent but failed to update pipeline status: ${prospectLoadErr.message}`)
+    }
+
+    const prospectRows = toProspect ?? []
+    if (prospectRows.length > 0) {
+      const prospectIds = prospectRows.map(r => r.id)
+      const { error: prospectErr } = await supabaseAdmin
+        .from('locations')
+        .update({ status: 'prospect' })
+        .in('id', prospectIds)
+
+      if (prospectErr) {
+        throw new Error(`Contract sent but failed to set Prospect status: ${prospectErr.message}`)
+      }
+
+      await supabaseAdmin.from('activity_log').insert(
+        prospectRows.map(row => ({
+          location_id: row.id,
+          type: 'status_change',
+          subject: 'Pipeline status',
+          body: `${LOCATION_STATUS_LABELS[row.status] ?? row.status} → ${LOCATION_STATUS_LABELS.prospect} (contract sent via Zoho Sign)`,
+          sent_by: options.sentBy,
+        })),
+      )
+    }
   }
 }

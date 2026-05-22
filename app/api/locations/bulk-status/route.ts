@@ -8,8 +8,8 @@ import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 const ALLOWED_STATUSES = [
   'lead',
   'contacted',
+  'prospect',
   'dormant',
-  'in_review',
   'contracted',
   'active',
   'inactive',

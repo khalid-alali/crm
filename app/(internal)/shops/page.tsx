@@ -6,7 +6,7 @@ import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import ShopsFilters from './ShopsFilters'
 import ShopsPageClient from './ShopsPageClient'
 
-const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive'] as const
+const STATUSES = ['lead', 'contacted', 'prospect', 'dormant', 'contracted', 'active', 'inactive'] as const
 
 /** One row per location for filter tabs / dropdowns (no joins). */
 type LocationMetaRow = {

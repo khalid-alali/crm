@@ -28,6 +28,7 @@ function accountInitials(name: string): string {
 export type AccountRow = {
   id: string
   business_name: string
+  legal_entity_name: string | null
   notes: string | null
 }
 
@@ -91,6 +92,10 @@ export default function AccountDetailShell({
   const [nameDraft, setNameDraft] = useState(account.business_name ?? '')
   const [nameSaving, setNameSaving] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
+  const [editingLegalEntity, setEditingLegalEntity] = useState(false)
+  const [legalEntityDraft, setLegalEntityDraft] = useState(account.legal_entity_name ?? '')
+  const [legalEntitySaving, setLegalEntitySaving] = useState(false)
+  const [legalEntityError, setLegalEntityError] = useState<string | null>(null)
   const [addingLoc, setAddingLoc] = useState(false)
   const [locSaving, setLocSaving] = useState(false)
   const [locError, setLocError] = useState('')
@@ -109,6 +114,10 @@ export default function AccountDetailShell({
   useEffect(() => {
     if (!editingName) setNameDraft(account.business_name ?? '')
   }, [account.business_name, editingName])
+
+  useEffect(() => {
+    if (!editingLegalEntity) setLegalEntityDraft(account.legal_entity_name ?? '')
+  }, [account.legal_entity_name, editingLegalEntity])
 
   async function createLocation(e: React.FormEvent) {
     e.preventDefault()
@@ -191,6 +200,28 @@ export default function AccountDetailShell({
     }
   }
 
+  async function saveAccountLegalEntity() {
+    setLegalEntitySaving(true)
+    setLegalEntityError(null)
+    try {
+      const res = await fetch(`/api/accounts/${account.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ legal_entity_name: legalEntityDraft.trim() || null }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error ?? 'Failed to update legal entity name')
+      }
+      setEditingLegalEntity(false)
+      router.refresh()
+    } catch (err: unknown) {
+      setLegalEntityError(err instanceof Error ? err.message : 'Failed to update legal entity name')
+    } finally {
+      setLegalEntitySaving(false)
+    }
+  }
+
   return (
     <div className="p-6 max-w-6xl">
       <div className="mb-3 text-sm text-onix-600">
@@ -260,6 +291,60 @@ export default function AccountDetailShell({
                   </div>
                 )}
                 {nameError && <p className="mt-1 text-xs text-red-600">{nameError}</p>}
+                {editingLegalEntity ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <input
+                      value={legalEntityDraft}
+                      onChange={e => setLegalEntityDraft(e.target.value)}
+                      className="w-full max-w-xl rounded-md border border-arctic-300 px-2.5 py-1.5 text-sm text-onix-900"
+                      aria-label="Legal entity name"
+                      placeholder="Legal entity name"
+                      disabled={legalEntitySaving}
+                    />
+                    <button
+                      type="button"
+                      onClick={saveAccountLegalEntity}
+                      disabled={legalEntitySaving}
+                      className="rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                    >
+                      {legalEntitySaving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLegalEntity(false)
+                        setLegalEntityDraft(account.legal_entity_name ?? '')
+                        setLegalEntityError(null)
+                      }}
+                      disabled={legalEntitySaving}
+                      className="rounded-md border border-arctic-300 bg-white px-2.5 py-1.5 text-xs font-medium text-onix-700 hover:bg-arctic-50 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <p className="text-sm text-onix-600">
+                      {account.legal_entity_name ? (
+                        account.legal_entity_name
+                      ) : (
+                        <span className="text-onix-400">No legal entity name</span>
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLegalEntity(true)
+                        setLegalEntityError(null)
+                      }}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded text-onix-400 hover:bg-arctic-100 hover:text-onix-700"
+                      aria-label="Edit legal entity name"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </div>
+                )}
+                {legalEntityError && <p className="mt-1 text-xs text-red-600">{legalEntityError}</p>}
               </div>
               <DeleteAccountButton
                 accountId={account.id}

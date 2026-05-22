@@ -41,7 +41,10 @@
     "import:vinfast-shops-csv:apply": "npx tsx scripts/import-vinfast-shops-csv.ts --apply",
     "import:vf-operational-csv": "npx tsx scripts/import-vf-operational-csv.ts",
     "import:vf-operational-csv:apply": "npx tsx scripts/import-vf-operational-csv.ts --apply",
-    "validate:bulk-import": "npx tsx scripts/validate-bulk-import.ts"
+    "validate:bulk-import": "npx tsx scripts/validate-bulk-import.ts",
+    "preview:llc-ltd-google-names": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts",
+    "preview:llc-ltd-google-names:account": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts --account-id=fa15c3ed-7bca-4225-ac7b-2c6ede80ddad",
+    "apply:llc-ltd-google-names:account": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts --apply --csv=scripts/output/llc-ltd-google-name-preview-account-fa15c3ed-2026-05-21T20-57-29.csv"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",

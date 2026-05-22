@@ -205,6 +205,8 @@ export type LeadEnrichmentInput = {
   shopName: string
   postalCode: string | null
   submittedPhone: string
+  /** When true, set `locations.name` to the matched Google business name. */
+  updateShopName?: boolean
 }
 
 export type LeadEnrichmentResult = {
@@ -466,6 +468,11 @@ export async function computeLeadEnrichment(
     locationPatch.name = `Midas ${cityForDisplay}`
   }
 
+  const googlePlaceName = (r.name ?? first.name ?? '').trim() || null
+  if (input.updateShopName && googlePlaceName) {
+    locationPatch.name = googlePlaceName
+  }
+
   let wouldCreateStoreContact = false
   let storeContactPhone: string | null = null
   if (placesPhone && placesPhoneDiffersFromSubmitted(submittedPhone, placesPhone)) {
@@ -494,8 +501,6 @@ export async function computeLeadEnrichment(
     geometry_lat: coords?.lat ?? null,
     geometry_lng: coords?.lng ?? null,
   }
-
-  const googlePlaceName = (r.name ?? first.name ?? '').trim() || null
 
   return {
     ok: true,
@@ -543,6 +548,9 @@ export type LeadEnrichmentPreviewResult =
       message: string
       googlePlaceName: string | null
       googleFormattedAddress: string | null
+      /** True when Google returned a business name different from the current shop name. */
+      canUpdateShopName: boolean
+      currentShopName: string
       changes: LeadEnrichmentPreviewChange[]
       notes: string[]
     }
@@ -640,11 +648,17 @@ export async function previewLeadEnrichment(
     )
   }
 
+  const currentShopName = displayCell(computed.before.name)
+  const googleName = displayCell(computed.googlePlaceName)
+  const canUpdateShopName = Boolean(computed.googlePlaceName && currentShopName !== googleName)
+
   return {
     ok: true,
     message: 'Review updates from Google Places. Confirm to save them to this location.',
     googlePlaceName: computed.googlePlaceName,
     googleFormattedAddress: computed.googleFormattedAddress,
+    canUpdateShopName,
+    currentShopName,
     changes,
     notes,
   }

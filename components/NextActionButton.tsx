@@ -7,8 +7,9 @@ import EmailModal from './EmailModal'
 const nextActionMap: Record<string, { label: string; action: string }> = {
   lead: { label: 'Send intro', action: 'email' },
   contacted: { label: 'Send follow-up', action: 'email' },
+  prospect: { label: 'View contract', action: 'contract' },
   dormant: { label: 'Re-engage', action: 'email' },
-  in_review: { label: 'Send contract', action: 'contract' },
+  in_review: { label: 'View contract', action: 'contract' },
   contracted: { label: 'Start onboarding', action: 'email' },
   active: { label: 'View details', action: 'navigate' },
   inactive: { label: 'Re-engage', action: 'email' },

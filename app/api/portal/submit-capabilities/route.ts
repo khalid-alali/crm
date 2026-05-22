@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { verifyCapabilitiesPortalToken } from '@/lib/portal-token'
-import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { resolvePrimaryContact } from '@/lib/primary-contact'
 import { upsertLocationShopContact } from '@/lib/contact-sync'
 import {
@@ -180,8 +179,6 @@ export async function POST(req: NextRequest) {
   const oldEmail = primary?.email ?? ''
   const oldPhone = primary?.phone ?? ''
 
-  const priorStatus = typeof L.status === 'string' ? L.status : ''
-
   const locationPatch: Record<string, unknown> = {
     name: shopName,
     bar_license_number,
@@ -287,19 +284,6 @@ export async function POST(req: NextRequest) {
       locationId,
       `Shop updated capabilities via portal:\n${capLines.join('\n')}`,
     )
-  }
-
-  if (priorStatus === 'contacted' || priorStatus === 'dormant') {
-    const { error: stErr } = await supabaseAdmin.from('locations').update({ status: 'in_review' }).eq('id', locationId)
-    if (stErr) return NextResponse.json({ error: stErr.message }, { status: 500 })
-
-    await supabaseAdmin.from('activity_log').insert({
-      location_id: locationId,
-      type: 'status_change',
-      subject: 'Pipeline status',
-      body: `${LOCATION_STATUS_LABELS[priorStatus] ?? priorStatus} → ${LOCATION_STATUS_LABELS.in_review} (capabilities form submitted)`,
-      sent_by: 'portal',
-    })
   }
 
   return NextResponse.json({ ok: true })

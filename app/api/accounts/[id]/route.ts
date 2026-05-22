@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data, error } = await supabaseAdmin
     .from('accounts')
-    .select('id, business_name, notes, created_at')
+    .select('id, business_name, legal_entity_name, notes, created_at')
     .eq('id', id)
     .single()
 
@@ -26,6 +26,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json()
   const updates: Record<string, unknown> = {}
   if (typeof body.business_name === 'string') updates.business_name = body.business_name.trim() || null
+  if (typeof body.legal_entity_name === 'string') {
+    updates.legal_entity_name = body.legal_entity_name.trim() || null
+  }
   if (typeof body.notes === 'string') updates.notes = body.notes.trim() || null
 
   const { data, error } = await supabaseAdmin.from('accounts').update(updates).eq('id', id).select().single()

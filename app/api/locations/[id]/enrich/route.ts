@@ -11,10 +11,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
 
   let preview = false
+  let updateShopName = false
   try {
     if (req.headers.get('content-type')?.includes('application/json')) {
-      const body = (await req.json()) as { preview?: boolean }
+      const body = (await req.json()) as { preview?: boolean; updateShopName?: boolean }
       preview = Boolean(body?.preview)
+      updateShopName = Boolean(body?.updateShopName)
     }
   } catch {
     // non-JSON or empty body: treat as apply
@@ -47,6 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     shopName: String(loc.name ?? '').trim() || 'Shop',
     postalCode: loc.postal_code,
     submittedPhone,
+    updateShopName,
   })
 
   if (primary?.id && result.contactPhone !== submittedPhone) {

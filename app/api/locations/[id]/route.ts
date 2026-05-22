@@ -95,6 +95,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     'shop_business_types',
     'high_priority_target',
     'website',
+    'legal_entity_name',
     'standard_labor_rate',
     'warranty_labor_rate',
     'store_number',
@@ -142,6 +143,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if ('website' in fields) {
     const w = typeof fields.website === 'string' ? fields.website.trim() : ''
     fields.website = w === '' ? null : w
+  }
+
+  if ('legal_entity_name' in fields) {
+    const le =
+      typeof fields.legal_entity_name === 'string'
+        ? fields.legal_entity_name
+        : fields.legal_entity_name == null
+          ? ''
+          : String(fields.legal_entity_name)
+    fields.legal_entity_name = le.trim() === '' ? null : le.trim()
   }
 
   if ('store_number' in fields) {

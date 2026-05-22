@@ -56,7 +56,7 @@ const PROGRAM_CARD_CONFIG = [
 ] as const
 const VINFAST_WELCOME_TEMPLATE_ID = '8bb8f454-fc68-448c-96d8-ea25049a66f8'
 const VINFAST_IT_SETUP_TEMPLATE_ID = 'a4428cd1-9c51-459e-9819-d4d71bf52af3'
-const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive']
+const STATUSES = ['lead', 'contacted', 'prospect', 'dormant', 'contracted', 'active', 'inactive']
 const BASE_TABS = ['activity', 'tasks', 'contracts', 'programs', 'capabilities', 'expert-assist'] as const
 type BaseTabKey = (typeof BASE_TABS)[number]
 type TabKey = BaseTabKey | 'admin'
@@ -332,6 +332,7 @@ export default function ShopDetailTabs({
   const [enrichPreviewData, setEnrichPreviewData] = useState<LeadEnrichmentPreviewResult | null>(null)
   const [enrichPreviewError, setEnrichPreviewError] = useState<string | null>(null)
   const [enrichConfirming, setEnrichConfirming] = useState(false)
+  const [enrichUpdateShopName, setEnrichUpdateShopName] = useState(false)
   const enrichBusy = enrichPreviewLoading || enrichConfirming
   const [tasks, setTasks] = useState<TaskWithLocation[]>([])
   const [tasksLoading, setTasksLoading] = useState(false)
@@ -350,6 +351,7 @@ export default function ShopDetailTabs({
     notes: shop.notes ?? '',
   })
   const [commercialDraft, setCommercialDraft] = useState({
+    legal_entity_name: shop.legal_entity_name ?? '',
     shop_type: (shop.shop_type as string | null) ?? '',
     shop_business_types: (Array.isArray(shop.shop_business_types)
       ? (shop.shop_business_types as string[])
@@ -427,6 +429,7 @@ export default function ShopDetailTabs({
 
   useEffect(() => {
     setCommercialDraft({
+      legal_entity_name: shop.legal_entity_name ?? '',
       shop_type: (shop.shop_type as string | null) ?? '',
       shop_business_types: (Array.isArray(shop.shop_business_types)
         ? (shop.shop_business_types as string[])
@@ -447,6 +450,7 @@ export default function ShopDetailTabs({
     setDqReason((shop.disqualified_reason as string | null) ?? '')
     setDqNotes(shop.disqualified_notes ?? '')
   }, [
+    shop.legal_entity_name,
     shop.shop_type,
     shop.shop_business_types,
     shop.high_priority_target,
@@ -1238,11 +1242,30 @@ export default function ShopDetailTabs({
     )
   }
 
+  function enrichChangesForDisplay(
+    data: Extract<LeadEnrichmentPreviewResult, { ok: true }>,
+    updateShopName: boolean,
+  ) {
+    let changes = [...data.changes]
+    if (data.canUpdateShopName && data.googlePlaceName) {
+      changes = changes.filter(c => c.label !== 'Shop name')
+      if (updateShopName) {
+        changes.unshift({
+          label: 'Shop name',
+          before: data.currentShopName,
+          after: data.googlePlaceName,
+        })
+      }
+    }
+    return changes
+  }
+
   async function openEnrichModal() {
     if (inlineEdit === 'location') return
     setEnrichModalOpen(true)
     setEnrichPreviewData(null)
     setEnrichPreviewError(null)
+    setEnrichUpdateShopName(false)
     setEnrichFeedback(null)
     setInlineError(null)
     setEnrichPreviewLoading(true)
@@ -1267,6 +1290,7 @@ export default function ShopDetailTabs({
     setEnrichModalOpen(false)
     setEnrichPreviewData(null)
     setEnrichPreviewError(null)
+    setEnrichUpdateShopName(false)
   }
 
   async function confirmEnrichFromModal() {
@@ -1274,13 +1298,18 @@ export default function ShopDetailTabs({
     setEnrichFeedback(null)
     setInlineError(null)
     try {
-      const res = await fetch(`/api/locations/${shop.id}/enrich`, { method: 'POST' })
+      const res = await fetch(`/api/locations/${shop.id}/enrich`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updateShopName: enrichUpdateShopName }),
+      })
       const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
       if (!res.ok) throw new Error(data.error ?? 'Enrichment failed')
       setEnrichFeedback(data.message ?? 'Done.')
       setEnrichModalOpen(false)
       setEnrichPreviewData(null)
       setEnrichPreviewError(null)
+      setEnrichUpdateShopName(false)
       router.refresh()
     } catch (e: unknown) {
       setEnrichPreviewError(e instanceof Error ? e.message : 'Enrichment failed')
@@ -1540,6 +1569,15 @@ export default function ShopDetailTabs({
             {inlineEdit === 'commercial' ? (
               <div className="mt-2 space-y-2">
                 <div>
+                  <label className="block text-[11px] font-medium text-onix-600">Legal entity name</label>
+                  <input
+                    type="text"
+                    value={commercialDraft.legal_entity_name}
+                    onChange={e => setCommercialDraft(d => ({ ...d, legal_entity_name: e.target.value }))}
+                    className="mt-0.5 w-full rounded border border-arctic-300 px-2 py-1 text-xs"
+                  />
+                </div>
+                <div>
                   <label className="block text-[11px] font-medium text-onix-600">Type</label>
                   <select
                     value={commercialDraft.shop_type}
@@ -1656,6 +1694,7 @@ export default function ShopDetailTabs({
                       setInlineSaving(true)
                       setInlineError(null)
                       void patchShopJson({
+                        legal_entity_name: commercialDraft.legal_entity_name.trim() || null,
                         shop_type: commercialDraft.shop_type === '' ? null : commercialDraft.shop_type,
                         shop_business_types:
                           commercialDraft.shop_business_types.length > 0
@@ -1682,6 +1721,7 @@ export default function ShopDetailTabs({
                     type="button"
                     onClick={() => {
                       setCommercialDraft({
+                        legal_entity_name: shop.legal_entity_name ?? '',
                         shop_type: (shop.shop_type as string | null) ?? '',
                         shop_business_types: (Array.isArray(shop.shop_business_types)
                           ? (shop.shop_business_types as string[])
@@ -1711,6 +1751,10 @@ export default function ShopDetailTabs({
               </div>
             ) : (
               <dl className="mt-2 space-y-1.5 text-xs text-onix-800">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-onix-500">Legal entity name</dt>
+                  <dd className="min-w-0 text-right">{shop.legal_entity_name?.trim() || '—'}</dd>
+                </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-onix-500">Type</dt>
                   <dd>{shop.shop_type === 'specialist' ? 'Specialist' : shop.shop_type === 'generalist' ? 'Generalist' : '—'}</dd>
@@ -2882,7 +2926,21 @@ export default function ShopDetailTabs({
                     </div>
                   )}
                   <p className="text-sm text-onix-700">{enrichPreviewData.message}</p>
-                  {enrichPreviewData.changes.length === 0 ? (
+                  {enrichPreviewData.canUpdateShopName && enrichPreviewData.googlePlaceName && (
+                    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-arctic-200 bg-white px-3 py-2 text-sm text-onix-700">
+                      <input
+                        type="checkbox"
+                        checked={enrichUpdateShopName}
+                        onChange={e => setEnrichUpdateShopName(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-arctic-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <span>
+                        Update shop name to matched Google name
+                        <span className="mt-0.5 block text-xs text-onix-500">{enrichPreviewData.googlePlaceName}</span>
+                      </span>
+                    </label>
+                  )}
+                  {enrichChangesForDisplay(enrichPreviewData, enrichUpdateShopName).length === 0 ? (
                     <p className="text-sm text-onix-600">
                       No visible field changes. Confirming will still refresh Google metadata on this location.
                     </p>
@@ -2897,7 +2955,7 @@ export default function ShopDetailTabs({
                           </tr>
                         </thead>
                         <tbody>
-                          {enrichPreviewData.changes.map((row, idx) => (
+                          {enrichChangesForDisplay(enrichPreviewData, enrichUpdateShopName).map((row, idx) => (
                             <tr key={idx} className="border-b border-arctic-100 last:border-0">
                               <td className="px-3 py-2 font-medium text-onix-900">{row.label}</td>
                               <td className="px-3 py-2 text-onix-600 whitespace-pre-wrap break-words max-w-[11rem]">{row.before}</td>

@@ -10,7 +10,7 @@ import { getPostalCodeError, normalizePostalCode } from '@/lib/postal-code'
 import AccountSelect from '@/components/AccountSelect'
 import StateSelect from '@/components/StateSelect'
 
-const STATUSES = ['lead', 'contacted', 'dormant', 'in_review', 'contracted', 'active', 'inactive']
+const STATUSES = ['lead', 'contacted', 'prospect', 'dormant', 'contracted', 'active', 'inactive']
 const PROGRAMS = [
   { key: 'multi_drive', label: 'Multi-Drive' },
   { key: 'ev_program', label: 'EV Program' },

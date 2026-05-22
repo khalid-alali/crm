@@ -22,7 +22,8 @@ export const MERGE_OVERRIDES: Record<
 export const PIPELINE_STATUS_RANK: Record<string, number> = {
   lead: 1,
   contacted: 2,
-  dormant: 3,
+  prospect: 3,
+  dormant: 4,
   in_review: 4,
   contracted: 5,
   active: 6,

@@ -2,6 +2,7 @@
 export const LOCATION_STATUS_LABELS: Record<string, string> = {
   lead: 'Lead',
   contacted: 'Contacted',
+  prospect: 'Prospect',
   dormant: 'Dormant',
   in_review: 'In Review',
   contracted: 'Signed',

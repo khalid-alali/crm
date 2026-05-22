@@ -27,8 +27,8 @@ import { formatLocationSource } from '@/lib/location-source'
 const PIPELINE_ORDER = [
   'lead',
   'contacted',
+  'prospect',
   'dormant',
-  'in_review',
   'contracted',
   'active',
   'inactive',

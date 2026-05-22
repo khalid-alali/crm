@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { verifyWebhookToken, getDocumentFields } from '@/lib/zohosign'
 import { laborRateFromSignedFields, warrantyRateFromSignedFields } from '@/lib/zoho-sign-contract-fields'
 import { syncContractPdfFromZoho } from '@/lib/contract-documents'
+import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 
 type NormalizedZohoEvent = {
   key:
@@ -256,6 +257,41 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  if (normalized.key === 'request_expired' && linkedLocationIds.length > 0) {
+    const { data: prospectLocations, error: prospectErr } = await supabaseAdmin
+      .from('locations')
+      .select('id')
+      .in('id', linkedLocationIds)
+      .eq('status', 'prospect')
+
+    if (prospectErr) {
+      console.error('[zohosign webhook] Failed to load prospect locations for expiry:', prospectErr)
+    } else if (prospectLocations && prospectLocations.length > 0) {
+      const prospectIds = prospectLocations.map(l => l.id)
+      const { error: dormantErr } = await supabaseAdmin
+        .from('locations')
+        .update({ status: 'dormant' })
+        .in('id', prospectIds)
+        .eq('status', 'prospect')
+
+      if (dormantErr) {
+        console.error('[zohosign webhook] Failed to move expired-contract prospects to dormant:', dormantErr)
+      } else {
+        const fromLabel = LOCATION_STATUS_LABELS.prospect
+        const toLabel = LOCATION_STATUS_LABELS.dormant
+        await supabaseAdmin.from('activity_log').insert(
+          prospectIds.map(locationId => ({
+            location_id: locationId,
+            type: 'status_change',
+            subject: 'Pipeline status',
+            body: `${fromLabel} → ${toLabel} (Zoho Sign contract expired unsigned)`,
+            sent_by: 'system',
+          }))
+        )
+      }
+    }
+  }
+
   const alreadySigned = contract.status === 'signed'
   const shouldSyncPdf = Boolean(normalized.shouldFinalizeSignedContract) && !contract.doc_storage_path
 
@@ -335,7 +371,7 @@ export async function POST(req: NextRequest) {
         .from('locations')
         .update({ status: 'contracted' })
         .in('id', finalizeTargetIds)
-        .in('status', ['lead', 'contacted', 'dormant', 'in_review'])
+        .in('status', ['lead', 'contacted', 'prospect', 'dormant', 'in_review'])
 
       if (standardRate != null && laborRateTargetIds.length > 0) {
         await supabaseAdmin

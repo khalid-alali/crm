@@ -1,65 +1,65 @@
-location_id,location_name,city,state,current_standard_labor_rate,current_warranty_labor_rate,zoho_standard_labor_rate,zoho_warranty_labor_rate,zoho_standard_source,zoho_warranty_source,zoho_sign_request_id,crm_contract_id,crm_contract_status,match_method,match_score,linked_contract_count
-fd111856-0e10-4735-bb1f-90d3976f9e4e,AAMCO Bakersfield,White Lane Bakersfield,CA,199,199,199,199,Labor Rate,Warranty Rate,425061000000635015,62bec068-69e4-49ef-99b4-0b8a86cd6359,signed,zoho_request_id,999,1
-ee258bfb-c35c-49b2-a7f6-36d0a1256ea7,advanced auto repair and tires inc,hayward,CA,195,185,195,185,Labor Rate,Warranty Rate,425061000000405015,827918c2-2945-4b20-b374-e5e43b623d76,signed,zoho_request_id,999,1
-a705efc5-915c-47f4-917f-7bcca5c0eebf,All About Price,,,200,200,200,200,Labor Rate,Warranty Rate,425061000000665015,4aeb7a52-3bc2-4770-9b7e-151839a45c1a,signed,zoho_request_id,999,1
-bd53938c-21f2-4d41-8f2f-bbcee7e63105,Apple Collision,Los Angeles,CA,195,175,195,175,Labor Rate,Warranty Rate,425061000000505151,73260916-c5a8-4370-9560-4bd18bb72880,signed,zoho_request_id,999,1
-a549bd44-1cb3-45a1-a318-8091a08a2161,Autoburn inc,Indian Trail,NC,180,180,180,180,Labor Rate,Warranty Rate,425061000000663017,eb924b3e-fd0d-46bc-a110-9df6bebcb135,signed,zoho_request_id,999,1
-ee426a42-d414-4394-a31c-19cfebba5c63,Automotive care center,Seaford,NY,180,180,180,180,Labor Rate,Warranty Rate,425061000000459015,54d9a50c-8a22-44ee-9d23-5bd031e47aac,signed,zoho_request_id,999,2
-27400ed5-f651-4448-b33b-6a654c90c4a5,Automotive Fleet Solutions (AFS),N Parker Street Orange,CA,185,170,185,170,Labor Rate,Warranty Rate,425061000000627015,4ffb9cd2-8b9c-452c-9742-d23e69ded52e,signed,zoho_request_id,999,1
-e2e56bfd-5561-4e41-b6d5-a349bc5cc993,Cali Current,Pasadena,CA,175,175,175,175,Labor Rate,Warranty Rate,425061000000579015,98f3cf50-dfd3-48e7-a4c4-c6ebb7cc34d4,signed,zoho_request_id,999,1
-e784cd0d-5b11-4893-be36-edd708b69982,Carotech,Los Angeles,CA,,,215,190,Labor Rate,Warranty Rate,425061000000471015,7e346852-f0f9-4fef-9900-47c01d0ac77a,signed,zoho_request_id,999,2
-146d4aae-ecc5-4018-9bae-a261e4578bb6,Carstar Emw Auto Body,Albany,CA,160,160,160,160,Labor Rate,Warranty Rate,425061000000684015,5328a5ab-d02f-4a75-a987-43130f34c1e7,signed,zoho_request_id,999,1
-bf83a804-cf1e-4f59-9cfc-4e3ba56ee307,Commercial Tire Center,San Fernando,CA,165,165,165,165,Labor Rate,Warranty Rate,425061000000483015,99a4de85-c2cc-4a7d-97e5-2bd2242a8330,signed,zoho_request_id,999,1
-792f7f1b-3993-4391-9611-5a45d117673b,Complete Car Care Encinitas,Encinitas,CA,240,200,239.99,200,Labor Rate,Warranty Rate,425061000000533021,6d30b968-18f8-407c-889f-e1af8e58b0da,signed,zoho_request_id,999,1
-8c69aefe-288f-4b0a-a417-a6834289e76e,Donut Auto Parts,Rancho Cordova,CA,175,175,175,175,Labor Rate,Warranty Rate,425061000000616015,adee595b-e8d8-4249-826d-7e95f1dcb5a4,signed,zoho_request_id,999,1
-e6812a57-3201-4d53-a52a-f4b17dbddde9,EV Central,Bryant St. San Francisco,CA,275,185,275,185,Labor Rate,Warranty Rate,425061000000685015,9dd207e3-8f66-4c49-bc1d-4c28983e9ac9,signed,zoho_request_id,999,1
-bc5bf753-7a46-4e88-9c14-100fc224208d,EV Coastal,Santa Ana,CA,250,175,250,175,Labor Rate,Warranty Rate,425061000000517039,685c885f-50da-4024-8341-c0233e012f33,signed,zoho_request_id,999,1
-88c0b314-37fe-49c7-87b9-50769a4ba168,EXCLUSIVE MOTORS,Los Angeles,CA,,180,250,200,Labor Rate,Warranty Rate,425061000000493015,0b2957ab-f636-4143-b2bf-79ef4ee6b379,signed,zoho_request_id,999,2
-72c197b0-5b5c-42db-8ce4-7125376e25df,Exclusive Motors Sacramento,Sacramento,CA,,,250,200,Labor Rate,Warranty Rate,425061000000493015,0b2957ab-f636-4143-b2bf-79ef4ee6b379,signed,zoho_request_id,999,1
-11877344-02f0-4048-a5d9-b4c4d040ed71,Glendale Collision Center,Glendale,CA,250,170,250,170,Labor Rate,Warranty Rate,425061000000546015,4cc2bc60-4945-404e-ada4-a1f82f0b4481,signed,zoho_request_id,999,1
-37f1d0da-d2c9-4b26-9cb0-b04e11c74f50,HANS WITTLER'S AUTOMOTIVE LLC,ELIZABETH ST. NE ALBUQUERQUE,NM,205,189,205,189,Labor Rate,Warranty Rate,425061000000745109,5c7119db-60ee-47a4-ab69-d87f2b59bd5f,signed,zoho_request_id,999,1
-18d8898e-72fc-4af1-8dea-3885c713bfb0,Haven Auto Repair,Rancho Cucamonga,CA,,,198,180,Labor Rate,Warranty Rate,425061000000597099,59417301-3659-4dc4-b95b-006e079d10ab,signed,zoho_request_id,999,2
-b2f7a642-45c3-43aa-85ba-f9b30f167a58,High Voltage,Bakersfield,CA,170,170,170,170,Labor Rate,Warranty Rate,425061000000525017,efbb5f78-4e74-4c5f-a128-cb99eee48ae9,signed,zoho_request_id,999,1
-9c105641-6758-42b3-a9a8-38386904da73,HYBRID AND ELECTRIC CAR SALES LLC,FRANKLIN,TN,125,125,125,125,Labor Rate,Warranty Rate,425061000000587015,05a206ab-f3a0-4c3a-a934-5f413c020c5d,signed,zoho_request_id,999,1
-e76e9800-151a-47f5-838e-7787f57f8b61,Hybrid Auto Repair,San Francisco,CA,135,135,135,135,Labor Rate,Warranty Rate,425061000000522015,1c737559-e2d4-4863-b83f-7650343b2f34,signed,zoho_request_id,999,1
-36d2281b-ac99-41e6-95dc-ddb1875b3b80,Jungs Auto Restoration,Walnut,CA,195,150,195,150,Labor Rate,Warranty Rate,425061000000601095,5e854c64-4372-4c7b-9bf9-295251104bbb,signed,zoho_request_id,999,1
-7bb30e60-9654-4d36-9152-3f1679271d55,Just Right Auto Repair,N. West St. Wichita,KS,175,150,175,150,Labor Rate,Warranty Rate,425061000000703043,aef051da-6b6b-4e20-afcb-8bc456440e7f,signed,zoho_request_id,999,1
-1f59fe9b-541a-485d-beae-a3a79d966c3f,Konduit EV,Vista,CA,160,160,160,160,Labor Rate,Warranty Rate,425061000000701015,0696282c-6d91-4490-85a0-ebb27f53ca8e,signed,zoho_request_id,999,2
-889496c9-f5f5-4efe-9f8c-c9549e60c917,Mapleview Collision,,,185,160,185,160,Labor Rate,Warranty Rate,425061000000674045,cdcfbe29-bcf4-4a7e-82c5-019c351010bb,signed,zoho_request_id,999,2
-2fcb2745-aee9-49d6-843e-c7cc2a7fe3da,Mcwilliams & Walden Inc.,East Brundage Lane Bakersfield,CA,195,170,195,170,Labor Rate,Warranty Rate,425061000000744213,11c0754d-3344-46b9-a407-ddf2136ac009,signed,zoho_request_id,999,1
-d964b62f-bc79-4468-91a9-4b0fe27c257c,MID Auto Service & Auto Body,Sunnyvale,CA,195,185,195,185,Labor Rate,Warranty Rate,425061000000412203,845a6f8e-da92-4569-ab93-b537fd300322,signed,zoho_request_id,999,1
-925537f0-4e8a-4d19-bdaf-58d70cf801ed,Midas,Fremont,CA,,,200,190,Labor Rate,Warranty Rate,425061000000532215,4278748e-df46-4403-87a7-086d1db0b0a7,signed,zoho_request_id,999,1
-fd2ec05b-c978-4f6d-afa5-64c4395fcbdd,Midas Automotive Cypress,Cypress,CA,,,195,195,Labor Rate,Warranty Rate,425061000000617071,7c3df39c-c54f-4f2b-a0d9-ead2210f4ad3,signed,zoho_request_id,999,2
-86e683d3-43ba-4519-94ad-ec8cd58aeaca,Midas Canton,,,189.99,189.99,189.99,189.99,Labor Rate,Warranty Rate,425061000000786047,21924c60-b5a7-413d-b814-a4ddf3ff476b,signed,zoho_request_id,999,1
-935939c6-baa5-4488-8f03-b42bd8750f7b,MIDAS CATHEDRAL CITY,CATHEDRAL CITY,CA,,,220,200,Labor Rate,Warranty Rate,425061000000721121,2a18429d-692d-4d59-b7c1-3260aa8a4192,signed,zoho_request_id,999,2
-496714e8-53ec-4d8b-824a-8a7153804059,Midas Corona,Corona,CA,,,220,200,Labor Rate,Warranty Rate,425061000000721121,2a18429d-692d-4d59-b7c1-3260aa8a4192,signed,zoho_request_id,999,2
-55c01cdf-8394-4138-b428-2935a7f2113a,Midas Daly City,Daly City,CA,,,200,200,Labor Rate,Warranty Rate,425061000000437015,5d3875c4-83c5-4021-8709-780d76585aed,signed,zoho_request_id,999,1
-43750084-2954-4fb7-baa6-76f0425ddf4f,MIDAS DIAMOND BAR,DIAMOND BAR,CA,,,220,200,Labor Rate,Warranty Rate,425061000000725015,ceeb2bdb-7915-45b4-87aa-79fbd953173a,signed,zoho_request_id,999,1
-412a0293-afaf-45c2-81ff-e91069565cf6,Midas Dodge City,Dodge City,KS,188,150,188,150,Labor Rate,Warranty Rate,425061000000792008,3a848a5e-e325-44dc-a13f-aed2a48b37c8,signed,zoho_request_id,999,1
-7ee52170-5806-45ae-a102-667d43476ceb,Midas Dublin,Village Pkwy Dublin,CA,,,200,190,Labor Rate,Warranty Rate,425061000000532215,4278748e-df46-4403-87a7-086d1db0b0a7,signed,zoho_request_id,999,4
-f3f49d69-7b26-4bed-9824-2878d1eaed35,Midas Folsom,Folsom,CA,,,180,180,Labor Rate,Warranty Rate,425061000000465019,c28d8909-6ca0-4e03-81f6-f52892611d6b,signed,zoho_request_id,999,1
-f394afc3-c001-4196-8fda-3627b7c5b4f4,Midas Georgetown,Georgetown,TX,225,185,225,185,Labor Rate,Warranty Rate,425061000000791008,1707de33-595b-44c7-87c8-b7733b15c8a0,signed,zoho_request_id,999,1
-9cb8cc84-5741-4470-9a8d-372166796b5c,Midas Hawaii,Waipahu,HI,220,220,220,220,Labor Rate,Warranty Rate,425061000000802049,5ff073d8-1c99-4009-88f9-bc9007a414f2,signed,zoho_request_id,999,1
-2e5e3492-9ddb-459b-a98d-909fca2ae2b8,Midas Hemet,HEMET,CA,,,220,200,Labor Rate,Warranty Rate,425061000000725015,ceeb2bdb-7915-45b4-87aa-79fbd953173a,signed,zoho_request_id,999,1
-8e77a0c5-2eb4-4a21-aee8-e633e7235318,Midas Lake Forest,Lake Forest,CA,200,200,200,200,Labor Rate,Warranty Rate,425061000000411099,0817f3b0-63a4-4582-a1e9-e3f9383b3b0f,signed,zoho_request_id,999,1
-d8beffd3-aa7b-4fed-842e-4ab9989921d2,Midas Modesto North,Modesto,CA,,,225,199,Labor Rate,Warranty Rate,425061000000515015,9a7e24c6-1363-466d-a2a1-104178e77540,signed,zoho_request_id,999,1
-118246de-bf4b-4b13-a9a6-55cf9a03c58e,Midas Modesto South,Modesto,CA,,,225,199,Labor Rate,Warranty Rate,425061000000515015,9a7e24c6-1363-466d-a2a1-104178e77540,signed,zoho_request_id,999,1
-800d2ac7-6b75-4268-b9de-56f07afa3d81,Midas Napa,Napa,CA,205,205,205,205,Labor Rate,Warranty Rate,425061000000532133,cc6b5e0b-5192-4986-83fb-5599ea0f527b,signed,zoho_request_id,999,2
-7e391864-9882-4733-9fad-9018a586245c,Midas of Tupelo,Tupelo,MS,180,160,180,160,Labor Rate,Warranty Rate,425061000000807027,29f55fd0-42d9-4f90-bc8a-80c8167c8500,signed,zoho_request_id,999,2
-95929402-b27d-4295-b87c-95405a2af3bf,Midas Orange,Orange,CA,200,200,200,200,Labor Rate,Warranty Rate,425061000000505015,87f18b1e-d1c1-4662-976e-63175fc759d1,signed,zoho_request_id,999,1
-267be470-f4de-4535-9a63-28015de62fbf,Midas Roseville South,Roseville,CA,190,190,190,190,Labor Rate,Warranty Rate,425061000000531015,cdc55d0f-d2a1-4b94-9151-742df50a83b4,signed,zoho_request_id,999,1
-c6989b8c-d3ba-44fb-ba21-e1ea9e3b5601,Midas Vancouver,,,155,155,155,155,Labor Rate,Warranty Rate,425061000000809010,7356b93f-c088-49d6-84be-6403b0d7b10b,signed,zoho_request_id,999,1
-9c667489-82d9-41ae-bf8d-06da33486c7c,Midas Ventura,Ventura,CA,229,200,229,200,Labor Rate,Warranty Rate,425061000000494015,e9bb1d8f-afe6-4698-85a0-b7e30c676dfa,signed,zoho_request_id,999,1
-7a9051d6-e4bd-4d9a-b57b-ccfda462693b,Multi Auto Group Inc,Van Nuys,CA,250,165,250,165,Labor Rate,Warranty Rate,425061000000546121,c0664379-bc8b-44f1-887f-0993f16992d2,signed,zoho_request_id,999,1
-b78fbd56-8001-4d5b-a05f-3658d23c5a48,Parkwood Collision Aubrey,Aubrey,TX,225,175,225,175,Labor Rate,Warranty Rate,425061000000721015,3b75ded0-8e16-4e7f-9812-cf0c886115f1,signed,zoho_request_id,999,1
-a2a7591c-4633-4f58-97f8-d29b657c18a0,Pasadena Collision Center,Pasadena,CA,165,165,165,165,Labor Rate,Warranty Rate,425061000000753015,15638e35-4494-43f8-8add-3ee293c2bd88,signed,zoho_request_id,999,1
-17b3fbc2-0f11-4024-bca5-5b7f78274876,Prestige Auto Repairs & Tires Oakland Park,,,200,180,200,180,Labor Rate,Warranty Rate,425061000000736015,ddd782bc-83c8-4ab9-a77a-665c9603cda2,signed,zoho_request_id,999,1
-b7833585-4432-4788-a14a-cd10029365a0,Rancho AutoCare,Rancho Cucamonga,CA,,,198,180,Labor Rate,Warranty Rate,425061000000601017,3feea54b-ad31-4272-ab32-fc5f9eaddc90,signed,zoho_request_id,999,2
-6bdcaa88-bd79-4596-8bd6-619f8c828cd1,Revolve Motors,ST Renton,WA,230,230,230,230,Labor Rate,Warranty Rate,425061000000733015,df542ee7-2784-4dd2-9c29-fdc9359c1265,signed,zoho_request_id,999,1
-2f5b523f-8dff-491b-9702-331a79879b1c,Rios Auto Reconditioning LLC,Carson,CA,220,180,220,180,Labor Rate,Warranty Rate,425061000000446023,654234d3-dde9-4b8e-b9be-699074112b5a,signed,zoho_request_id,999,2
-80ffa30f-ffae-46e4-bda1-42a4974cce15,Shant's Automotive Center,,,,,215,190,Labor Rate,Warranty Rate,425061000000460407,9cf3188c-8fe5-448a-9936-73a8f68cc25e,signed,zoho_request_id,999,3
-85edda4f-c57e-4f77-9411-19ab296de731,The Auto Crue,Cypress,CA,,,195,195,Labor Rate,Warranty Rate,425061000000617071,7c3df39c-c54f-4f2b-a0d9-ead2210f4ad3,signed,zoho_request_id,999,1
-3ccaf6eb-262b-4f53-b61d-ff17bbf4589b,Toyota and Tesla Service Center,Santa Clara,CA,175,175,175,175,Labor Rate,Warranty Rate,425061000000733097,c9a5f274-c7dc-4658-a585-7c6dc080f250,signed,zoho_request_id,999,2
-a63a0466-3653-4443-80b2-07fd5c823ca4,"Wenco Industries, Inc",N Academy Blvd Colorado Springs,CO,230,230,230,230,Labor Rate,Warranty Rate,425061000000696015,b97a952f-78ba-4c52-843f-898b17537d61,signed,zoho_request_id,999,1
-86cc5d87-d951-4f5a-9a97-20363867db3e,Yoel victores,E Sunrise Blvd Fort Lauderdale,FL,160,160,160,160,Labor Rate,Warranty Rate,425061000000737015,3bd9ce6e-2a8e-456b-a99b-4d02066dfbc4,signed,zoho_request_id,999,1
-329ca1d6-1ab4-4450-a88b-bd18dd38472b,YOUR MECHANIC 813,E ROBERTSON ST BRANDON,FL,175,175,175,175,Labor Rate,Warranty Rate,425061000000646015,ebc03395-5a15-486e-9f53-05c4b904b5af,signed,zoho_request_id,999,1
+location_id,location_name,zoho_standard_labor_rate,zoho_warranty_labor_rate,zoho_standard_source,zoho_warranty_source,zoho_sign_request_id,crm_contract_id,crm_contract_status,match_method,match_score,linked_contract_count
+fd111856-0e10-4735-bb1f-90d3976f9e4e,AAMCO Bakersfield,199,199,Labor Rate,Warranty Rate,4.25061E+17,62bec068-69e4-49ef-99b4-0b8a86cd6359,signed,zoho_request_id,999,1
+ee258bfb-c35c-49b2-a7f6-36d0a1256ea7,advanced auto repair and tires inc,195,185,Labor Rate,Warranty Rate,4.25061E+17,827918c2-2945-4b20-b374-e5e43b623d76,signed,zoho_request_id,999,1
+a705efc5-915c-47f4-917f-7bcca5c0eebf,All About Price,200,200,Labor Rate,Warranty Rate,4.25061E+17,4aeb7a52-3bc2-4770-9b7e-151839a45c1a,signed,zoho_request_id,999,1
+bd53938c-21f2-4d41-8f2f-bbcee7e63105,Apple Collision,195,175,Labor Rate,Warranty Rate,4.25061E+17,73260916-c5a8-4370-9560-4bd18bb72880,signed,zoho_request_id,999,1
+a549bd44-1cb3-45a1-a318-8091a08a2161,Autoburn inc,180,180,Labor Rate,Warranty Rate,4.25061E+17,eb924b3e-fd0d-46bc-a110-9df6bebcb135,signed,zoho_request_id,999,1
+ee426a42-d414-4394-a31c-19cfebba5c63,Automotive care center,180,180,Labor Rate,Warranty Rate,4.25061E+17,54d9a50c-8a22-44ee-9d23-5bd031e47aac,signed,zoho_request_id,999,2
+27400ed5-f651-4448-b33b-6a654c90c4a5,Automotive Fleet Solutions (AFS),185,170,Labor Rate,Warranty Rate,4.25061E+17,4ffb9cd2-8b9c-452c-9742-d23e69ded52e,signed,zoho_request_id,999,1
+e2e56bfd-5561-4e41-b6d5-a349bc5cc993,Cali Current,175,175,Labor Rate,Warranty Rate,4.25061E+17,98f3cf50-dfd3-48e7-a4c4-c6ebb7cc34d4,signed,zoho_request_id,999,1
+e784cd0d-5b11-4893-be36-edd708b69982,Carotech,215,190,Labor Rate,Warranty Rate,4.25061E+17,7e346852-f0f9-4fef-9900-47c01d0ac77a,signed,zoho_request_id,999,2
+146d4aae-ecc5-4018-9bae-a261e4578bb6,Carstar Emw Auto Body,160,160,Labor Rate,Warranty Rate,4.25061E+17,5328a5ab-d02f-4a75-a987-43130f34c1e7,signed,zoho_request_id,999,1
+bf83a804-cf1e-4f59-9cfc-4e3ba56ee307,Commercial Tire Center,165,165,Labor Rate,Warranty Rate,4.25061E+17,99a4de85-c2cc-4a7d-97e5-2bd2242a8330,signed,zoho_request_id,999,1
+792f7f1b-3993-4391-9611-5a45d117673b,Complete Car Care Encinitas,239.99,200,Labor Rate,Warranty Rate,4.25061E+17,6d30b968-18f8-407c-889f-e1af8e58b0da,signed,zoho_request_id,999,1
+8c69aefe-288f-4b0a-a417-a6834289e76e,Donut Auto Parts,175,175,Labor Rate,Warranty Rate,4.25061E+17,adee595b-e8d8-4249-826d-7e95f1dcb5a4,signed,zoho_request_id,999,1
+e6812a57-3201-4d53-a52a-f4b17dbddde9,EV Central,275,185,Labor Rate,Warranty Rate,4.25061E+17,9dd207e3-8f66-4c49-bc1d-4c28983e9ac9,signed,zoho_request_id,999,1
+bc5bf753-7a46-4e88-9c14-100fc224208d,EV Coastal,250,175,Labor Rate,Warranty Rate,4.25061E+17,685c885f-50da-4024-8341-c0233e012f33,signed,zoho_request_id,999,1
+88c0b314-37fe-49c7-87b9-50769a4ba168,EXCLUSIVE MOTORS,250,200,Labor Rate,Warranty Rate,4.25061E+17,0b2957ab-f636-4143-b2bf-79ef4ee6b379,signed,zoho_request_id,999,2
+72c197b0-5b5c-42db-8ce4-7125376e25df,Exclusive Motors Sacramento,250,200,Labor Rate,Warranty Rate,4.25061E+17,0b2957ab-f636-4143-b2bf-79ef4ee6b379,signed,zoho_request_id,999,1
+11877344-02f0-4048-a5d9-b4c4d040ed71,Glendale Collision Center,250,170,Labor Rate,Warranty Rate,4.25061E+17,4cc2bc60-4945-404e-ada4-a1f82f0b4481,signed,zoho_request_id,999,1
+37f1d0da-d2c9-4b26-9cb0-b04e11c74f50,HANS WITTLER'S AUTOMOTIVE LLC,205,189,Labor Rate,Warranty Rate,4.25061E+17,5c7119db-60ee-47a4-ab69-d87f2b59bd5f,signed,zoho_request_id,999,1
+18d8898e-72fc-4af1-8dea-3885c713bfb0,Haven Auto Repair,198,180,Labor Rate,Warranty Rate,4.25061E+17,59417301-3659-4dc4-b95b-006e079d10ab,signed,zoho_request_id,999,2
+b2f7a642-45c3-43aa-85ba-f9b30f167a58,High Voltage,170,170,Labor Rate,Warranty Rate,4.25061E+17,efbb5f78-4e74-4c5f-a128-cb99eee48ae9,signed,zoho_request_id,999,1
+9c105641-6758-42b3-a9a8-38386904da73,HYBRID AND ELECTRIC CAR SALES LLC,125,125,Labor Rate,Warranty Rate,4.25061E+17,05a206ab-f3a0-4c3a-a934-5f413c020c5d,signed,zoho_request_id,999,1
+e76e9800-151a-47f5-838e-7787f57f8b61,Hybrid Auto Repair,135,135,Labor Rate,Warranty Rate,4.25061E+17,1c737559-e2d4-4863-b83f-7650343b2f34,signed,zoho_request_id,999,1
+36d2281b-ac99-41e6-95dc-ddb1875b3b80,Jungs Auto Restoration,195,150,Labor Rate,Warranty Rate,4.25061E+17,5e854c64-4372-4c7b-9bf9-295251104bbb,signed,zoho_request_id,999,1
+7bb30e60-9654-4d36-9152-3f1679271d55,Just Right Auto Repair,175,150,Labor Rate,Warranty Rate,4.25061E+17,aef051da-6b6b-4e20-afcb-8bc456440e7f,signed,zoho_request_id,999,1
+1f59fe9b-541a-485d-beae-a3a79d966c3f,Konduit EV,160,160,Labor Rate,Warranty Rate,4.25061E+17,0696282c-6d91-4490-85a0-ebb27f53ca8e,signed,zoho_request_id,999,2
+889496c9-f5f5-4efe-9f8c-c9549e60c917,Mapleview Collision,185,160,Labor Rate,Warranty Rate,4.25061E+17,cdcfbe29-bcf4-4a7e-82c5-019c351010bb,signed,zoho_request_id,999,2
+2fcb2745-aee9-49d6-843e-c7cc2a7fe3da,Mcwilliams & Walden Inc.,195,170,Labor Rate,Warranty Rate,4.25061E+17,11c0754d-3344-46b9-a407-ddf2136ac009,signed,zoho_request_id,999,1
+d964b62f-bc79-4468-91a9-4b0fe27c257c,MID Auto Service & Auto Body,195,185,Labor Rate,Warranty Rate,4.25061E+17,845a6f8e-da92-4569-ab93-b537fd300322,signed,zoho_request_id,999,1
+925537f0-4e8a-4d19-bdaf-58d70cf801ed,Midas,200,190,Labor Rate,Warranty Rate,4.25061E+17,4278748e-df46-4403-87a7-086d1db0b0a7,signed,zoho_request_id,999,1
+fd2ec05b-c978-4f6d-afa5-64c4395fcbdd,Midas Automotive Cypress,195,195,Labor Rate,Warranty Rate,4.25061E+17,7c3df39c-c54f-4f2b-a0d9-ead2210f4ad3,signed,zoho_request_id,999,2
+86e683d3-43ba-4519-94ad-ec8cd58aeaca,Midas Canton,189.99,189.99,Labor Rate,Warranty Rate,4.25061E+17,21924c60-b5a7-413d-b814-a4ddf3ff476b,signed,zoho_request_id,999,1
+935939c6-baa5-4488-8f03-b42bd8750f7b,MIDAS CATHEDRAL CITY,220,200,Labor Rate,Warranty Rate,4.25061E+17,2a18429d-692d-4d59-b7c1-3260aa8a4192,signed,zoho_request_id,999,2
+496714e8-53ec-4d8b-824a-8a7153804059,Midas Corona,220,200,Labor Rate,Warranty Rate,4.25061E+17,2a18429d-692d-4d59-b7c1-3260aa8a4192,signed,zoho_request_id,999,2
+55c01cdf-8394-4138-b428-2935a7f2113a,Midas Daly City,200,200,Labor Rate,Warranty Rate,4.25061E+17,5d3875c4-83c5-4021-8709-780d76585aed,signed,zoho_request_id,999,1
+43750084-2954-4fb7-baa6-76f0425ddf4f,MIDAS DIAMOND BAR,220,200,Labor Rate,Warranty Rate,4.25061E+17,ceeb2bdb-7915-45b4-87aa-79fbd953173a,signed,zoho_request_id,999,1
+412a0293-afaf-45c2-81ff-e91069565cf6,Midas Dodge City,188,150,Labor Rate,Warranty Rate,4.25061E+17,3a848a5e-e325-44dc-a13f-aed2a48b37c8,signed,zoho_request_id,999,1
+7ee52170-5806-45ae-a102-667d43476ceb,Midas Dublin,200,190,Labor Rate,Warranty Rate,4.25061E+17,4278748e-df46-4403-87a7-086d1db0b0a7,signed,zoho_request_id,999,4
+f3f49d69-7b26-4bed-9824-2878d1eaed35,Midas Folsom,180,180,Labor Rate,Warranty Rate,4.25061E+17,c28d8909-6ca0-4e03-81f6-f52892611d6b,signed,zoho_request_id,999,1
+f394afc3-c001-4196-8fda-3627b7c5b4f4,Midas Georgetown,225,185,Labor Rate,Warranty Rate,4.25061E+17,1707de33-595b-44c7-87c8-b7733b15c8a0,signed,zoho_request_id,999,1
+9cb8cc84-5741-4470-9a8d-372166796b5c,Midas Hawaii,220,220,Labor Rate,Warranty Rate,4.25061E+17,5ff073d8-1c99-4009-88f9-bc9007a414f2,signed,zoho_request_id,999,1
+2e5e3492-9ddb-459b-a98d-909fca2ae2b8,Midas Hemet,220,200,Labor Rate,Warranty Rate,4.25061E+17,ceeb2bdb-7915-45b4-87aa-79fbd953173a,signed,zoho_request_id,999,1
+8e77a0c5-2eb4-4a21-aee8-e633e7235318,Midas Lake Forest,200,200,Labor Rate,Warranty Rate,4.25061E+17,0817f3b0-63a4-4582-a1e9-e3f9383b3b0f,signed,zoho_request_id,999,1
+d8beffd3-aa7b-4fed-842e-4ab9989921d2,Midas Modesto North,225,199,Labor Rate,Warranty Rate,4.25061E+17,9a7e24c6-1363-466d-a2a1-104178e77540,signed,zoho_request_id,999,1
+118246de-bf4b-4b13-a9a6-55cf9a03c58e,Midas Modesto South,225,199,Labor Rate,Warranty Rate,4.25061E+17,9a7e24c6-1363-466d-a2a1-104178e77540,signed,zoho_request_id,999,1
+800d2ac7-6b75-4268-b9de-56f07afa3d81,Midas Napa,205,205,Labor Rate,Warranty Rate,4.25061E+17,cc6b5e0b-5192-4986-83fb-5599ea0f527b,signed,zoho_request_id,999,2
+7e391864-9882-4733-9fad-9018a586245c,Midas of Tupelo,180,160,Labor Rate,Warranty Rate,4.25061E+17,29f55fd0-42d9-4f90-bc8a-80c8167c8500,signed,zoho_request_id,999,2
+95929402-b27d-4295-b87c-95405a2af3bf,Midas Orange,200,200,Labor Rate,Warranty Rate,4.25061E+17,87f18b1e-d1c1-4662-976e-63175fc759d1,signed,zoho_request_id,999,1
+267be470-f4de-4535-9a63-28015de62fbf,Midas Roseville South,190,190,Labor Rate,Warranty Rate,4.25061E+17,cdc55d0f-d2a1-4b94-9151-742df50a83b4,signed,zoho_request_id,999,1
+c6989b8c-d3ba-44fb-ba21-e1ea9e3b5601,Midas Vancouver,155,155,Labor Rate,Warranty Rate,4.25061E+17,7356b93f-c088-49d6-84be-6403b0d7b10b,signed,zoho_request_id,999,1
+9c667489-82d9-41ae-bf8d-06da33486c7c,Midas Ventura,229,200,Labor Rate,Warranty Rate,4.25061E+17,e9bb1d8f-afe6-4698-85a0-b7e30c676dfa,signed,zoho_request_id,999,1
+7a9051d6-e4bd-4d9a-b57b-ccfda462693b,Multi Auto Group Inc,250,165,Labor Rate,Warranty Rate,4.25061E+17,c0664379-bc8b-44f1-887f-0993f16992d2,signed,zoho_request_id,999,1
+b78fbd56-8001-4d5b-a05f-3658d23c5a48,Parkwood Collision Aubrey,225,175,Labor Rate,Warranty Rate,4.25061E+17,3b75ded0-8e16-4e7f-9812-cf0c886115f1,signed,zoho_request_id,999,1
+a2a7591c-4633-4f58-97f8-d29b657c18a0,Pasadena Collision Center,165,165,Labor Rate,Warranty Rate,4.25061E+17,15638e35-4494-43f8-8add-3ee293c2bd88,signed,zoho_request_id,999,1
+17b3fbc2-0f11-4024-bca5-5b7f78274876,Prestige Auto Repairs & Tires Oakland Park,200,180,Labor Rate,Warranty Rate,4.25061E+17,ddd782bc-83c8-4ab9-a77a-665c9603cda2,signed,zoho_request_id,999,1
+b7833585-4432-4788-a14a-cd10029365a0,Rancho AutoCare,198,180,Labor Rate,Warranty Rate,4.25061E+17,3feea54b-ad31-4272-ab32-fc5f9eaddc90,signed,zoho_request_id,999,2
+6bdcaa88-bd79-4596-8bd6-619f8c828cd1,Revolve Motors,230,230,Labor Rate,Warranty Rate,4.25061E+17,df542ee7-2784-4dd2-9c29-fdc9359c1265,signed,zoho_request_id,999,1
+2f5b523f-8dff-491b-9702-331a79879b1c,Rios Auto Reconditioning LLC,220,180,Labor Rate,Warranty Rate,4.25061E+17,654234d3-dde9-4b8e-b9be-699074112b5a,signed,zoho_request_id,999,2
+80ffa30f-ffae-46e4-bda1-42a4974cce15,Shant's Automotive Center,215,190,Labor Rate,Warranty Rate,4.25061E+17,9cf3188c-8fe5-448a-9936-73a8f68cc25e,signed,zoho_request_id,999,3
+85edda4f-c57e-4f77-9411-19ab296de731,The Auto Crue,195,195,Labor Rate,Warranty Rate,4.25061E+17,7c3df39c-c54f-4f2b-a0d9-ead2210f4ad3,signed,zoho_request_id,999,1
+3ccaf6eb-262b-4f53-b61d-ff17bbf4589b,Toyota and Tesla Service Center,175,175,Labor Rate,Warranty Rate,4.25061E+17,c9a5f274-c7dc-4658-a585-7c6dc080f250,signed,zoho_request_id,999,2
+a63a0466-3653-4443-80b2-07fd5c823ca4,"Wenco Industries, Inc",230,230,Labor Rate,Warranty Rate,4.25061E+17,b97a952f-78ba-4c52-843f-898b17537d61,signed,zoho_request_id,999,1
+86cc5d87-d951-4f5a-9a97-20363867db3e,Yoel victores,160,160,Labor Rate,Warranty Rate,4.25061E+17,3bd9ce6e-2a8e-456b-a99b-4d02066dfbc4,signed,zoho_request_id,999,1
+329ca1d6-1ab4-4450-a88b-bd18dd38472b,YOUR MECHANIC 813,175,175,Labor Rate,Warranty Rate,4.25061E+17,ebc03395-5a15-486e-9f53-05c4b904b5af,signed,zoho_request_id,999,1

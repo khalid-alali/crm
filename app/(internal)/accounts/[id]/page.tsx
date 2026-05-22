@@ -16,7 +16,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const session = await getAppSession()
   const { data: account } = await supabaseAdmin
     .from('accounts')
-    .select('id, business_name, notes, created_at')
+    .select('id, business_name, legal_entity_name, notes, created_at')
     .eq('id', id)
     .single()
 
@@ -72,6 +72,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const accountRow: AccountRow = {
     id: account.id,
     business_name: account.business_name?.trim() ? account.business_name : '—',
+    legal_entity_name: account.legal_entity_name?.trim() || null,
     notes: account.notes,
   }
 

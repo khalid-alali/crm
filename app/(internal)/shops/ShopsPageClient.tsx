@@ -18,8 +18,8 @@ import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 const PIPELINE_STATUSES = [
   'lead',
   'contacted',
+  'prospect',
   'dormant',
-  'in_review',
   'contracted',
   'active',
   'inactive',

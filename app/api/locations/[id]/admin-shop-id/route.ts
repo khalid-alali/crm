@@ -5,7 +5,8 @@ import { getAppSession } from '@/lib/app-auth'
 const STATUS_RANK: Record<string, number> = {
   lead: 0,
   contacted: 1,
-  dormant: 2,
+  prospect: 2,
+  dormant: 3,
   in_review: 3,
   contracted: 4,
   active: 5,
