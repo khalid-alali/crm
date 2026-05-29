@@ -44,7 +44,8 @@
     "validate:bulk-import": "npx tsx scripts/validate-bulk-import.ts",
     "preview:llc-ltd-google-names": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts",
     "preview:llc-ltd-google-names:account": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts --account-id=fa15c3ed-7bca-4225-ac7b-2c6ede80ddad",
-    "apply:llc-ltd-google-names:account": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts --apply --csv=scripts/output/llc-ltd-google-name-preview-account-fa15c3ed-2026-05-21T20-57-29.csv"
+    "apply:llc-ltd-google-names:account": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts --apply --csv=scripts/output/llc-ltd-google-name-preview-account-fa15c3ed-2026-05-21T20-57-29.csv",
+    "preview:jude-crane-lp-names": "npx tsx scripts/preview-lp-google-shop-names.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",

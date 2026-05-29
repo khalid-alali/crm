@@ -95,7 +95,25 @@ export type VinfastEnrollmentView = {
   vfOnboardingStatus: string | null
 }
 
-function normalizeVinfastStage(input: {
+/** VinFast onboarding label written when a card is moved on the kanban (PATCH enrollment stage). */
+export function vfOnboardingStatusForKanbanStage(stage: TeslaStage): string {
+  switch (stage) {
+    case 'active':
+      return 'Active'
+    case 'ready':
+      return 'Ready for activation'
+    case 'getting_ready':
+      return 'Setup, training & equipment'
+    case 'not_ready':
+      return 'Labor rate approval'
+    case 'disqualified':
+      return 'Archived'
+    default:
+      return 'Active'
+  }
+}
+
+export function normalizeVinfastStage(input: {
   locationStatus: string | null | undefined
   vfOnboardingStatus: string | null | undefined
   enrollmentStage: string
@@ -104,14 +122,14 @@ function normalizeVinfastStage(input: {
   const locationStatus = (input.locationStatus ?? '').trim().toLowerCase()
   if (locationStatus === 'inactive') return 'disqualified'
 
-  const raw = (input.vfOnboardingStatus ?? '').trim().toLowerCase()
-  if (raw.includes('archived')) return 'disqualified'
-
-  // Kanban drag sets enrollment.stage + manual_stage_override (see PATCH /api/vinfast/enrollments).
-  // Without this, vf_onboarding_status always wins and the card snaps back after refresh.
+  // Kanban sets enrollment.stage + manual_stage_override (see PATCH /api/vinfast/enrollments).
+  // Must run before archived vf_onboarding_status or the card snaps back after refresh.
   if (input.manualStageOverride && isTeslaStage(input.enrollmentStage)) {
     return input.enrollmentStage
   }
+
+  const raw = (input.vfOnboardingStatus ?? '').trim().toLowerCase()
+  if (raw.includes('archived')) return 'disqualified'
 
   if (raw) {
     if (raw.includes('ready for activation')) return 'ready'

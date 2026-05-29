@@ -55,16 +55,33 @@ begin
 end;
 $$;
 
--- Shops with an unsigned sent/viewed Zoho contract still marked Contacted → Prospect.
-update locations l
-set status = 'prospect', updated_at = now()
-where l.status = 'contacted'
-  and l.deleted_at is null
-  and exists (
-    select 1
-    from contract_locations cl
-    join contracts c on c.id = cl.contract_id
-    where cl.location_id = l.id
-      and c.zoho_sign_request_id is not null
-      and c.status in ('sent', 'viewed')
-  );
+-- Shops with an open (sent/viewed) Zoho contract → Prospect.
+with target as (
+  select l.id as location_id, l.status as from_status
+  from locations l
+  where l.deleted_at is null
+    and l.status in ('lead', 'contacted', 'dormant', 'in_review')
+    and exists (
+      select 1
+      from contract_locations cl
+      join contracts c on c.id = cl.contract_id
+      where cl.location_id = l.id
+        and c.zoho_sign_request_id is not null
+        and c.status in ('sent', 'viewed')
+    )
+),
+updated as (
+  update locations l
+  set status = 'prospect', updated_at = now()
+  from target t
+  where l.id = t.location_id
+  returning l.id, t.from_status
+)
+insert into activity_log (location_id, type, subject, body, sent_by)
+select
+  u.id,
+  'status_change',
+  'Pipeline status',
+  u.from_status || ' → Prospect (backfill: open Zoho contract)',
+  'system'
+from updated u;

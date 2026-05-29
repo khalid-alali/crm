@@ -9,6 +9,7 @@ import {
   VINFAST_DEFAULT_OPS_WHEN_ACTIVE,
   VINFAST_DEFAULT_OPS_WHEN_NOT_READY,
 } from '@/lib/vinfast-operational-status'
+import { vfOnboardingStatusForKanbanStage } from '@/lib/vinfast-enrollments'
 
 type PatchBody = {
   stage?: string
@@ -117,20 +118,36 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
-  if (body.stage !== undefined) {
+  if (body.stage !== undefined && isTeslaStage(body.stage)) {
     const locUpdate: Record<string, string> = {}
     if (body.stage === 'active') {
       locUpdate.vf_operational_status = VINFAST_DEFAULT_OPS_WHEN_ACTIVE
     } else if (body.stage === 'not_ready') {
       locUpdate.vf_operational_status = VINFAST_DEFAULT_OPS_WHEN_NOT_READY
     }
+
+    const { data: locRow, error: locLoadErr } = await supabaseAdmin
+      .from('locations')
+      .select('vf_onboarding_status')
+      .eq('id', enrollment.location_id)
+      .maybeSingle()
+    if (locLoadErr) {
+      console.error('VinFast stage load vf_onboarding_status:', locLoadErr.message)
+    } else {
+      const currentOnboarding = (locRow?.vf_onboarding_status as string | null | undefined) ?? ''
+      const onboardingLower = currentOnboarding.trim().toLowerCase()
+      if (body.stage === 'disqualified' || onboardingLower.includes('archived')) {
+        locUpdate.vf_onboarding_status = vfOnboardingStatusForKanbanStage(body.stage)
+      }
+    }
+
     if (Object.keys(locUpdate).length > 0) {
       const { error: locErr } = await supabaseAdmin
         .from('locations')
         .update(locUpdate)
         .eq('id', enrollment.location_id)
       if (locErr) {
-        console.error('VinFast stage default vf_operational_status:', locErr.message)
+        console.error('VinFast stage location sync:', locErr.message)
       }
     }
   }
