@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getAppSession } from '@/lib/app-auth'
 import { expertAssistSurfacesPathShopId } from '@/lib/expert-assist-shop-token'
 import { expertAssistSurfacesBaseUrl } from '@/lib/expert-assist-surfaces-base-url'
+import { EXPERT_ASSIST_PROGRAM_ID } from '@/lib/program-config'
+import { enrollLocationInProgram } from '@/lib/program-enrollment-service'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
@@ -22,6 +25,25 @@ export async function POST(req: NextRequest) {
   const { data: loc, error } = await supabaseAdmin.from('locations').select('id').eq('id', locationId).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!loc) return NextResponse.json({ error: 'Location not found' }, { status: 404 })
+
+  const now = new Date().toISOString()
+  await supabaseAdmin
+    .from('locations')
+    .update({ consult_invited_at: now })
+    .eq('id', locationId)
+    .is('consult_invited_at', null)
+
+  try {
+    await enrollLocationInProgram(supabaseAdmin, {
+      locationId,
+      programId: EXPERT_ASSIST_PROGRAM_ID,
+      actorId: session.user?.email ?? null,
+    })
+  } catch (enrollError) {
+    console.error('expert-assist generate-invite-link enroll:', enrollError)
+  }
+
+  revalidatePath('/consults')
 
   const pathShopId = expertAssistSurfacesPathShopId(locationId)
   const base = expertAssistSurfacesBaseUrl(req)

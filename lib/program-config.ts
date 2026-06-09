@@ -1,8 +1,13 @@
 export const TESLA_PROGRAM_ID = 'tesla' as const
 export const VINFAST_PROGRAM_ID = 'vinfast' as const
+export const EXPERT_ASSIST_PROGRAM_ID = 'expert_assist' as const
 
 /** Programs whose checklist can be edited via program enrollment API routes. */
-export const CHECKLIST_EDITABLE_PROGRAM_IDS: readonly string[] = [TESLA_PROGRAM_ID, VINFAST_PROGRAM_ID]
+export const CHECKLIST_EDITABLE_PROGRAM_IDS: readonly string[] = [
+  TESLA_PROGRAM_ID,
+  VINFAST_PROGRAM_ID,
+  EXPERT_ASSIST_PROGRAM_ID,
+]
 
 export type ChecklistPrerequisite =
   | string
@@ -329,6 +334,25 @@ const PROGRAM_CONFIGS: Record<string, ProgramConfig> = {
         owner: 'fl',
         order: 2,
         prerequisites: ['month_1_check_in'],
+        requiredForStage: false,
+      },
+    ],
+  },
+  expert_assist: {
+    id: EXPERT_ASSIST_PROGRAM_ID,
+    label: 'Expert Assist',
+    checklist: [
+      { key: 'card_on_file', label: 'Card on file', requiredForStage: false },
+      { key: 'owner_forward_clicked', label: 'Owner-forward clicked', requiredForStage: false },
+      { key: 'front_desk_sms_delivered', label: 'Front desk SMS delivered', requiredForStage: false },
+      { key: 'counter_card_downloaded', label: 'Counter card downloaded', requiredForStage: false },
+      { key: 'welcome_kit_shipped', label: 'Welcome kit shipped', requiredForStage: false },
+      { key: 'printout_photo_received', label: 'Printout photo received', requiredForStage: false },
+      { key: 'qr_scanned', label: 'QR scanned', requiredForStage: false },
+      {
+        key: 'free_consult_used',
+        label: 'Free consult used',
+        tooltip: 'Auto-set when the shop\'s first consult closes successfully.',
         requiredForStage: false,
       },
     ],

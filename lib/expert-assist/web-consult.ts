@@ -3,7 +3,7 @@ import { CONSULT_MEDIA_BUCKET, consultMediaObjectPath } from '@/lib/expert-assis
 import { assertShopCanRunConsults } from '@/lib/expert-assist/billing-gates'
 import { insertConsultCaseEvent } from '@/lib/expert-assist/events'
 import { normalizeSmsAddress } from '@/lib/expert-assist/phone'
-import { postExpertAssistSlack } from '@/lib/expert-assist/slack'
+import { notifyExpertAssistSlack } from '@/lib/expert-assist/slack'
 import { decodeVinNhtsa, extractVinFromText } from '@/lib/expert-assist/vin-decode'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -239,9 +239,12 @@ export async function createWebConsultCase(input: CreateWebConsultInput): Promis
       from: phone,
     })
 
-    await postExpertAssistSlack(
-      `Expert Assist: OPEN case ${caseId} (${source}) — shop **${input.shopName}**`,
-    )
+    await notifyExpertAssistSlack({
+      type: 'open',
+      caseId,
+      shopName: input.shopName,
+      source,
+    })
 
     return { ok: true, caseId }
   } catch (e) {

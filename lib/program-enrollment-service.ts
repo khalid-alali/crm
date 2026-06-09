@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deriveProgramStage } from '@/lib/program-stage'
-import { getProgramConfig } from '@/lib/program-config'
+import { EXPERT_ASSIST_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
 
 type EnrollmentRow = {
   id: string
@@ -117,12 +117,13 @@ export async function enrollLocationInProgram(
   if (active) return { enrollmentId: active.id, created: false }
 
   const now = new Date().toISOString()
+  const initialStage = input.programId === EXPERT_ASSIST_PROGRAM_ID ? 'invited' : 'not_ready'
   const { data: createdRow, error: createError } = await supabaseAdmin
     .from('location_program_enrollments')
     .insert({
       location_id: input.locationId,
       program_id: input.programId,
-      stage: 'not_ready',
+      stage: initialStage,
       enrolled_at: now,
       enrolled_by_user_id: input.actorId,
       last_touched_at: now,
@@ -155,23 +156,25 @@ export async function enrollLocationInProgram(
     if (checklistInsertError) throw new Error(checklistInsertError.message)
   }
 
-  const completedKeys = checklistRows
-    .filter(row => Boolean(row.completed_at))
-    .map(row => row.item_key)
+  if (input.programId !== EXPERT_ASSIST_PROGRAM_ID) {
+    const completedKeys = checklistRows
+      .filter(row => Boolean(row.completed_at))
+      .map(row => row.item_key)
 
-  const stage = deriveProgramStage({
-    programId: input.programId,
-    checklistCompletedKeys: completedKeys,
-    firstJobCompletedAt: null,
-    currentStage: 'not_ready',
-    manualStageOverride: false,
-  })
+    const stage = deriveProgramStage({
+      programId: input.programId,
+      checklistCompletedKeys: completedKeys,
+      firstJobCompletedAt: null,
+      currentStage: 'not_ready',
+      manualStageOverride: false,
+    })
 
-  const { error: stageError } = await supabaseAdmin
-    .from('location_program_enrollments')
-    .update({ stage, last_touched_at: now })
-    .eq('id', createdRow.id)
-  if (stageError) throw new Error(stageError.message)
+    const { error: stageError } = await supabaseAdmin
+      .from('location_program_enrollments')
+      .update({ stage, last_touched_at: now })
+      .eq('id', createdRow.id)
+    if (stageError) throw new Error(stageError.message)
+  }
 
   return { enrollmentId: createdRow.id as string, created: true }
 }

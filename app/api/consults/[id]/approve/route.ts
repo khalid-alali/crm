@@ -4,7 +4,7 @@ import { getAppSession } from '@/lib/app-auth'
 import { assertShopCanRunConsults } from '@/lib/expert-assist/billing-gates'
 import { insertConsultCaseEvent } from '@/lib/expert-assist/events'
 import { sendConsultSms } from '@/lib/expert-assist/send-sms'
-import { postExpertAssistSlack } from '@/lib/expert-assist/slack'
+import { notifyExpertAssistSlack } from '@/lib/expert-assist/slack'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
@@ -64,7 +64,11 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
   })
 
   const { data: shop } = await supabaseAdmin.from('locations').select('name').eq('id', c.shop_id).maybeSingle()
-  await postExpertAssistSlack(`Expert Assist: case ${caseId} APPROVED and OPEN — ${(shop as { name: string } | null)?.name ?? ''}`)
+  await notifyExpertAssistSlack({
+    type: 'approved',
+    caseId,
+    shopName: (shop as { name: string } | null)?.name ?? '',
+  })
 
   revalidatePath('/consults')
   revalidatePath(`/consults/${caseId}`)

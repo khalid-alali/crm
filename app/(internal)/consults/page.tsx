@@ -5,8 +5,10 @@
  */
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
-import ConsultQueueTables from '@/components/expert-assist/ConsultQueueTables'
+import ConsultsPageClient from '@/components/expert-assist/ConsultsPageClient'
+import { listExpertAssistEnrollments } from '@/lib/expert-assist-enrollments'
 import { fetchOpenCasesQueue, fetchPendingApprovalQueue } from '@/lib/expert-assist/queries'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +16,8 @@ export default async function ConsultsQueuePage() {
   let pending: Awaited<ReturnType<typeof fetchPendingApprovalQueue>> = []
   let open: Awaited<ReturnType<typeof fetchOpenCasesQueue>> = []
   let schemaError: string | null = null
+  let funnelEnrollments: Awaited<ReturnType<typeof listExpertAssistEnrollments>> = []
+  let funnelError: string | null = null
 
   try {
     ;[pending, open] = await Promise.all([fetchPendingApprovalQueue(), fetchOpenCasesQueue()])
@@ -25,6 +29,12 @@ export default async function ConsultsQueuePage() {
     } else {
       schemaError = msg
     }
+  }
+
+  try {
+    funnelEnrollments = await listExpertAssistEnrollments(supabaseAdmin)
+  } catch (e) {
+    funnelError = e instanceof Error ? e.message : String(e)
   }
 
   return (
@@ -39,9 +49,13 @@ export default async function ConsultsQueuePage() {
         </nav>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto px-10 pt-8 pb-20">
-        <ConsultQueueTables pending={pending} open={open} schemaError={schemaError} />
-      </div>
+      <ConsultsPageClient
+        pending={pending}
+        open={open}
+        schemaError={schemaError}
+        funnelEnrollments={funnelEnrollments}
+        funnelError={funnelError}
+      />
     </div>
   )
 }

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { getAppSession } from '@/lib/app-auth'
+import { FREE_CONSULT_CHECKLIST_KEY } from '@/lib/expert-assist/free-consult'
 import {
   CHECKLIST_EDITABLE_PROGRAM_IDS,
+  EXPERT_ASSIST_PROGRAM_ID,
   programChecklistKeys,
   TESLA_PROGRAM_ID,
 } from '@/lib/program-config'
@@ -53,6 +55,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Unknown checklist item for this program' }, { status: 400 })
   }
 
+  if (enrollment.program_id === EXPERT_ASSIST_PROGRAM_ID && itemKey === FREE_CONSULT_CHECKLIST_KEY) {
+    return NextResponse.json(
+      { error: 'Free consult used is set automatically when the first consult closes' },
+      { status: 400 },
+    )
+  }
+
   const completed = body.completed === true
   const completedAt = completed ? new Date().toISOString() : null
   const completedBy = completed ? (session.user?.email ?? null) : null
@@ -78,7 +87,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     last_touched_at: new Date().toISOString(),
   }
 
-  if (!enrollment.manual_stage_override) {
+  if (!enrollment.manual_stage_override && enrollment.program_id !== EXPERT_ASSIST_PROGRAM_ID) {
     const { data: checklistRows, error: listError } = await supabaseAdmin
       .from('program_enrollment_checklist')
       .select('item_key, completed_at')
@@ -110,6 +119,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (enrollment.program_id === TESLA_PROGRAM_ID) {
     revalidatePath('/tesla')
+  }
+  if (enrollment.program_id === EXPERT_ASSIST_PROGRAM_ID) {
+    revalidatePath('/consults')
   }
   revalidatePath('/shops')
   return NextResponse.json({ ok: true, enrollment: updatedEnrollment })

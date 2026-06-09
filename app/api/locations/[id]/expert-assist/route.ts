@@ -11,6 +11,7 @@ export const runtime = 'nodejs'
 const LOCATION_CONSULT_SELECT = `
   id,
   name,
+  account_id,
   consult_enabled,
   consult_short_code,
   toolbox_case_partner,
@@ -20,7 +21,9 @@ const LOCATION_CONSULT_SELECT = `
   consult_billing_status,
   consult_stripe_customer_id,
   consult_stripe_payment_method_id,
-  consult_stripe_card_last4
+  consult_stripe_card_last4,
+  consult_service_writer_contact_id,
+  consult_service_writer_is_owner
 `
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -45,6 +48,19 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
   if (e2) return NextResponse.json({ error: e2.message }, { status: 500 })
 
+  let serviceWriterContact: Record<string, unknown> | null = null
+  const serviceWriterContactId = (loc as { consult_service_writer_contact_id?: string | null })
+    .consult_service_writer_contact_id
+  if (serviceWriterContactId) {
+    const { data: sw, error: swErr } = await supabaseAdmin
+      .from('contacts')
+      .select('id, name, email, phone, role, is_expert_assist_service_writer')
+      .eq('id', serviceWriterContactId)
+      .maybeSingle()
+    if (swErr) return NextResponse.json({ error: swErr.message }, { status: 500 })
+    serviceWriterContact = sw
+  }
+
   const { data: cases, error: e3 } = await supabaseAdmin
     .from('consult_cases')
     .select('id, status, created_at, closed_at, billed_amount_cents')
@@ -62,6 +78,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
   return NextResponse.json({
     location: loc,
+    serviceWriterContact,
     contacts: contacts ?? [],
     cases: cases ?? [],
   })

@@ -4,10 +4,13 @@ import { computeConsultBillUsd } from '@/lib/expert-assist/billing'
 import { assertShopCanRunConsults } from '@/lib/expert-assist/billing-gates'
 import { sendConsultReceiptEmail, sendConsultBillingFailureEmail } from '@/lib/expert-assist/email'
 import { insertConsultCaseEvent } from '@/lib/expert-assist/events'
+import { isFirstFreeConsultAvailable, markFirstFreeConsultUsed } from '@/lib/expert-assist/free-consult'
 import { sendConsultSms } from '@/lib/expert-assist/send-sms'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export type CloseConsultSource = 'expert' | 'cron'
+
+const COMPLIMENTARY_AMOUNT_LABEL = '$0.00'
 
 export async function closeConsultCaseWithBilling(params: {
   caseId: string
@@ -46,11 +49,72 @@ export async function closeConsultCaseWithBilling(params: {
 
   const { data: loc } = await supabaseAdmin
     .from('locations')
-    .select('id, name, consult_billing_email, consult_stripe_customer_id, consult_stripe_payment_method_id')
+    .select(
+      'id, name, consult_billing_email, consult_stripe_customer_id, consult_stripe_payment_method_id, consult_first_free_used_at',
+    )
     .eq('id', cr.shop_id)
     .maybeSingle()
 
   if (!loc) return { ok: false, error: 'Shop not found' }
+
+  const shopName = (loc as { name: string }).name
+  const billEmail = (loc as { consult_billing_email: string | null }).consult_billing_email
+  const actorType = params.source === 'cron' ? 'system' : 'expert'
+
+  if (isFirstFreeConsultAvailable(loc as { consult_first_free_used_at: string | null })) {
+    const closedAt = new Date().toISOString()
+    const claimed = await markFirstFreeConsultUsed({
+      supabase: supabaseAdmin,
+      locationId: cr.shop_id,
+      usedAt: closedAt,
+      actorEmail: params.expertEmail,
+    })
+
+    if (claimed) {
+      await supabaseAdmin
+        .from('consult_cases')
+        .update({
+          status: 'closed',
+          payment_status: 'succeeded',
+          billed_amount_cents: 0,
+          stripe_charge_id: null,
+          closed_at: closedAt,
+          is_complimentary: true,
+        })
+        .eq('id', params.caseId)
+
+      await insertConsultCaseEvent({
+        caseId: params.caseId,
+        eventType: 'charged',
+        actorType,
+        actorId: params.expertEmail ?? null,
+        metadata: { amount_cents: 0, complimentary: true },
+      })
+      await insertConsultCaseEvent({
+        caseId: params.caseId,
+        eventType: 'closed',
+        actorType,
+        actorId: params.expertEmail ?? null,
+        metadata: { complimentary: true },
+      })
+
+      try {
+        await sendConsultSms({
+          to: cr.originating_phone_number,
+          body: `Consult closed. Your first Expert Assist consult was complimentary — no charge.`,
+          caseId: params.caseId,
+          logDirection: 'system',
+        })
+      } catch (e) {
+        console.error('closeConsultCaseWithBilling complimentary SMS', e)
+      }
+
+      revalidatePath('/consults')
+      revalidatePath(`/consults/${params.caseId}`)
+
+      return { ok: true, amountLabel: COMPLIMENTARY_AMOUNT_LABEL, amountCents: 0 }
+    }
+  }
 
   const secs = billableSecondsToCharge(cr.billable_seconds, params.billableSecondsOverride)
   const amountCents = computeChargeAmountCents(secs)
@@ -70,9 +134,6 @@ export async function closeConsultCaseWithBilling(params: {
     idempotencyKey: `consult_close_${params.caseId}`,
   })
 
-  const shopName = (loc as { name: string }).name
-  const billEmail = (loc as { consult_billing_email: string | null }).consult_billing_email
-
   if ('error' in charge) {
     await supabaseAdmin
       .from('consult_cases')
@@ -88,7 +149,7 @@ export async function closeConsultCaseWithBilling(params: {
     await insertConsultCaseEvent({
       caseId: params.caseId,
       eventType: 'charge_failed',
-      actorType: params.source === 'cron' ? 'system' : 'expert',
+      actorType,
       actorId: params.expertEmail ?? null,
       metadata: { error: charge.error },
     })
@@ -116,20 +177,21 @@ export async function closeConsultCaseWithBilling(params: {
       billed_amount_cents: amountCents,
       stripe_charge_id: charge.paymentIntentId,
       closed_at: closedAt,
+      is_complimentary: false,
     })
     .eq('id', params.caseId)
 
   await insertConsultCaseEvent({
     caseId: params.caseId,
     eventType: 'charged',
-    actorType: params.source === 'cron' ? 'system' : 'expert',
+    actorType,
     actorId: params.expertEmail ?? null,
     metadata: { amount_cents: amountCents, payment_intent: charge.paymentIntentId },
   })
   await insertConsultCaseEvent({
     caseId: params.caseId,
     eventType: 'closed',
-    actorType: params.source === 'cron' ? 'system' : 'expert',
+    actorType,
     actorId: params.expertEmail ?? null,
     metadata: {},
   })

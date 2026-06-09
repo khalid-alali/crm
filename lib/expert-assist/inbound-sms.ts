@@ -5,7 +5,7 @@ import { decodeVinNhtsa, extractVinFromText } from '@/lib/expert-assist/vin-deco
 import { normalizeShopShortCode, normalizeSmsAddress } from '@/lib/expert-assist/phone'
 import { downloadTwilioMediaToConsultStorage } from '@/lib/expert-assist/storage'
 import { sendConsultSms, sendTwilioSmsWithoutLog } from '@/lib/expert-assist/send-sms'
-import { postExpertAssistSlack } from '@/lib/expert-assist/slack'
+import { notifyExpertAssistSlack } from '@/lib/expert-assist/slack'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const WELCOME_CLAIM =
@@ -237,9 +237,12 @@ export async function handleInboundSms(form: Record<string, string>): Promise<vo
     })
 
     const { data: shop } = await supabaseAdmin.from('locations').select('name').eq('id', approved.shop_id).maybeSingle()
-    await postExpertAssistSlack(
-      `Expert Assist: OPEN case ${caseId} — shop **${(shop as { name: string } | null)?.name ?? approved.shop_id}**`
-    )
+    await notifyExpertAssistSlack({
+      type: 'open',
+      caseId,
+      shopName: (shop as { name: string } | null)?.name ?? approved.shop_id,
+      source: 'sms',
+    })
     return
   }
 
@@ -361,7 +364,11 @@ export async function handleInboundSms(form: Record<string, string>): Promise<vo
       fromNumber: to,
     })
 
-    await postExpertAssistSlack(`Expert Assist: case ${codeCase.id} awaiting EXPERT APPROVAL — ${loc.name}`)
+    await notifyExpertAssistSlack({
+      type: 'awaiting_approval',
+      caseId: codeCase.id,
+      shopName: loc.name,
+    })
     return
   }
 
