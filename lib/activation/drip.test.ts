@@ -8,7 +8,7 @@ function view(partial: Partial<ActivationStateView>): ActivationStateView {
     locationId: 'loc-1',
     card_added_at: null,
     owner_forward_clicked_at: null,
-    front_desk_sms_delivered_at: null,
+    service_writer_setup_email_sent_at: null,
     counter_card_downloaded_at: null,
     welcome_kit_shipped_at: null,
     printout_photo_received_at: null,
@@ -34,6 +34,8 @@ function view(partial: Partial<ActivationStateView>): ActivationStateView {
     ownerEmail: 'owner@test.com',
     ownerName: 'Owner',
     frontDeskPhone: '+15551234567',
+    serviceWriterEmail: 'writer@test.com',
+    serviceWriterName: 'Writer',
     toolboxCasePartner: 'TESTSHOP1234',
     ...partial,
   }

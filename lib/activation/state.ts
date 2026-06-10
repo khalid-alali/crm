@@ -25,10 +25,23 @@ const LOCATION_SEND_FIELDS =
 async function loadSendContext(
   supabase: SupabaseClient,
   location: LocationJoinRow,
-): Promise<Pick<ActivationStateView, 'shopName' | 'ownerEmail' | 'ownerName' | 'frontDeskPhone' | 'toolboxCasePartner'>> {
+): Promise<
+  Pick<
+    ActivationStateView,
+    | 'shopName'
+    | 'ownerEmail'
+    | 'ownerName'
+    | 'frontDeskPhone'
+    | 'serviceWriterEmail'
+    | 'serviceWriterName'
+    | 'toolboxCasePartner'
+  >
+> {
   let ownerEmail: string | null = location.consult_billing_email
   let ownerName: string | null = null
   let frontDeskPhone: string | null = null
+  let serviceWriterEmail: string | null = null
+  let serviceWriterName: string | null = null
 
   if (location.account_id) {
     const primary = await resolvePrimaryContact(supabase, location.account_id, location.id)
@@ -48,9 +61,11 @@ async function loadSendContext(
     if (error) throw new Error(error.message)
     const contact = writer as ServiceWriterContactRow | null
     if (contact) {
+      serviceWriterEmail = contact.email
+      serviceWriterName = contact.name
       frontDeskPhone = contact.phone
-      ownerName = ownerName ?? contact.name
-      ownerEmail = ownerEmail ?? contact.email
+      if (contact.name && !ownerName) ownerName = contact.name
+      if (contact.email && !ownerEmail) ownerEmail = contact.email
     }
   }
 
@@ -59,6 +74,8 @@ async function loadSendContext(
     ownerEmail,
     ownerName,
     frontDeskPhone,
+    serviceWriterEmail,
+    serviceWriterName,
     toolboxCasePartner: location.toolbox_case_partner,
   }
 }

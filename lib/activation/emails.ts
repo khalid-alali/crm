@@ -40,6 +40,11 @@ function greeting(ctx: ActivationStateView): string {
   return name ? `Hi ${name},` : 'Hi,'
 }
 
+function serviceWriterGreeting(ctx: ActivationStateView): string {
+  const name = ctx.serviceWriterName?.trim()
+  return name ? `Hi ${name},` : 'Hi,'
+}
+
 function requireCasePartner(ctx: ActivationStateView): string {
   const partner = ctx.toolboxCasePartner?.trim()
   if (!partner) throw new Error(`toolbox_case_partner missing for ${ctx.locationId}`)
@@ -100,9 +105,9 @@ function ownerGapEmailContent(
       subject: `Forward Expert Assist to your team — ${ctx.shopName}`,
       text: [
         ...base,
-        `Your front desk hasn't texted Expert Assist yet.`,
+        `Your service writer hasn't started an Expert Assist consult yet.`,
         ``,
-        `Forward this note to your service writers so they know how to reach us:`,
+        `Forward this note so they know how to reach us:`,
         ownerForwardCtaUrl(ctx.locationId),
         ``,
         `— RepairWise`,
@@ -151,41 +156,88 @@ export async function sendOwnerGapEmail(ctx: ActivationStateView): Promise<void>
   await sendOwnerEmail({ to, subject, text })
 }
 
+async function sendServiceWriterEmail(params: {
+  to: string
+  subject: string
+  text: string
+}): Promise<void> {
+  await sendOwnerEmail(params)
+}
+
+/** Sent at signup — setup instructions for the designated service writer (email only). */
+export async function sendServiceWriterSetupEmail(ctx: ActivationStateView): Promise<void> {
+  const to = ctx.serviceWriterEmail?.trim()
+  if (!to) return
+
+  const tollFree = expertAssistTollFreeNumber()
+  const shopCode = await loadShopShortCode(ctx.locationId)
+  const codeLine = shopCode ? ` Include shop code ${shopCode} in your first message.` : ''
+  const toolkitUrl = expertAssistToolkitUrl(ctx.locationId)
+
+  await sendServiceWriterEmail({
+    to,
+    subject: `Expert Assist setup — ${ctx.shopName}`,
+    text: [
+      serviceWriterGreeting(ctx),
+      ``,
+      `${ctx.shopName} is enrolled in Expert Assist. You're the service writer who reaches out when a Tesla rolls in.`,
+      ``,
+      `To start a consult, text ${tollFree} with a VIN, photo, or question. You initiate the thread — we won't text you first.${codeLine}`,
+      ``,
+      `Shop toolkit (referral links + resources):`,
+      toolkitUrl,
+      ``,
+      `— RepairWise`,
+    ].join('\n'),
+  })
+}
+
+/** T+2 — service writer email nudge. */
+export async function sendServiceWriterNudge1Email(ctx: ActivationStateView): Promise<void> {
+  const to = ctx.serviceWriterEmail?.trim()
+  if (!to) return
+  const tollFree = expertAssistTollFreeNumber()
+
+  await sendServiceWriterEmail({
+    to,
+    subject: `Try Expert Assist — ${ctx.shopName}`,
+    text: [
+      serviceWriterGreeting(ctx),
+      ``,
+      `Quick reminder — Expert Assist is live for ${ctx.shopName}.`,
+      `Text ${tollFree} with a VIN or photo when you have a Tesla in the bay.`,
+      ``,
+      `— RepairWise`,
+    ].join('\n'),
+  })
+}
+
+/** T+7 — service writer email nudge. */
+export async function sendServiceWriterNudge2Email(ctx: ActivationStateView): Promise<void> {
+  const to = ctx.serviceWriterEmail?.trim()
+  if (!to) return
+  const tollFree = expertAssistTollFreeNumber()
+
+  await sendServiceWriterEmail({
+    to,
+    subject: `Expert Assist check-in — ${ctx.shopName}`,
+    text: [
+      serviceWriterGreeting(ctx),
+      ``,
+      `We haven't seen a consult from ${ctx.shopName} yet.`,
+      `When you're ready, text ${tollFree} with a VIN or question to start.`,
+      ``,
+      `— RepairWise`,
+    ].join('\n'),
+  })
+}
+
 async function sendFrontDeskSms(ctx: ActivationStateView, body: string): Promise<void> {
   const raw = ctx.frontDeskPhone?.trim()
   if (!raw) return
   const to = normalizeSmsAddress(raw)
   if (!to) return
   await sendTwilioSmsWithoutLog(to, body)
-}
-
-/** T0 — front desk welcome SMS (staff channel; may include shop code). */
-export async function sendFrontDeskWelcomeSms(ctx: ActivationStateView): Promise<void> {
-  const tollFree = expertAssistTollFreeNumber()
-  const shopCode = await loadShopShortCode(ctx.locationId)
-  const codeLine = shopCode ? ` Reply with shop code ${shopCode} to link your number.` : ''
-  await sendFrontDeskSms(
-    ctx,
-    `Expert Assist is live for ${ctx.shopName}. Text ${tollFree} with a VIN or question.${codeLine} Reply CALL for a walkthrough.`,
-  )
-}
-
-/** T+2 — front desk nudge. */
-export async function sendNudge1Sms(ctx: ActivationStateView): Promise<void> {
-  const tollFree = expertAssistTollFreeNumber()
-  await sendFrontDeskSms(
-    ctx,
-    `Reminder — try Expert Assist for ${ctx.shopName}. Text ${tollFree} with a VIN or photo. Reply CALL if you want a quick walkthrough.`,
-  )
-}
-
-/** T+7 — front desk nudge before CALL escalation. */
-export async function sendNudge2Sms(ctx: ActivationStateView): Promise<void> {
-  const tollFree = expertAssistTollFreeNumber()
-  await sendFrontDeskSms(
-    ctx,
-    `Last nudge — ${ctx.shopName} hasn't used Expert Assist yet. Text ${tollFree} or reply CALL and we'll schedule a walkthrough.`,
-  )
 }
 
 export async function sendMoneyKeptEmail(ctx: ActivationStateView, consultId: string): Promise<void> {

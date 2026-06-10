@@ -16,7 +16,7 @@ export type ActivationVariant = (typeof ACTIVATION_VARIANTS)[number]
 export type ActivationTimestampField =
   | 'card_added_at'
   | 'owner_forward_clicked_at'
-  | 'front_desk_sms_delivered_at'
+  | 'service_writer_setup_email_sent_at'
   | 'counter_card_downloaded_at'
   | 'welcome_kit_shipped_at'
   | 'printout_photo_received_at'
@@ -35,7 +35,7 @@ export type ActivationStateRow = {
   location_id: string
   card_added_at: string | null
   owner_forward_clicked_at: string | null
-  front_desk_sms_delivered_at: string | null
+  service_writer_setup_email_sent_at: string | null
   counter_card_downloaded_at: string | null
   welcome_kit_shipped_at: string | null
   printout_photo_received_at: string | null
@@ -66,6 +66,8 @@ export type ActivationSendContext = {
   ownerEmail: string | null
   ownerName: string | null
   frontDeskPhone: string | null
+  serviceWriterEmail: string | null
+  serviceWriterName: string | null
   toolboxCasePartner: string | null
 }
 
@@ -112,7 +114,7 @@ export type DripDoneReason = 'first_inbound' | 'disabled'
 
 export type DripStep =
   | 'welcome_email'
-  | 'front_desk_sms'
+  | 'service_writer_setup_email'
   | 'nudge_1'
   | 'owner_gap_email'
   | 'nudge_2'

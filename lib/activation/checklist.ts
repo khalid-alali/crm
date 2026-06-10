@@ -4,7 +4,7 @@ import { FREE_CONSULT_CHECKLIST_KEY } from '@/lib/expert-assist/free-consult'
 const CHECKLIST_TIMESTAMP_FIELD: Record<string, keyof ActivationStateRow> = {
   card_on_file: 'card_added_at',
   owner_forward_clicked: 'owner_forward_clicked_at',
-  front_desk_sms_delivered: 'front_desk_sms_delivered_at',
+  service_writer_setup_email_sent: 'service_writer_setup_email_sent_at',
   counter_card_downloaded: 'counter_card_downloaded_at',
   welcome_kit_shipped: 'welcome_kit_shipped_at',
   printout_photo_received: 'printout_photo_received_at',
@@ -16,7 +16,7 @@ const CHECKLIST_TIMESTAMP_FIELD: Record<string, keyof ActivationStateRow> = {
 export const AUTO_RESOLVED_EXPERT_ASSIST_CHECKLIST_KEYS = [
   'card_on_file',
   'owner_forward_clicked',
-  'front_desk_sms_delivered',
+  'service_writer_setup_email_sent',
   'counter_card_downloaded',
   'printout_photo_received',
   'qr_scanned',

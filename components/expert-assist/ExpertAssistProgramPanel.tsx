@@ -8,7 +8,7 @@ import type { ExpertAssistShopProgramView } from '@/lib/expert-assist-enrollment
 
 const DISPLAY_CHECKLIST_ORDER = [
   'card_on_file',
-  'front_desk_sms_delivered',
+  'service_writer_setup_email_sent',
   'owner_forward_clicked',
   'counter_card_downloaded',
   'welcome_kit_shipped',

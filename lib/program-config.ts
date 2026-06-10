@@ -344,7 +344,11 @@ const PROGRAM_CONFIGS: Record<string, ProgramConfig> = {
     checklist: [
       { key: 'card_on_file', label: 'Card on file', requiredForStage: false },
       { key: 'owner_forward_clicked', label: 'Owner-forward clicked', requiredForStage: false },
-      { key: 'front_desk_sms_delivered', label: 'Front desk SMS delivered', requiredForStage: false },
+      {
+        key: 'service_writer_setup_email_sent',
+        label: 'Service writer setup email sent',
+        requiredForStage: false,
+      },
       { key: 'counter_card_downloaded', label: 'Counter card downloaded', requiredForStage: false },
       { key: 'welcome_kit_shipped', label: 'Welcome kit shipped', requiredForStage: false },
       { key: 'printout_photo_received', label: 'Printout photo received', requiredForStage: false },

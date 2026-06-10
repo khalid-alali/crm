@@ -3,7 +3,7 @@ import type { ExpertAssistFunnelStage } from '@/lib/expert-assist-funnel/stages'
 
 const ACTIVATION_CHECKLIST_ORDER = [
   'card_on_file',
-  'front_desk_sms_delivered',
+  'service_writer_setup_email_sent',
   'owner_forward_clicked',
   'counter_card_downloaded',
   'welcome_kit_shipped',
@@ -15,7 +15,7 @@ const ACTIVATION_GAP_FIELD: Record<
   keyof ActivationStateRow
 > = {
   card_on_file: 'card_added_at',
-  front_desk_sms_delivered: 'front_desk_sms_delivered_at',
+  service_writer_setup_email_sent: 'service_writer_setup_email_sent_at',
   owner_forward_clicked: 'owner_forward_clicked_at',
   counter_card_downloaded: 'counter_card_downloaded_at',
   welcome_kit_shipped: 'welcome_kit_shipped_at',

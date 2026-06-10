@@ -2,14 +2,12 @@ import { logger, task, wait } from '@trigger.dev/sdk'
 import {
   dripDone,
   getState,
-  sendFrontDeskWelcomeSms,
-  sendNudge1Sms,
-  sendNudge2Sms,
+  sendServiceWriterNudge1Email,
+  sendServiceWriterNudge2Email,
   sendOnce,
   sendOwnerGapEmail,
   sendWelcomeOwnerEmail,
   shouldSendDripStep,
-  triggerHandleCallRequest,
   triggerInternalFollowUp,
 } from '@/lib/activation'
 
@@ -38,22 +36,15 @@ export const activationDripTask = task({
       return null
     }
 
-    // T0 — welcome email + front desk SMS
+    // T0 — owner welcome email (service writer setup email sends at signup)
     let early = await exitIfDone('t0')
     if (early) return early
 
     const state0 = await getState(locationId)
-    if (state0) {
-      if (await shouldSendDripStep(locationId, 'welcome_email')) {
-        await sendOnce(locationId, dripStepDedupeKey('welcome_email'), () =>
-          sendWelcomeOwnerEmail(state0),
-        )
-      }
-      if (await shouldSendDripStep(locationId, 'front_desk_sms')) {
-        await sendOnce(locationId, dripStepDedupeKey('front_desk_sms'), () =>
-          sendFrontDeskWelcomeSms(state0),
-        )
-      }
+    if (state0 && (await shouldSendDripStep(locationId, 'welcome_email'))) {
+      await sendOnce(locationId, dripStepDedupeKey('welcome_email'), () =>
+        sendWelcomeOwnerEmail(state0),
+      )
     }
 
     // T+2 — nudge1
@@ -63,7 +54,9 @@ export const activationDripTask = task({
 
     const state2 = await getState(locationId)
     if (state2 && (await shouldSendDripStep(locationId, 'nudge_1'))) {
-      await sendOnce(locationId, dripStepDedupeKey('nudge_1'), () => sendNudge1Sms(state2))
+      await sendOnce(locationId, dripStepDedupeKey('nudge_1'), () =>
+        sendServiceWriterNudge1Email(state2),
+      )
     }
 
     // T+5 — owner email by gap
@@ -84,21 +77,10 @@ export const activationDripTask = task({
     if (early) return early
 
     const state7 = await getState(locationId)
-    if (state7) {
-      if (await shouldSendDripStep(locationId, 'nudge_2')) {
-        await sendOnce(locationId, dripStepDedupeKey('nudge_2'), () => sendNudge2Sms(state7))
-      }
-
-      const phone = state7.frontDeskPhone?.trim()
-      if (phone && (await shouldSendDripStep(locationId, 'call_request'))) {
-        await sendOnce(locationId, dripStepDedupeKey('call_request'), async () => {
-          await triggerHandleCallRequest({
-            locationId,
-            phoneNumber: phone,
-            messageId: `activation-drip-call:${locationId}`,
-          })
-        })
-      }
+    if (state7 && (await shouldSendDripStep(locationId, 'nudge_2'))) {
+      await sendOnce(locationId, dripStepDedupeKey('nudge_2'), () =>
+        sendServiceWriterNudge2Email(state7),
+      )
     }
 
     // T+14 — internal follow-up for high-value shops still without inbound

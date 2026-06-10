@@ -102,7 +102,7 @@ describe('buildActivationSeed', () => {
       location: location(),
       enrollment: enrollment(),
       checklistRows: checklist([
-        { item_key: 'front_desk_sms_delivered', completed_at: '2026-05-16T00:00:00.000Z' },
+        { item_key: 'service_writer_setup_email_sent', completed_at: '2026-05-16T00:00:00.000Z' },
       ]),
       closedCases: [],
       inboundMessages: [{ shop_id: 'loc-1', created_at: '2026-05-20T00:00:00.000Z' }],
@@ -111,7 +111,7 @@ describe('buildActivationSeed', () => {
 
     expect(seed.signed_up_at).toBe('2026-05-15T00:00:00.000Z')
     expect(seed.first_inbound_at).toBe('2026-05-20T00:00:00.000Z')
-    expect(seed.front_desk_sms_delivered_at).toBe('2026-05-16T00:00:00.000Z')
+    expect(seed.service_writer_setup_email_sent_at).toBe('2026-05-16T00:00:00.000Z')
     expect(seed.card_added_at).toBe('2026-05-15T00:00:00.000Z')
     expect(seed.stage).toBe('engaged')
   })

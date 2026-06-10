@@ -29,8 +29,8 @@ export async function shouldSendDripStep(
   if (done) return false
 
   if (
-    state.sms_channel_dead &&
-    (step === 'front_desk_sms' || step === 'nudge_1' || step === 'nudge_2')
+    (step === 'nudge_1' || step === 'nudge_2') &&
+    !state.serviceWriterEmail?.trim()
   ) {
     return false
   }

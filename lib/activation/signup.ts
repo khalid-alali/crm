@@ -3,6 +3,7 @@ import { logShopEvent } from '@/lib/activation/events'
 import { writeFactIfNull } from '@/lib/activation/facts'
 import { recomputeStage } from '@/lib/activation/recompute'
 import { ensureActivationState } from '@/lib/activation/state'
+import { tryDeliverServiceWriterSetupEmailOnce } from '@/lib/activation/service-writer-email'
 import { triggerActivationDrip } from '@/lib/activation/trigger'
 import type { ActivationVariant } from '@/lib/activation/types'
 
@@ -29,6 +30,12 @@ export async function recordExpertAssistSignup(
   await logShopEvent(supabase, locationId, 'shop.signed_up', `signup:${locationId}`, {
     activation_variant: activationVariant,
   })
+
+  try {
+    await tryDeliverServiceWriterSetupEmailOnce(supabase, locationId)
+  } catch (emailError) {
+    console.error('recordExpertAssistSignup: service writer setup email failed', emailError)
+  }
 
   if (activationVariant === 'card_after_first_consult') {
     await triggerActivationDrip(locationId)

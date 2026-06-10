@@ -40,7 +40,7 @@ export type ActivationSeedPayload = {
   location_id: string
   card_added_at: string | null
   owner_forward_clicked_at: string | null
-  front_desk_sms_delivered_at: string | null
+  service_writer_setup_email_sent_at: string | null
   counter_card_downloaded_at: string | null
   welcome_kit_shipped_at: string | null
   printout_photo_received_at: string | null
@@ -165,7 +165,8 @@ export function buildActivationSeed(input: BuildActivationSeedInput): Activation
     location_id: location.id,
     card_added_at: cardAddedAt,
     owner_forward_clicked_at: (checklist.owner_forward_clicked_at as string | null) ?? null,
-    front_desk_sms_delivered_at: (checklist.front_desk_sms_delivered_at as string | null) ?? null,
+    service_writer_setup_email_sent_at:
+      (checklist.service_writer_setup_email_sent_at as string | null) ?? null,
     counter_card_downloaded_at: (checklist.counter_card_downloaded_at as string | null) ?? null,
     welcome_kit_shipped_at: (checklist.welcome_kit_shipped_at as string | null) ?? null,
     printout_photo_received_at: (checklist.printout_photo_received_at as string | null) ?? null,

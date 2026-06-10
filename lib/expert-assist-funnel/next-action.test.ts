@@ -11,10 +11,14 @@ describe('deriveExpertAssistNextAction', () => {
         closedConsultCount: 0,
         checklist: [
           { itemKey: 'card_on_file', label: 'Card on file', completedAt: '2026-01-01' },
-          { itemKey: 'front_desk_sms_delivered', label: 'Front desk SMS delivered', completedAt: null },
+          {
+            itemKey: 'service_writer_setup_email_sent',
+            label: 'Service writer setup email sent',
+            completedAt: null,
+          },
         ],
       }),
-    ).toBe('Front desk SMS delivered')
+    ).toBe('Service writer setup email sent')
   })
 
   it('suggests first consult after activation checklist is done', () => {
@@ -26,7 +30,11 @@ describe('deriveExpertAssistNextAction', () => {
         closedConsultCount: 0,
         checklist: [
           { itemKey: 'card_on_file', label: 'Card on file', completedAt: '2026-01-01' },
-          { itemKey: 'front_desk_sms_delivered', label: 'Front desk SMS delivered', completedAt: '2026-01-02' },
+          {
+            itemKey: 'service_writer_setup_email_sent',
+            label: 'Service writer setup email sent',
+            completedAt: '2026-01-02',
+          },
         ],
       }),
     ).toBe('Complete first consult')
