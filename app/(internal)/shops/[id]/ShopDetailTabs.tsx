@@ -24,7 +24,9 @@ import SendContractModal, { type SendContractDraftPrefill } from '@/components/S
 import { contractStatusBadgeClass, contractStatusLabel } from '@/lib/contract-status-display'
 import AccountSelect from '@/components/AccountSelect'
 import LocationContactsSection from '@/components/LocationContactsSection'
+import ExpertAssistProgramPanel from '@/components/expert-assist/ExpertAssistProgramPanel'
 import ExpertAssistShopPanel from '@/components/expert-assist/ExpertAssistShopPanel'
+import type { ExpertAssistShopProgramView } from '@/lib/expert-assist-enrollments'
 import { CapabilitiesSection } from '@/components/shop-detail/CapabilitiesSection'
 import ActivityFeed from '@/components/ActivityFeed'
 import StateSelect from '@/components/StateSelect'
@@ -38,7 +40,7 @@ import TaskFormModal from '@/components/tasks/TaskFormModal'
 import TaskRow from '@/components/tasks/TaskRow'
 import type { TaskWithLocation } from '@/lib/types/task'
 import { isTaskResolvedInLast30Days } from '@/lib/tasks/date-groups'
-import { VINFAST_PROGRAM_ID } from '@/lib/program-config'
+import { EXPERT_ASSIST_PROGRAM_ID, VINFAST_PROGRAM_ID } from '@/lib/program-config'
 import {
   buildVinfastChecklistMaps,
   evaluateVinfastPrerequisites,
@@ -53,6 +55,16 @@ const PROGRAM_CARD_CONFIG = [
   { key: 'vinfast', enrollmentKey: 'oem_warranty', label: 'VinFast OEM' },
   { key: 'tesla', enrollmentKey: 'ev_program', label: 'Tesla / EV' },
   { key: 'multidrive', enrollmentKey: 'multi_drive', label: 'Multidrive' },
+  { key: 'expert_assist', enrollmentKey: EXPERT_ASSIST_PROGRAM_ID, label: 'Expert Assist' },
+] as const
+
+const EXPERT_ASSIST_PROGRESS_KEYS = [
+  'card_on_file',
+  'front_desk_sms_delivered',
+  'owner_forward_clicked',
+  'counter_card_downloaded',
+  'welcome_kit_shipped',
+  'printout_photo_received',
 ] as const
 const VINFAST_WELCOME_TEMPLATE_ID = '8bb8f454-fc68-448c-96d8-ea25049a66f8'
 const VINFAST_IT_SETUP_TEMPLATE_ID = 'a4428cd1-9c51-459e-9819-d4d71bf52af3'
@@ -78,6 +90,7 @@ interface Props {
   currentUserEmail: string
   /** Server-derived: only khalid@repairwise.pro */
   allowContractDelete?: boolean
+  expertAssistProgram?: ExpertAssistShopProgramView | null
 }
 
 type AdminSearchResult = {
@@ -273,6 +286,7 @@ export default function ShopDetailTabs({
   primaryContactEmail,
   currentUserEmail,
   allowContractDelete = false,
+  expertAssistProgram = null,
 }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<TabKey>(() => {
@@ -298,6 +312,7 @@ export default function ShopDetailTabs({
   const [checklistBusyItem, setChecklistBusyItem] = useState<string | null>(null)
   const [enrollingProgram, setEnrollingProgram] = useState<string | null>(null)
   const [unenrollingVinfast, setUnenrollingVinfast] = useState(false)
+  const [unenrollingExpertAssist, setUnenrollingExpertAssist] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
   const [showIntroModal, setShowIntroModal] = useState(false)
@@ -641,13 +656,32 @@ export default function ShopDetailTabs({
     const next = vinfastPhases.find(phase => !phase.allComplete)
     return next?.phase ?? 5
   }, [vinfastPhases])
+  const hasExpertAssistCardOnFile = Boolean(String(shop.consult_stripe_payment_method_id ?? '').trim())
+  const expertAssistProgress = useMemo(() => {
+    if (!expertAssistProgram) return { completed: 0, total: EXPERT_ASSIST_PROGRESS_KEYS.length + 3 }
+    const checklistByKey = new Map(expertAssistProgram.checklist.map(item => [item.itemKey, item]))
+    let completed = 0
+    for (const key of EXPERT_ASSIST_PROGRESS_KEYS) {
+      if (key === 'card_on_file') {
+        if (hasExpertAssistCardOnFile || checklistByKey.get(key)?.completedAt) completed++
+      } else if (checklistByKey.get(key)?.completedAt) {
+        completed++
+      }
+    }
+    if (expertAssistProgram.firstInboundSms) completed++
+    if (expertAssistProgram.firstConsultComplete) completed++
+    if (expertAssistProgram.secondConsultComplete) completed++
+    return { completed, total: EXPERT_ASSIST_PROGRESS_KEYS.length + 3 }
+  }, [expertAssistProgram, hasExpertAssistCardOnFile])
+
   const enrolledProgramsCount = useMemo(() => {
     return PROGRAM_CARD_CONFIG.filter(program => {
       if (program.key === 'vinfast') return Boolean(vinfastEnrollment)
+      if (program.key === 'expert_assist') return Boolean(expertAssistProgram)
       const enrollment = legacyProgramByKey.get(program.enrollmentKey)
       return enrollment && enrollment.status !== 'not_enrolled'
     }).length
-  }, [legacyProgramByKey, vinfastEnrollment])
+  }, [expertAssistProgram, legacyProgramByKey, vinfastEnrollment])
   const programCardStats = useMemo(() => {
     return PROGRAM_CARD_CONFIG.map(program => {
       const enrollment = legacyProgramByKey.get(program.enrollmentKey)
@@ -667,6 +701,21 @@ export default function ShopDetailTabs({
             !vinfastEnrollment ? null : completed >= total && total > 0 ? 'Active' : 'In progress',
         }
       }
+      if (program.key === 'expert_assist') {
+        const { completed, total } = expertAssistProgress
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+        const stage = expertAssistProgram?.stage
+        return {
+          ...program,
+          enrolled: Boolean(expertAssistProgram),
+          enrolledAt: expertAssistProgram?.enrolledAt ?? null,
+          completed,
+          total,
+          pct,
+          statusBadge:
+            !expertAssistProgram ? null : stage === 'active' ? 'Active' : 'In progress',
+        }
+      }
       const total = 4
       const completed = enrolled ? (enrollment?.status === 'active' ? total : 1) : 0
       const pct = total > 0 ? Math.round((completed / total) * 100) : 0
@@ -680,7 +729,7 @@ export default function ShopDetailTabs({
         statusBadge: !enrolled ? null : enrollment?.status === 'active' ? 'Active' : 'In progress',
       }
     })
-  }, [legacyProgramByKey, vinfastChecklistItems, vinfastEnrollment])
+  }, [expertAssistProgram, expertAssistProgress, legacyProgramByKey, vinfastChecklistItems, vinfastEnrollment])
   const selectedProgramStats = useMemo(
     () => programCardStats.find(program => program.key === selectedProgram) ?? programCardStats[0],
     [programCardStats, selectedProgram],
@@ -946,6 +995,14 @@ export default function ShopDetailTabs({
         })
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         if (!res.ok) throw new Error(data.error ?? 'Could not enroll in VinFast')
+      } else if (programKey === EXPERT_ASSIST_PROGRAM_ID) {
+        const res = await fetch('/api/expert-assist/enrollments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ location_id: shop.id }),
+        })
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) throw new Error(data.error ?? 'Could not enroll in Expert Assist')
       } else {
         await fetch(`/api/locations/${shop.id}/programs`, {
           method: 'PUT',
@@ -958,6 +1015,29 @@ export default function ShopDetailTabs({
       window.alert(e instanceof Error ? e.message : 'Could not enroll program')
     } finally {
       setEnrollingProgram(null)
+    }
+  }
+
+  async function unenrollExpertAssistProgram() {
+    if (!expertAssistProgram?.id) return
+    if (!window.confirm('Unenroll this shop from Expert Assist? Checklist history will be preserved.')) return
+    const reasonInput = window.prompt('Optional reason for unenrollment (leave blank to skip):', '')
+    const reason = reasonInput == null ? null : reasonInput.trim() || null
+
+    setUnenrollingExpertAssist(true)
+    try {
+      const res = await fetch(`/api/expert-assist/enrollments/${expertAssistProgram.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not unenroll Expert Assist')
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not unenroll Expert Assist')
+    } finally {
+      setUnenrollingExpertAssist(false)
     }
   }
 
@@ -2206,7 +2286,7 @@ export default function ShopDetailTabs({
 
           {tab === 'programs' && (
             <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {programCardStats.map(card => (
                   <div
                     key={card.key}
@@ -2256,6 +2336,19 @@ export default function ShopDetailTabs({
                               {unenrollingVinfast ? 'Unenrolling…' : 'Unenroll'}
                             </button>
                           )}
+                          {card.key === 'expert_assist' && selectedProgram === 'expert_assist' && (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation()
+                                void unenrollExpertAssistProgram()
+                              }}
+                              disabled={unenrollingExpertAssist}
+                              className="rounded border border-red-300 px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {unenrollingExpertAssist ? 'Unenrolling…' : 'Unenroll'}
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <button
@@ -2291,11 +2384,28 @@ export default function ShopDetailTabs({
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-onix-700">VinFast Status</span>
-                <span className="text-onix-600">{operationalStatusLoading ? 'Loading…' : operationalStatus ?? '—'}</span>
+                <span className="font-medium text-onix-700">
+                  {selectedProgram === 'expert_assist' ? 'Expert Assist Status' : 'VinFast Status'}
+                </span>
+                {selectedProgram === 'vinfast' ? (
+                  <span className="text-onix-600">
+                    {operationalStatusLoading ? 'Loading…' : operationalStatus ?? '—'}
+                  </span>
+                ) : null}
               </div>
 
-              {selectedProgram === 'vinfast' ? (
+              {selectedProgram === 'expert_assist' && expertAssistProgram ? (
+                <ExpertAssistProgramPanel
+                  view={expertAssistProgram}
+                  shopName={shop.name ?? 'Shop'}
+                  ownerName={primaryContactDisplayName}
+                  hasCardOnFile={hasExpertAssistCardOnFile}
+                />
+              ) : selectedProgram === 'expert_assist' ? (
+                <div className="rounded-lg border border-arctic-200 bg-white p-4 text-sm text-onix-600">
+                  Enroll this shop in Expert Assist to track activation funnel progress.
+                </div>
+              ) : selectedProgram === 'vinfast' ? (
                 <div className="space-y-3 rounded-lg border border-arctic-200 bg-white p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -2684,7 +2794,7 @@ export default function ShopDetailTabs({
                 </div>
               ) : (
                 <div className="rounded-lg border border-arctic-200 bg-white p-4 text-sm text-onix-600">
-                  {selectedProgramStats?.label} checklist is coming next. Use the VinFast card for full phased onboarding.
+                  {selectedProgramStats?.label} checklist is coming next. Use VinFast or Expert Assist for full onboarding.
                 </div>
               )}
             </div>

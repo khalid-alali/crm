@@ -6,6 +6,7 @@ import { canDeleteContracts } from '@/lib/contract-permissions'
 import ShopDetailTabs from './ShopDetailTabs'
 import { getSignedContractDocUrl } from '@/lib/contract-documents'
 import { resolvePrimaryContact } from '@/lib/primary-contact'
+import { getExpertAssistShopProgramView } from '@/lib/expert-assist-enrollments'
 import TrackRecentShopVisit from '@/components/TrackRecentShopVisit'
 
 export default async function ShopDetailPage({
@@ -98,6 +99,10 @@ export default async function ShopDetailPage({
   const primaryContactDisplayName = primary?.name?.trim() || primary?.email?.trim() || ''
   const primaryContactEmail = primary?.email?.trim() || ''
 
+  const expertAssistProgram = await getExpertAssistShopProgramView(supabaseAdmin, id, {
+    ownerName: primaryContactDisplayName || null,
+  }).catch(() => null)
+
   return (
     <div className="p-6">
       {mergedFromBanner && (
@@ -127,6 +132,7 @@ export default async function ShopDetailPage({
         primaryContactEmail={primaryContactEmail}
         currentUserEmail={session?.user?.email ?? ''}
         allowContractDelete={canDeleteContracts(session?.user?.email)}
+        expertAssistProgram={expertAssistProgram}
       />
     </div>
   )

@@ -5,19 +5,11 @@ import { useRouter } from 'next/navigation'
 import ExpertAssistEnrollSearchModal from '@/components/expert-assist/ExpertAssistEnrollSearchModal'
 import {
   EXPERT_ASSIST_FUNNEL_STAGES,
+  EXPERT_ASSIST_STAGE_LABELS,
   type ExpertAssistFunnelStage,
 } from '@/lib/expert-assist-funnel/stages'
 import type { ExpertAssistEnrollmentView } from '@/lib/expert-assist-enrollments'
 import { UserPlus } from 'lucide-react'
-
-const STAGE_LABELS: Record<ExpertAssistFunnelStage, string> = {
-  invited: 'Invited',
-  signed_up: 'Signed Up',
-  engaged: 'Engaged',
-  activated: 'Activated',
-  active: 'Active',
-  dormant: 'Dormant',
-}
 
 const STAGE_DOT: Record<ExpertAssistFunnelStage, string> = {
   invited: 'bg-sky-500',
@@ -154,7 +146,7 @@ export default function ConsultActivationBoard({ initialEnrollments }: Props) {
         <header className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-onix-900">
             <span className={`inline-block h-2 w-2 rounded-full ${STAGE_DOT[stage]}`} />
-            {STAGE_LABELS[stage]}
+            {EXPERT_ASSIST_STAGE_LABELS[stage]}
           </h2>
           <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-onix-500">
             {cards.length}
@@ -169,7 +161,7 @@ export default function ConsultActivationBoard({ initialEnrollments }: Props) {
               <article
                 key={card.id}
                 className="space-y-2 rounded-xl border border-arctic-300 bg-white p-3 cursor-pointer"
-                onClick={() => router.push(`/shops/${card.locationId}?tab=expert-assist`)}
+                onClick={() => router.push(`/shops/${card.locationId}?tab=programs`)}
               >
                 <div className="relative pr-8">
                   <button
@@ -185,51 +177,27 @@ export default function ConsultActivationBoard({ initialEnrollments }: Props) {
                     …
                   </button>
 
-                  {openMenuCardId === card.id && (
+                  {openMenuCardId === card.id && card.manualStageOverride && (
                     <div
                       className="absolute right-0 top-8 z-20 min-w-48 rounded-md border border-arctic-300 bg-white p-1 shadow-lg"
                       onClick={e => e.stopPropagation()}
                       onMouseDown={e => e.stopPropagation()}
                     >
-                      <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-onix-400">
-                        Move to stage
-                      </p>
-                      {EXPERT_ASSIST_FUNNEL_STAGES.map(nextStage => (
-                        <button
-                          key={nextStage}
-                          type="button"
-                          disabled={isBusy}
-                          onClick={e => {
-                            e.stopPropagation()
-                            setOpenMenuCardId(null)
-                            void withRefresh(() => updateEnrollment(card.id, { stage: nextStage }), card.id)
-                          }}
-                          className={`block w-full rounded px-2 py-1 text-left text-xs ${
-                            card.stage === nextStage
-                              ? 'bg-arctic-100 font-semibold text-onix-900'
-                              : 'text-onix-700 hover:bg-arctic-50'
-                          }`}
-                        >
-                          {STAGE_LABELS[nextStage]}
-                        </button>
-                      ))}
-                      {card.manualStageOverride && (
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={e => {
-                            e.stopPropagation()
-                            setOpenMenuCardId(null)
-                            void withRefresh(
-                              () => updateEnrollment(card.id, { manual_stage_override: false }),
-                              card.id,
-                            )
-                          }}
-                          className="mt-1 block w-full rounded border-t border-arctic-100 px-2 py-1.5 text-left text-xs text-brand-700 hover:bg-arctic-50"
-                        >
-                          Clear manual override
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={e => {
+                          e.stopPropagation()
+                          setOpenMenuCardId(null)
+                          void withRefresh(
+                            () => updateEnrollment(card.id, { manual_stage_override: false }),
+                            card.id,
+                          )
+                        }}
+                        className="block w-full rounded px-2 py-1.5 text-left text-xs text-brand-700 hover:bg-arctic-50"
+                      >
+                        Clear manual stage override
+                      </button>
                     </div>
                   )}
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import Stripe from 'stripe'
+import { recordExpertAssistCardAdded } from '@/lib/activation/card-added'
 import { getStripe } from '@/lib/expert-assist/billing-charge'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -48,6 +49,12 @@ export async function POST(req: NextRequest) {
           .eq('id', locationId)
 
         revalidatePath(`/shops/${locationId}`)
+
+        try {
+          await recordExpertAssistCardAdded(supabaseAdmin, locationId)
+        } catch (activationError) {
+          console.error('stripe webhook setup_intent.succeeded: activation facts failed', activationError)
+        }
       }
     }
 
@@ -79,6 +86,15 @@ export async function POST(req: NextRequest) {
               })
               .eq('id', locationId)
             revalidatePath(`/shops/${locationId}`)
+
+            try {
+              await recordExpertAssistCardAdded(supabaseAdmin, locationId)
+            } catch (activationError) {
+              console.error(
+                'stripe webhook checkout.session.completed: activation facts failed',
+                activationError,
+              )
+            }
           }
         }
       }

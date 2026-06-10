@@ -1,4 +1,5 @@
 import { revalidatePath } from 'next/cache'
+import { triggerConsultCompleted } from '@/lib/activation/trigger'
 import { computeChargeAmountCents, chargeConsultOffSession, billableSecondsToCharge } from '@/lib/expert-assist/billing-charge'
 import { computeConsultBillUsd } from '@/lib/expert-assist/billing'
 import { assertShopCanRunConsults } from '@/lib/expert-assist/billing-gates'
@@ -112,6 +113,19 @@ export async function closeConsultCaseWithBilling(params: {
       revalidatePath('/consults')
       revalidatePath(`/consults/${params.caseId}`)
 
+      try {
+        await triggerConsultCompleted({
+          locationId: cr.shop_id,
+          consultId: params.caseId,
+          closedAt,
+          amountLabel: COMPLIMENTARY_AMOUNT_LABEL,
+          amountCents: 0,
+          paid: false,
+        })
+      } catch (triggerError) {
+        console.error('closeConsultCaseWithBilling: consult-completed trigger failed', triggerError)
+      }
+
       return { ok: true, amountLabel: COMPLIMENTARY_AMOUNT_LABEL, amountCents: 0 }
     }
   }
@@ -221,6 +235,19 @@ export async function closeConsultCaseWithBilling(params: {
 
   revalidatePath('/consults')
   revalidatePath(`/consults/${params.caseId}`)
+
+  try {
+    await triggerConsultCompleted({
+      locationId: cr.shop_id,
+      consultId: params.caseId,
+      closedAt,
+      amountLabel,
+      amountCents,
+      paid: true,
+    })
+  } catch (triggerError) {
+    console.error('closeConsultCaseWithBilling: consult-completed trigger failed', triggerError)
+  }
 
   return { ok: true, amountLabel, amountCents }
 }

@@ -9,12 +9,21 @@ export const EXPERT_ASSIST_FUNNEL_STAGES = [
 
 export type ExpertAssistFunnelStage = (typeof EXPERT_ASSIST_FUNNEL_STAGES)[number]
 
+export const EXPERT_ASSIST_STAGE_LABELS: Record<ExpertAssistFunnelStage, string> = {
+  invited: 'Invited',
+  signed_up: 'Signed Up',
+  engaged: 'Engaged',
+  activated: 'Activated',
+  active: 'Active',
+  dormant: 'Dormant',
+}
+
 export function isExpertAssistFunnelStage(value: string): value is ExpertAssistFunnelStage {
   return EXPERT_ASSIST_FUNNEL_STAGES.includes(value as ExpertAssistFunnelStage)
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
-const ACTIVE_WINDOW_DAYS = 60
+export const EXPERT_ASSIST_ACTIVE_WINDOW_DAYS = 60
 
 export type ExpertAssistFunnelSignals = {
   signupComplete: boolean
@@ -63,7 +72,7 @@ export function deriveExpertAssistFunnelStage(
   }
 
   const lastClosed = signals.lastClosedAt
-  if (lastClosed && daysSince(lastClosed, nowMs) > ACTIVE_WINDOW_DAYS) {
+  if (lastClosed && daysSince(lastClosed, nowMs) > EXPERT_ASSIST_ACTIVE_WINDOW_DAYS) {
     return 'dormant'
   }
 
@@ -73,9 +82,9 @@ export function deriveExpertAssistFunnelStage(
     signals.closedConsultCount >= 2 &&
     firstClosed &&
     secondClosed &&
-    daysBetween(firstClosed, secondClosed) <= ACTIVE_WINDOW_DAYS &&
+    daysBetween(firstClosed, secondClosed) <= EXPERT_ASSIST_ACTIVE_WINDOW_DAYS &&
     lastClosed &&
-    daysSince(lastClosed, nowMs) <= ACTIVE_WINDOW_DAYS
+    daysSince(lastClosed, nowMs) <= EXPERT_ASSIST_ACTIVE_WINDOW_DAYS
   ) {
     return 'active'
   }

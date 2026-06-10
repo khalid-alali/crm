@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { getAppSession } from '@/lib/app-auth'
 import { listExpertAssistEnrollments } from '@/lib/expert-assist-enrollments'
+import { enqueueExpertAssistStageSync } from '@/lib/expert-assist-funnel/trigger'
 import { EXPERT_ASSIST_PROGRAM_ID } from '@/lib/program-config'
 import { enrollLocationInProgram } from '@/lib/program-enrollment-service'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -63,6 +64,11 @@ export async function POST(req: Request) {
         actorId: actor,
       })
       enrollmentIds.push(result.enrollmentId)
+      try {
+        await enqueueExpertAssistStageSync(locationId)
+      } catch (triggerError) {
+        console.error('expert-assist enrollments: stage sync enqueue failed', triggerError)
+      }
       if (result.created) {
         created++
         await supabaseAdmin.from('activity_log').insert({

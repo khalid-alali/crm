@@ -1,3 +1,6 @@
+import type { InboundSmsTriggerPayload } from '@/lib/activation/types'
+import { recomputeStage, setFirstInboundIfNull } from '@/lib/activation/bindings'
+import { triggerInboundSms } from '@/lib/activation/trigger'
 import { insertConsultCaseEvent } from '@/lib/expert-assist/events'
 import { hasInboundMedia } from '@/lib/expert-assist/consult-media'
 import { shopAllowsInboundConsultSms } from '@/lib/expert-assist/billing-gates'
@@ -165,6 +168,113 @@ async function maybeApplyVinFromBody(caseId: string, body: string, currentVin: s
     .eq('id', caseId)
 }
 
+/** Dev fallback when Trigger.dev is not configured — mirrors inbound-sms task side effects. */
+export async function processInboundSmsAfterPersist(payload: InboundSmsTriggerPayload): Promise<void> {
+  const now = new Date().toISOString()
+  await setFirstInboundIfNull(payload.locationId, now)
+  await recomputeStage(payload.locationId)
+
+  if (payload.notifyOpen && payload.caseId) {
+    await notifyExpertAssistSlack({
+      type: 'open',
+      caseId: payload.caseId,
+      shopName: payload.shopName ?? payload.locationId,
+      source: 'sms',
+    })
+  }
+}
+
+async function persistApprovedInboundAndTrigger(
+  form: Record<string, string>,
+  approved: { id: string; shop_id: string },
+  from: string,
+  to: string,
+  body: string,
+  messageSid: string | undefined,
+): Promise<void> {
+  if (hasInboundMedia(form)) {
+    const dedupe = messageSid?.trim() || crypto.randomUUID()
+    try {
+      const { recordPrintoutPhotoReceived } = await import('@/lib/activation/ingest')
+      await recordPrintoutPhotoReceived(approved.shop_id, dedupe)
+    } catch (err) {
+      console.error('printout photo ingest', err)
+    }
+  }
+
+  let caseId: string
+  let notifyOpen = false
+
+  const appendId = await openCaseWithRecentActivity(approved.id)
+  if (appendId) {
+    caseId = appendId
+    const paths = await collectMediaPaths(appendId, form)
+    await insertInboundMessage({
+      caseId: appendId,
+      body: body || null,
+      mediaPaths: paths,
+      from,
+      to,
+      twilioMessageSid: messageSid,
+    })
+    const { data: c } = await supabaseAdmin
+      .from('consult_cases')
+      .select('vin')
+      .eq('id', appendId)
+      .maybeSingle()
+    await maybeApplyVinFromBody(appendId, body, (c as { vin: string | null } | null)?.vin ?? null)
+  } else {
+    const vin = extractVinFromText(body)
+    const decoded = vin ? await decodeVinNhtsa(vin) : null
+    const { data: newCase, error: cErr } = await supabaseAdmin
+      .from('consult_cases')
+      .insert({
+        shop_id: approved.shop_id,
+        originating_phone_number: from,
+        originating_contact_id: approved.id,
+        status: 'open',
+        initial_question: body || null,
+        vin: vin ?? null,
+        year: decoded?.year ?? null,
+        model: decoded?.model ?? null,
+        trim: decoded?.trim ?? null,
+      })
+      .select('id')
+      .single()
+
+    if (cErr || !newCase) throw new Error(cErr?.message ?? 'case insert failed')
+    caseId = newCase.id as string
+    notifyOpen = true
+    await insertConsultCaseEvent({ caseId, eventType: 'created', actorType: 'shop', metadata: { from } })
+    const paths = await collectMediaPaths(caseId, form)
+    await insertInboundMessage({
+      caseId,
+      body: body || null,
+      mediaPaths: paths,
+      from,
+      to,
+      twilioMessageSid: messageSid,
+    })
+  }
+
+  const { data: shop } = await supabaseAdmin
+    .from('locations')
+    .select('name')
+    .eq('id', approved.shop_id)
+    .maybeSingle()
+
+  const messageId = messageSid?.trim() || crypto.randomUUID()
+  await triggerInboundSms({
+    locationId: approved.shop_id,
+    messageId,
+    caseId,
+    body: body || null,
+    fromPhone: from,
+    shopName: (shop as { name: string } | null)?.name ?? approved.shop_id,
+    notifyOpen,
+  })
+}
+
 export async function handleInboundSms(form: Record<string, string>): Promise<void> {
   const rawFrom = form['From'] ?? ''
   const rawTo = form['To'] ?? ''
@@ -189,60 +299,7 @@ export async function handleInboundSms(form: Record<string, string>): Promise<vo
       return
     }
 
-    const appendId = await openCaseWithRecentActivity(approved.id)
-    if (appendId) {
-      const paths = await collectMediaPaths(appendId, form)
-      await insertInboundMessage({
-        caseId: appendId,
-        body: body || null,
-        mediaPaths: paths,
-        from,
-        to,
-        twilioMessageSid: messageSid,
-      })
-      const { data: c } = await supabaseAdmin.from('consult_cases').select('vin').eq('id', appendId).maybeSingle()
-      await maybeApplyVinFromBody(appendId, body, (c as { vin: string | null } | null)?.vin ?? null)
-      return
-    }
-
-    const vin = extractVinFromText(body)
-    const decoded = vin ? await decodeVinNhtsa(vin) : null
-    const { data: newCase, error: cErr } = await supabaseAdmin
-      .from('consult_cases')
-      .insert({
-        shop_id: approved.shop_id,
-        originating_phone_number: from,
-        originating_contact_id: approved.id,
-        status: 'open',
-        initial_question: body || null,
-        vin: vin ?? null,
-        year: decoded?.year ?? null,
-        model: decoded?.model ?? null,
-        trim: decoded?.trim ?? null,
-      })
-      .select('id')
-      .single()
-
-    if (cErr || !newCase) throw new Error(cErr?.message ?? 'case insert failed')
-    const caseId = newCase.id as string
-    await insertConsultCaseEvent({ caseId, eventType: 'created', actorType: 'shop', metadata: { from } })
-    const paths = await collectMediaPaths(caseId, form)
-    await insertInboundMessage({
-      caseId,
-      body: body || null,
-      mediaPaths: paths,
-      from,
-      to,
-      twilioMessageSid: messageSid,
-    })
-
-    const { data: shop } = await supabaseAdmin.from('locations').select('name').eq('id', approved.shop_id).maybeSingle()
-    await notifyExpertAssistSlack({
-      type: 'open',
-      caseId,
-      shopName: (shop as { name: string } | null)?.name ?? approved.shop_id,
-      source: 'sms',
-    })
+    await persistApprovedInboundAndTrigger(form, approved, from, to, body, messageSid)
     return
   }
 

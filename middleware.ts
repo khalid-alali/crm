@@ -20,6 +20,6 @@ export default withAuth({
 export const config = {
   // Public shop portal + token APIs (auth enforced inside routes where needed).
   matcher: [
-    '/((?!portal|api/portal|api/webhooks|api/shops|api/cron|api/auth|api/twilio|api/stripe/webhook|api/expert-assist/intake|_next|favicon|signin).*)',
+    '/((?!portal|api/portal|approve|request-changes|r/|api/labor-rate-approvals|api/webhooks|api/shops|api/cron|api/auth|api/twilio|api/stripe/webhook|api/expert-assist/intake|api/expert-assist/signup|api/expert-assist/activation|_next|favicon|signin).*)',
   ],
 }

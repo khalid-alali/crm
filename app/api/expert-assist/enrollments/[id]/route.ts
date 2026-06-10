@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { getAppSession } from '@/lib/app-auth'
-import { isExpertAssistFunnelStage } from '@/lib/expert-assist-funnel/stages'
 import { EXPERT_ASSIST_PROGRAM_ID } from '@/lib/program-config'
 import { unenrollEnrollment } from '@/lib/program-enrollment-service'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -51,11 +50,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (body.stage !== undefined) {
-    if (!isExpertAssistFunnelStage(body.stage)) {
-      return NextResponse.json({ error: 'Invalid stage value' }, { status: 400 })
-    }
-    patch.stage = body.stage
-    patch.manual_stage_override = true
+    return NextResponse.json(
+      {
+        error:
+          'Stage is derived from activation_state. Clear manual_stage_override or update activation facts instead.',
+      },
+      { status: 400 },
+    )
   }
 
   const { data: updated, error: updateError } = await supabaseAdmin
