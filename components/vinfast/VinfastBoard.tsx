@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import MapView, { type MapViewLocation } from '@/app/(internal)/map/MapView'
+import LaborRateApprovalModal from '@/components/vinfast/LaborRateApprovalModal'
 import VinfastEnrollSearchModal from '@/components/vinfast/VinfastEnrollSearchModal'
+import type { LaborRateApprovalStatus } from '@/lib/labor-rate-approval/types'
 import type { VinfastEnrollmentView } from '@/lib/vinfast-enrollments'
 import {
   VINFAST_OPERATIONAL_STATUS_OPTIONS,
@@ -44,6 +46,19 @@ function isVfOnboardingPip(status: string | null | undefined): boolean {
   return (status ?? '').trim().toLowerCase() === 'pip'
 }
 
+const LABOR_RATE_PILL: Record<LaborRateApprovalStatus, string> = {
+  requested: 'bg-sky-100 text-sky-900 ring-sky-200/80',
+  changes_requested: 'bg-amber-100 text-amber-900 ring-amber-200/80',
+  approved: 'bg-emerald-100 text-emerald-900 ring-emerald-200/80',
+  escalated: 'bg-red-100 text-red-900 ring-red-200/80',
+  expired: 'bg-zinc-100 text-zinc-600 ring-zinc-200/80',
+}
+
+function isLaborRateApproved(card: VinfastEnrollmentView): boolean {
+  if (card.laborRateApproval?.status === 'approved') return true
+  return card.checklist.some(c => c.itemKey === 'labor_rate_approved' && c.completedAt)
+}
+
 type ViewMode = 'kanban' | 'map' | 'table'
 type CompletionFilter = 'all' | 'complete' | 'incomplete'
 type BooleanFilter = 'all' | 'true' | 'false'
@@ -72,6 +87,7 @@ export default function VinfastBoard({ initialEnrollments, mapLocations }: Props
   const [error, setError] = useState<string | null>(null)
   const [enrollShopModalOpen, setEnrollShopModalOpen] = useState(false)
   const [enrollBusyLocationId, setEnrollBusyLocationId] = useState<string | null>(null)
+  const [laborRateModalCard, setLaborRateModalCard] = useState<VinfastEnrollmentView | null>(null)
 
   useEffect(() => {
     setEnrollments(initialEnrollments)
@@ -316,31 +332,77 @@ export default function VinfastBoard({ initialEnrollments, mapLocations }: Props
 
                   {openMenuCardId === card.id && (
                     <div
-                      className="absolute right-0 top-8 z-20 min-w-40 rounded-md border border-arctic-300 bg-white p-1 shadow-lg"
+                      className="absolute right-0 top-8 z-20 min-w-48 rounded-md border border-arctic-300 bg-white p-1 shadow-lg"
                       onClick={e => e.stopPropagation()}
                       onMouseDown={e => e.stopPropagation()}
                     >
-                      {TESLA_STAGES.map(nextStage => (
-                        <button
-                          key={nextStage}
-                          type="button"
-                          disabled={isBusy}
-                          onClick={e => {
-                            e.stopPropagation()
-                            setOpenMenuCardId(null)
-                            setOpsMenuEnrollmentId(null)
-                            setPipMenuEnrollmentId(null)
-                            void withRefresh(() => updateEnrollment(card.id, { stage: nextStage }), card.id)
-                          }}
-                          className={`block w-full rounded px-2 py-1 text-left text-xs ${
-                            card.stage === nextStage
-                              ? 'bg-arctic-100 font-semibold text-onix-900'
-                              : 'text-onix-700 hover:bg-arctic-50'
-                          }`}
-                        >
-                          {STAGE_LABELS[nextStage]}
-                        </button>
-                      ))}
+                      {stage === 'not_ready' ? (
+                        <>
+                          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-onix-400">
+                            Change status
+                          </p>
+                          {TESLA_STAGES.map(nextStage => (
+                            <button
+                              key={nextStage}
+                              type="button"
+                              disabled={isBusy}
+                              onClick={e => {
+                                e.stopPropagation()
+                                setOpenMenuCardId(null)
+                                setOpsMenuEnrollmentId(null)
+                                setPipMenuEnrollmentId(null)
+                                void withRefresh(() => updateEnrollment(card.id, { stage: nextStage }), card.id)
+                              }}
+                              className={`block w-full rounded px-2 py-1 text-left text-xs ${
+                                card.stage === nextStage
+                                  ? 'bg-arctic-100 font-semibold text-onix-900'
+                                  : 'text-onix-700 hover:bg-arctic-50'
+                              }`}
+                            >
+                              {STAGE_LABELS[nextStage]}
+                            </button>
+                          ))}
+                          {!isLaborRateApproved(card) && (
+                            <>
+                              <div className="my-1 border-t border-arctic-100" />
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  setOpenMenuCardId(null)
+                                  setLaborRateModalCard(card)
+                                }}
+                                className="block w-full rounded px-2 py-1.5 text-left text-xs font-medium text-brand-700 hover:bg-arctic-50"
+                              >
+                                Submit labor rate for approval
+                              </button>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        TESLA_STAGES.map(nextStage => (
+                          <button
+                            key={nextStage}
+                            type="button"
+                            disabled={isBusy}
+                            onClick={e => {
+                              e.stopPropagation()
+                              setOpenMenuCardId(null)
+                              setOpsMenuEnrollmentId(null)
+                              setPipMenuEnrollmentId(null)
+                              void withRefresh(() => updateEnrollment(card.id, { stage: nextStage }), card.id)
+                            }}
+                            className={`block w-full rounded px-2 py-1 text-left text-xs ${
+                              card.stage === nextStage
+                                ? 'bg-arctic-100 font-semibold text-onix-900'
+                                : 'text-onix-700 hover:bg-arctic-50'
+                            }`}
+                          >
+                            {STAGE_LABELS[nextStage]}
+                          </button>
+                        ))
+                      )}
                     </div>
                   )}
 
@@ -349,6 +411,15 @@ export default function VinfastBoard({ initialEnrollments, mapLocations }: Props
                   </div>
                   <div className="text-sm text-onix-600">{locationLine || 'Location unknown'}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {stage === 'not_ready' && card.laborRateApproval?.statusLabel && (
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
+                          LABOR_RATE_PILL[card.laborRateApproval.status]
+                        }`}
+                      >
+                        {card.laborRateApproval.statusLabel}
+                      </span>
+                    )}
                     {onboardingPip && (
                       <div className="relative" data-vinfast-pip-menu-root>
                         <button
@@ -811,6 +882,14 @@ export default function VinfastBoard({ initialEnrollments, mapLocations }: Props
         onEnroll={enrollLocation}
         errorMessage={enrollShopModalOpen ? error : null}
       />
+
+      {laborRateModalCard && (
+        <LaborRateApprovalModal
+          card={laborRateModalCard}
+          onClose={() => setLaborRateModalCard(null)}
+          onSubmitted={() => router.refresh()}
+        />
+      )}
     </div>
   )
 }

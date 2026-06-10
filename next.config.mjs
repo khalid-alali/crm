@@ -5,6 +5,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Next 16 defaults to Turbopack for `next dev`; acknowledge it alongside webpack (prod build).
+  turbopack: {},
   async redirects() {
     return [
       { source: '/owners', destination: '/accounts', permanent: false },

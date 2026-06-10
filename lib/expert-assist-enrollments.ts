@@ -468,7 +468,7 @@ export async function getExpertAssistShopProgramView(
 
   const { data: closedCases, error: casesError } = await supabaseAdmin
     .from('consult_cases')
-    .select('shop_id, closed_at, created_at, updated_at')
+    .select('shop_id, closed_at, created_at')
     .eq('shop_id', locationId)
     .eq('status', 'closed')
     .not('closed_at', 'is', null)
@@ -477,10 +477,10 @@ export async function getExpertAssistShopProgramView(
 
   const { data: openCases, error: openCasesError } = await supabaseAdmin
     .from('consult_cases')
-    .select('created_at, updated_at')
+    .select('created_at')
     .eq('shop_id', locationId)
     .neq('status', 'closed')
-    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(1)
 
   if (openCasesError) throw new Error(openCasesError.message)
@@ -532,8 +532,12 @@ export async function getExpertAssistShopProgramView(
   const lastActivityCandidates = [
     base.lastTouchedAt,
     closedStats.lastClosedAt,
-    ...(openCases ?? []).map(row => (row as { updated_at?: string | null }).updated_at ?? null),
-    ...(closedCases ?? []).map(row => (row as { updated_at?: string | null }).updated_at ?? null),
+    ...(openCases ?? []).map(row => (row as { created_at?: string | null }).created_at ?? null),
+    ...(closedCases ?? []).map(
+      row => (row as { closed_at?: string | null; created_at?: string | null }).closed_at
+        ?? (row as { created_at?: string | null }).created_at
+        ?? null,
+    ),
   ].filter((value): value is string => Boolean(value))
 
   const lastActivityAt =

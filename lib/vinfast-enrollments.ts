@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { activeLocations } from '@/lib/locations-active'
+import { toCardView, type LaborRateApprovalCardView } from '@/lib/labor-rate-approval/row'
+import type { LaborRateApprovalRow } from '@/lib/labor-rate-approval/types'
 import { VINFAST_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
 import { rowForCanonicalKey, type VinfastChecklistRow } from '@/lib/vinfast-checklist'
 import { getMissingChecklistKeys, isTeslaStage, type TeslaStage } from '@/lib/program-stage'
@@ -29,6 +31,7 @@ type LocationRow = {
   capabilities_submitted_at: string | null
   account_id: string | null
   motherduck_shop_id: string | null
+  warranty_labor_rate: number | null
 }
 
 type ChecklistRow = {
@@ -93,6 +96,8 @@ export type VinfastEnrollmentView = {
   vfOperationalStatus: string | null
   /** From `locations.vf_onboarding_status` (e.g. PIP). */
   vfOnboardingStatus: string | null
+  laborRateApproval: LaborRateApprovalCardView | null
+  warrantyLaborRate: number | null
 }
 
 /** VinFast onboarding label written when a card is moved on the kanban (PATCH enrollment stage). */
@@ -178,7 +183,7 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
   for (const ids of chunk(locationIds, BATCH_SIZE)) {
     const { data, error } = await activeLocations(
       supabaseAdmin,
-      'id, name, city, state, county, status, vf_onboarding_status, vf_operational_status, capabilities_submitted_at, account_id, motherduck_shop_id',
+      'id, name, city, state, county, status, vf_onboarding_status, vf_operational_status, capabilities_submitted_at, account_id, motherduck_shop_id, warranty_labor_rate',
     ).in('id', ids)
     if (error) throw new Error(error.message)
     locationsData.push(...((data ?? []) as LocationRow[]))
@@ -237,6 +242,18 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
     surveyCountByLocation.set(row.location_id, (surveyCountByLocation.get(row.location_id) ?? 0) + 1)
   }
   const cacheByShopId = new Map((cacheData ?? []).map(row => [row.shop_id as string, row as ShopStatusCacheRow]))
+
+  const approvalData: LaborRateApprovalRow[] = []
+  for (const ids of chunk(locationIds, BATCH_SIZE)) {
+    const { data, error: approvalError } = await supabaseAdmin
+      .from('labor_rate_approvals')
+      .select('*')
+      .in('location_id', ids)
+    if (approvalError) throw new Error(approvalError.message)
+    approvalData.push(...((data ?? []) as LaborRateApprovalRow[]))
+  }
+  const approvalByLocationId = new Map(approvalData.map(row => [row.location_id, row]))
+
   const config = getProgramConfig(VINFAST_PROGRAM_ID)
   const checklistDef = config?.checklist ?? []
 
@@ -297,6 +314,11 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
       missingChecklistKeys: getMissingChecklistKeys(VINFAST_PROGRAM_ID, canonicalCompletedKeys),
       vfOperationalStatus: (loc?.vf_operational_status as string | null) ?? null,
       vfOnboardingStatus: (loc?.vf_onboarding_status as string | null) ?? null,
+      laborRateApproval: toCardView(approvalByLocationId.get(enrollment.location_id)),
+      warrantyLaborRate:
+        loc?.warranty_labor_rate != null && Number.isFinite(Number(loc.warranty_labor_rate))
+          ? Number(loc.warranty_labor_rate)
+          : null,
     }
   })
 }

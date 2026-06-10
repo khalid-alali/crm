@@ -85,6 +85,17 @@ export default function ConsultActivationBoard({ initialEnrollments }: Props) {
     if (!res.ok) throw new Error(data.error ?? 'Failed to update enrollment')
   }
 
+  async function unenrollEnrollment(enrollmentId: string, locationName: string) {
+    if (!window.confirm(`Remove ${locationName} from the Expert Assist funnel?`)) return
+    const res = await fetch(`/api/expert-assist/enrollments/${enrollmentId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Removed from activation funnel' }),
+    })
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    if (!res.ok) throw new Error(data.error ?? 'Could not unenroll')
+  }
+
   async function toggleChecklist(
     enrollmentId: string,
     itemKey: string,
@@ -177,26 +188,41 @@ export default function ConsultActivationBoard({ initialEnrollments }: Props) {
                     …
                   </button>
 
-                  {openMenuCardId === card.id && card.manualStageOverride && (
+                  {openMenuCardId === card.id && (
                     <div
                       className="absolute right-0 top-8 z-20 min-w-48 rounded-md border border-arctic-300 bg-white p-1 shadow-lg"
                       onClick={e => e.stopPropagation()}
                       onMouseDown={e => e.stopPropagation()}
                     >
+                      {card.manualStageOverride ? (
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={e => {
+                            e.stopPropagation()
+                            setOpenMenuCardId(null)
+                            void withRefresh(
+                              () => updateEnrollment(card.id, { manual_stage_override: false }),
+                              card.id,
+                            )
+                          }}
+                          className="block w-full rounded px-2 py-1.5 text-left text-xs text-brand-700 hover:bg-arctic-50"
+                        >
+                          Clear manual stage override
+                        </button>
+                      ) : null}
+                      {card.manualStageOverride ? <div className="my-1 border-t border-arctic-100" /> : null}
                       <button
                         type="button"
                         disabled={isBusy}
                         onClick={e => {
                           e.stopPropagation()
                           setOpenMenuCardId(null)
-                          void withRefresh(
-                            () => updateEnrollment(card.id, { manual_stage_override: false }),
-                            card.id,
-                          )
+                          void withRefresh(() => unenrollEnrollment(card.id, card.locationName), card.id)
                         }}
-                        className="block w-full rounded px-2 py-1.5 text-left text-xs text-brand-700 hover:bg-arctic-50"
+                        className="block w-full rounded px-2 py-1.5 text-left text-xs text-red-700 hover:bg-red-50"
                       >
-                        Clear manual stage override
+                        Unenroll
                       </button>
                     </div>
                   )}
