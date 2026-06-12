@@ -22,8 +22,8 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUSES = ['lead', 'contacted', 'prospect', 'dormant', 'contracted', 'active', 'inactive']
-/** Statuses shown in the map filter (churned is toggled separately). */
-const MAP_FILTER_STATUSES = STATUSES.filter(s => s !== 'inactive')
+const MAP_FILTER_STATUSES = STATUSES
+const DEFAULT_MAP_STATUSES = new Set(['contracted', 'active', 'inactive'])
 
 export interface MapViewLocation {
   id: string
@@ -118,22 +118,16 @@ function countyOptionLabel(loc: Location, countyNameToStates: Map<string, Set<st
   return st ? `${base}, ${st}` : base
 }
 
-function getVisibleLocations(locs: Location[], filterStatus: string, showChurned: boolean): Location[] {
-  if (filterStatus) {
-    return locs.filter(l => l.status === filterStatus)
-  }
-  if (!showChurned) {
-    return locs.filter(l => l.status !== 'inactive')
-  }
-  return locs
+function getVisibleLocations(locs: Location[], selectedStatuses: ReadonlySet<string>): Location[] {
+  if (selectedStatuses.size === 0) return []
+  return locs.filter(l => selectedStatuses.has(l.status))
 }
 
 function featureCollection(
   locs: Location[],
-  filterStatus: string,
-  showChurned: boolean,
+  selectedStatuses: ReadonlySet<string>,
 ): GeoJSON.FeatureCollection {
-  const list = getVisibleLocations(locs, filterStatus, showChurned)
+  const list = getVisibleLocations(locs, selectedStatuses)
   const features: GeoJSON.Feature[] = list.flatMap(loc => {
     const ll = toLngLat(loc)
     if (!ll) return []
@@ -255,32 +249,40 @@ export default function MapView({
   teslaStagesRef.current = teslaStageByLocationId ?? {}
   const teslaEmbedRef = useRef(teslaEmbed)
   teslaEmbedRef.current = teslaEmbed
-  const filterStatusRef = useRef('')
-  const showChurnedRef = useRef(false)
+  const selectedStatusesRef = useRef(DEFAULT_MAP_STATUSES)
   const containerRef = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<Location | null>(null)
-  const [filterStatus, setFilterStatus] = useState('')
-  filterStatusRef.current = filterStatus
-  const [showChurned, setShowChurned] = useState(false)
-  showChurnedRef.current = showChurned
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => new Set(DEFAULT_MAP_STATUSES))
+  selectedStatusesRef.current = selectedStatuses
   const [mapJump, setMapJump] = useState('')
   const [countyJump, setCountyJump] = useState('')
   const [geocoding, setGeocoding] = useState(false)
   const [geocodeResult, setGeocodeResult] = useState<string | null>(null)
 
   const scoped = useMemo(
-    () => (teslaEmbed ? locations : getVisibleLocations(locations, filterStatus, showChurned)),
-    [locations, filterStatus, showChurned, teslaEmbed],
+    () => (teslaEmbed ? locations : getVisibleLocations(locations, selectedStatuses)),
+    [locations, selectedStatuses, teslaEmbed],
   )
   const pinsShown = scoped.filter(l => toLngLat(l) != null).length
   const missingCoords = scoped.length - pinsShown
   const geocodeCandidates = scoped.filter(l => toLngLat(l) == null && l.address_line1?.trim()).length
-  const nonChurnedCount = useMemo(
-    () => locations.filter(l => l.status !== 'inactive').length,
-    [locations],
-  )
-  const churnedCount = useMemo(() => locations.filter(l => l.status === 'inactive').length, [locations])
-  const allRowCount = showChurned ? locations.length : nonChurnedCount
+
+  const statusCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const loc of locations) {
+      m.set(loc.status, (m.get(loc.status) ?? 0) + 1)
+    }
+    return m
+  }, [locations])
+
+  function toggleStatus(status: string) {
+    setSelectedStatuses(prev => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      return next
+    })
+  }
 
   const stateCounts = useMemo(() => {
     const m = new Map<string, number>()
@@ -374,11 +376,7 @@ export default function MapView({
       const embed = teslaEmbedRef.current
       const data = embed
         ? teslaFeatureCollection(locationsRef.current, teslaStagesRef.current)
-        : featureCollection(
-            locationsRef.current,
-            filterStatusRef.current,
-            showChurnedRef.current,
-          )
+        : featureCollection(locationsRef.current, selectedStatusesRef.current)
       map.addSource('locations', {
         type: 'geojson',
         data,
@@ -416,9 +414,9 @@ export default function MapView({
     source.setData(
       teslaEmbed
         ? teslaFeatureCollection(locations, teslaStageByLocationId ?? {})
-        : featureCollection(locations, filterStatus, showChurned),
+        : featureCollection(locations, selectedStatuses),
     )
-  }, [locations, filterStatus, showChurned, teslaEmbed, teslaStageByLocationId])
+  }, [locations, selectedStatuses, teslaEmbed, teslaStageByLocationId])
 
   function flyMapToArea(code: string) {
     const map = mapRef.current
@@ -481,8 +479,7 @@ export default function MapView({
   }
 
   function clearFilters() {
-    setFilterStatus('')
-    setShowChurned(false)
+    setSelectedStatuses(new Set(DEFAULT_MAP_STATUSES))
     setMapJump('')
     setCountyJump('')
     setSelected(null)
@@ -520,42 +517,29 @@ export default function MapView({
       <div className="w-56 bg-white border-r border-arctic-200 p-3 flex flex-col gap-3 z-10">
         <div>
           <label className="block text-xs font-medium text-onix-600 mb-1">Filter by status</label>
-          <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className="w-full border border-arctic-300 rounded px-2 py-1 text-sm"
-          >
-            <option value="">All ({allRowCount})</option>
-            {MAP_FILTER_STATUSES.map(s => {
-              const cnt = locations.filter(l => l.status === s).length
-              return (
-                <option key={s} value={s}>
-                  {LOCATION_STATUS_LABELS[s]} ({cnt})
-                </option>
-              )
-            })}
-          </select>
-          <label
-            className={`mt-2 flex items-center gap-2 text-xs ${
-              filterStatus ? 'text-onix-400 cursor-not-allowed' : 'text-onix-700 cursor-pointer'
-            }`}
-          >
-            <input
-              type="checkbox"
-              className="rounded border-arctic-300"
-              checked={showChurned}
-              disabled={Boolean(filterStatus)}
-              onChange={e => setShowChurned(e.target.checked)}
-            />
-            <span>Show churned ({churnedCount})</span>
-          </label>
-          {filterStatus ? (
-            <p className="text-[11px] text-onix-500 mt-1">Churned toggle applies in &quot;All&quot; view only.</p>
-          ) : null}
+          <div className="max-h-44 overflow-y-auto border border-arctic-300 rounded px-2 py-1.5 space-y-1">
+            {MAP_FILTER_STATUSES.map(s => (
+              <label key={s} className="flex items-center gap-2 text-xs text-onix-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="rounded border-arctic-300"
+                  checked={selectedStatuses.has(s)}
+                  onChange={() => toggleStatus(s)}
+                />
+                <span
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: STATUS_COLORS[s] }}
+                />
+                <span>
+                  {LOCATION_STATUS_LABELS[s]} ({statusCounts.get(s) ?? 0})
+                </span>
+              </label>
+            ))}
+          </div>
           <p className="text-xs text-onix-600 mt-1.5 leading-snug">
-            {filterStatus
-              ? `${pinsShown} on map for this status (${scoped.length} in status)`
-              : `${pinsShown} on map of ${allRowCount} shops`}
+            {selectedStatuses.size === 0
+              ? 'Select at least one status to show shops'
+              : `${pinsShown} on map of ${scoped.length} shops`}
             {missingCoords > 0 ? ` · ${missingCoords} lack coordinates` : null}
             {geocodeCandidates > 0 ? ` · ${geocodeCandidates} with address to geocode` : null}
           </p>
@@ -620,15 +604,6 @@ export default function MapView({
               <span className="text-onix-600">{LOCATION_STATUS_LABELS[s]}</span>
             </div>
           ))}
-          {showChurned && !filterStatus ? (
-            <div className="flex items-center gap-2 text-xs">
-              <span
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: STATUS_COLORS.inactive }}
-              />
-              <span className="text-onix-600">{LOCATION_STATUS_LABELS.inactive}</span>
-            </div>
-          ) : null}
         </div>
         {locations.length === 0 && (
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
