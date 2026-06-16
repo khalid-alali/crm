@@ -28,6 +28,7 @@ import ExpertAssistProgramPanel from '@/components/expert-assist/ExpertAssistPro
 import ExpertAssistShopPanel from '@/components/expert-assist/ExpertAssistShopPanel'
 import type { ExpertAssistShopProgramView } from '@/lib/expert-assist-enrollments'
 import { CapabilitiesSection } from '@/components/shop-detail/CapabilitiesSection'
+import { pickCapabilityProfileState } from '@/lib/capability-profile'
 import ActivityFeed from '@/components/ActivityFeed'
 import StateSelect from '@/components/StateSelect'
 import { BDR_ASSIGNEES, normalizeBdrAssignedTo } from '@/lib/bdr-assignees'
@@ -2834,6 +2835,7 @@ export default function ShopDetailTabs({
                   capabilities_hv_battery_table: shop.capabilities_hv_battery_table ?? null,
                   capabilities_windshields: shop.capabilities_windshields ?? null,
                 }}
+                profile={pickCapabilityProfileState(shop)}
                 techSurveys={Array.isArray(shop.tech_competency_surveys) ? shop.tech_competency_surveys : []}
                 onSendForm={sendCapabilitiesPortalLink}
               />

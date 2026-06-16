@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, CircleX, FileText, Info, User, X } from 'lucide-react'
 import { formatHoursForDisplay } from '@/lib/portal-hours-schedule'
 import { formatAllocatedTechsDisplay } from '@/lib/portal-capabilities-form'
+import type { CapabilityProfileState } from '@/lib/capability-profile'
+import { CapabilityProfileBand } from '@/components/shop-detail/CapabilityProfileBand'
 
 interface CapabilitiesData {
   bar_license_number: string | null
@@ -68,16 +70,20 @@ interface Props {
   locationId: string
   locationName: string
   location: CapabilitiesData
+  profile: CapabilityProfileState
   techSurveys: RawSurvey[]
   onSendForm?: () => void
+  readOnly?: boolean
 }
 
 export function CapabilitiesSection({
   locationId,
   locationName,
   location,
+  profile,
   techSurveys,
   onSendForm,
+  readOnly = false,
 }: Props) {
   const submitted = !!location.capabilities_submitted_at
   const [openQuizForTech, setOpenQuizForTech] = useState<TechSurveyCard | null>(null)
@@ -99,10 +105,15 @@ export function CapabilitiesSection({
     </>
   )
 
+  const profileBand = (
+    <CapabilityProfileBand locationId={locationId} profile={profile} readOnly={readOnly} />
+  )
+
   /* State A — no capabilities, no surveys */
   if (!submitted && !hasSurveys) {
     return (
-      <>
+      <div className="space-y-6">
+        {profileBand}
         <div className="rounded-xl border border-arctic-200 bg-white px-6 py-12 text-center shadow-sm sm:px-10 sm:py-14">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-arctic-100 text-onix-500">
             <FileText className="h-6 w-6" aria-hidden />
@@ -133,14 +144,15 @@ export function CapabilitiesSection({
           </div>
         </div>
         {modals}
-      </>
+      </div>
     )
   }
 
   /* State B — surveys present, capabilities not submitted */
   if (!submitted && hasSurveys) {
     return (
-      <>
+      <div className="space-y-6">
+        {profileBand}
         <CapabilitiesNudgeBanner onSendForm={onSendForm} />
         <TechnicianCompetencyPanel
           techCards={techCards}
@@ -149,13 +161,14 @@ export function CapabilitiesSection({
           interiorEmpty={false}
         />
         {modals}
-      </>
+      </div>
     )
   }
 
   /* State C & D — shop capabilities submitted */
   return (
     <div className="space-y-6">
+      {profileBand}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-onix-900">Shop capabilities</h3>
         <span className="text-xs text-onix-400">
