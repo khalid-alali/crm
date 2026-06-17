@@ -1,6 +1,6 @@
 export const ELIGIBILITY_VALUES = ['tesla_ev', 'tesla', 'ev', 'none'] as const
-export const DEPTH_VALUES = ['light', 'heavy'] as const
-export const HV_DEPTH_VALUES = ['light', 'heavy', 'heavy_plus'] as const
+export const DEPTH_VALUES = ['light', 'heavy', 'none'] as const
+export const HV_DEPTH_VALUES = ['light', 'heavy', 'heavy_plus', 'none'] as const
 
 export type EligibilityValue = (typeof ELIGIBILITY_VALUES)[number]
 export type DepthValue = (typeof DEPTH_VALUES)[number]
@@ -39,15 +39,29 @@ export const ELIGIBILITY_OPTIONS: { value: EligibilityValue; label: string }[] =
   { value: 'none', label: 'No EVs' },
 ]
 
-export const DEPTH_OPTIONS: { value: DepthValue; label: string }[] = [
+export const AUTO_DEPTH_OPTIONS: { value: DepthValue; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'heavy', label: 'Heavy' },
+  { value: 'none', label: 'No Auto' },
+]
+
+export const LV_DEPTH_OPTIONS: { value: DepthValue; label: string }[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'heavy', label: 'Heavy' },
+  { value: 'none', label: 'No LV' },
+]
+
+export const ADAS_DEPTH_OPTIONS: { value: AdasDepthValue; label: string }[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'heavy', label: 'Heavy' },
+  { value: 'none', label: 'No ADAS' },
 ]
 
 export const HV_DEPTH_OPTIONS: { value: HvDepthValue; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'heavy', label: 'Heavy' },
   { value: 'heavy_plus', label: 'Heavy+' },
+  { value: 'none', label: 'No HV' },
 ]
 
 export type CapabilityProfileDimension = {
@@ -74,7 +88,7 @@ export const CAPABILITY_PROFILE_DIMENSIONS: CapabilityProfileDimension[] = [
     subLabel: 'General mechanical',
     ariaLabel: 'Auto depth',
     variant: 'neutral',
-    options: DEPTH_OPTIONS,
+    options: AUTO_DEPTH_OPTIONS,
   },
   {
     field: 'lv_depth',
@@ -82,7 +96,7 @@ export const CAPABILITY_PROFILE_DIMENSIONS: CapabilityProfileDimension[] = [
     subLabel: '12V electrical',
     ariaLabel: 'Low voltage depth',
     variant: 'neutral',
-    options: DEPTH_OPTIONS,
+    options: LV_DEPTH_OPTIONS,
   },
   {
     field: 'hv_depth',
@@ -98,7 +112,7 @@ export const CAPABILITY_PROFILE_DIMENSIONS: CapabilityProfileDimension[] = [
     subLabel: 'Calibration',
     ariaLabel: 'ADAS depth',
     variant: 'neutral',
-    options: DEPTH_OPTIONS,
+    options: ADAS_DEPTH_OPTIONS,
   },
 ]
 
