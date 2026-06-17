@@ -21,7 +21,7 @@ function parseBool(value: unknown): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.EXPERT_ASSIST_SIGNUP_SECRET?.trim()
+  const secret = process.env.EXPERT_ASSIST_INTAKE_SECRET?.trim()
   if (!secret) {
     return NextResponse.json({ error: 'Expert Assist signup is not configured' }, { status: 503 })
   }
