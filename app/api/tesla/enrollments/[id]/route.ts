@@ -4,6 +4,7 @@ import { getAppSession } from '@/lib/app-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { deriveProgramStage, isTeslaStage } from '@/lib/program-stage'
 import { TESLA_PROGRAM_ID } from '@/lib/program-config'
+import { unenrollEnrollment } from '@/lib/program-enrollment-service'
 
 type PatchBody = {
   stage?: string
@@ -110,5 +111,59 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
   revalidatePath('/tesla')
+  revalidatePath('/shops')
   return NextResponse.json(updated)
+}
+
+type UnenrollBody = {
+  reason?: string | null
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getAppSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid enrollment id' }, { status: 400 })
+
+  const { data: enrollment, error: loadError } = await supabaseAdmin
+    .from('location_program_enrollments')
+    .select('id, program_id')
+    .eq('id', id)
+    .single()
+
+  if (loadError || !enrollment) return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 })
+  if (enrollment.program_id !== TESLA_PROGRAM_ID) {
+    return NextResponse.json({ error: 'Only Tesla enrollments can be unenrolled here' }, { status: 400 })
+  }
+
+  let reason: string | null = null
+  try {
+    const body = (await req.json().catch(() => ({}))) as UnenrollBody
+    reason = body.reason == null ? null : String(body.reason).trim() || null
+  } catch {
+    reason = null
+  }
+
+  try {
+    const updated = await unenrollEnrollment(supabaseAdmin, {
+      enrollmentId: id,
+      actorId: session.user?.email ?? null,
+      reason,
+    })
+    await supabaseAdmin.from('activity_log').insert({
+      location_id: updated.location_id,
+      type: 'note',
+      body: reason
+        ? `Unenrolled from Tesla program. Reason: ${reason}`
+        : 'Unenrolled from Tesla program.',
+      sent_by: session.user?.email ?? 'unknown',
+    })
+    revalidatePath('/tesla')
+    revalidatePath('/shops')
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unenroll failed'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }

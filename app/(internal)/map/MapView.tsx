@@ -9,6 +9,7 @@ import ChainBadge from '@/components/ChainBadge'
 import { LOCATION_STATUS_LABELS } from '@/lib/location-status-labels'
 import { US_STATE_CODES_SET, US_STATE_OPTIONS } from '@/lib/us-states'
 import { US_CONTINENTAL_BOUNDS, US_STATE_BOUNDS } from '@/lib/us-state-map-bounds'
+import { teslaStageLabel } from '@/lib/program-stage'
 
 const STATUS_COLORS: Record<string, string> = {
   lead: '#6D6E70',
@@ -188,14 +189,6 @@ const TESLA_CIRCLE_PAINT: mapboxgl.CirclePaint = {
   'circle-radius': 8,
   'circle-stroke-width': 1.5,
   'circle-stroke-color': '#fff',
-}
-
-const TESLA_STAGE_POPUP_LABEL: Record<string, string> = {
-  not_ready: 'Not Ready',
-  getting_ready: 'Getting Ready',
-  ready: 'Ready',
-  active: 'Active',
-  disqualified: 'Disqualified',
 }
 
 const CRM_CIRCLE_PAINT: mapboxgl.CirclePaint = {
@@ -649,9 +642,7 @@ export default function MapView({
           {teslaEmbed ? (
             <div className="mb-2 text-xs font-medium text-onix-800">
               Tesla:{' '}
-              {TESLA_STAGE_POPUP_LABEL[teslaStageByLocationId?.[selected.id] ?? 'not_ready'] ??
-                teslaStageByLocationId?.[selected.id] ??
-                'Not Ready'}
+              {teslaStageLabel(teslaStageByLocationId?.[selected.id] ?? 'getting_ready') || 'Onboarding'}
             </div>
           ) : null}
           <StatusBadge status={selected.status} />

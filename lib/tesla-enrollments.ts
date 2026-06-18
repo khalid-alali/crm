@@ -90,7 +90,7 @@ export type TeslaEnrollmentView = {
 }
 
 function parseStage(value: string): TeslaStage {
-  return isTeslaStage(value) ? value : 'not_ready'
+  return isTeslaStage(value) ? value : 'getting_ready'
 }
 
 const HIGH_SIGNAL_NAME_RE = /\b(ev|electric|hybrid|voltage|tesla)\b/i
@@ -100,54 +100,9 @@ function isHighSignalShopName(name: string | null | undefined): boolean {
   return HIGH_SIGNAL_NAME_RE.test(name)
 }
 
-async function ensureDefaultTeslaEnrollments(supabaseAdmin: SupabaseClient): Promise<void> {
-  const { data: existingRows, error: existingError } = await supabaseAdmin
-    .from('location_program_enrollments')
-    .select('location_id')
-    .eq('program_id', TESLA_PROGRAM_ID)
-
-  if (existingError) throw new Error(existingError.message)
-
-  // Include both active and unenrolled rows so an explicit unenrollment stays sticky.
-  const existingLocationIds = new Set((existingRows ?? []).map(row => row.location_id as string))
-  const { data: eligibleLocations, error: eligibleError } = await activeLocations(supabaseAdmin, 'id')
-    .in('status', ['contracted', 'active'])
-
-  if (eligibleError) throw new Error(eligibleError.message)
-
-  const now = new Date().toISOString()
-  const rowsToInsert = (eligibleLocations ?? [])
-    .map((row: { id: string }) => row.id)
-    .filter((locationId: string) => !existingLocationIds.has(locationId))
-    .map((locationId: string) => ({
-      location_id: locationId,
-      program_id: TESLA_PROGRAM_ID,
-      stage: 'not_ready',
-      manual_stage_override: false,
-      last_touched_at: now,
-    }))
-
-  if (rowsToInsert.length === 0) return
-
-  // We can't use `.upsert(..., { onConflict: 'location_id,program_id' })` because the unique
-  // index on this table is partial (`WHERE unenrolled_at IS NULL`, see migration 031), and
-  // Postgres rejects ON CONFLICT against a partial index without a matching predicate. The
-  // existence pre-check above already dedupes; the only remaining duplicate-key risk is a race
-  // between concurrent calls, which we swallow per-row.
-  const { error: insertError } = await supabaseAdmin
-    .from('location_program_enrollments')
-    .insert(rowsToInsert)
-
-  if (insertError && (insertError as { code?: string }).code !== '23505') {
-    throw new Error(insertError.message)
-  }
-}
-
 export async function listTeslaEnrollments(
   supabaseAdmin: SupabaseClient,
 ): Promise<TeslaEnrollmentView[]> {
-  await ensureDefaultTeslaEnrollments(supabaseAdmin)
-
   const { data: enrollmentsData, error: enrollmentsError } = await supabaseAdmin
     .from('location_program_enrollments')
     .select(

@@ -41,7 +41,8 @@ import TaskFormModal from '@/components/tasks/TaskFormModal'
 import TaskRow from '@/components/tasks/TaskRow'
 import type { TaskWithLocation } from '@/lib/types/task'
 import { isTaskResolvedInLast30Days } from '@/lib/tasks/date-groups'
-import { EXPERT_ASSIST_PROGRAM_ID, VINFAST_PROGRAM_ID } from '@/lib/program-config'
+import { EXPERT_ASSIST_PROGRAM_ID, TESLA_PROGRAM_ID, VINFAST_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
+import { teslaStageLabel } from '@/lib/program-stage'
 import {
   buildVinfastChecklistMaps,
   evaluateVinfastPrerequisites,
@@ -53,10 +54,10 @@ import {
 } from '@/lib/vinfast-checklist'
 
 const PROGRAM_CARD_CONFIG = [
-  { key: 'vinfast', enrollmentKey: 'oem_warranty', label: 'VinFast OEM' },
-  { key: 'tesla', enrollmentKey: 'ev_program', label: 'Tesla / EV' },
-  { key: 'multidrive', enrollmentKey: 'multi_drive', label: 'Multidrive' },
-  { key: 'expert_assist', enrollmentKey: EXPERT_ASSIST_PROGRAM_ID, label: 'Expert Assist' },
+  { key: 'vinfast', enrollmentKey: 'oem_warranty', programId: VINFAST_PROGRAM_ID, label: 'VinFast OEM' },
+  { key: 'tesla', enrollmentKey: 'ev_program', programId: TESLA_PROGRAM_ID, label: 'Tesla / EV' },
+  { key: 'multidrive', enrollmentKey: 'multi_drive', programId: 'multidrive', label: 'Multidrive' },
+  { key: 'expert_assist', enrollmentKey: EXPERT_ASSIST_PROGRAM_ID, programId: EXPERT_ASSIST_PROGRAM_ID, label: 'Expert Assist' },
 ] as const
 
 const EXPERT_ASSIST_PROGRESS_KEYS = [
@@ -313,6 +314,7 @@ export default function ShopDetailTabs({
   const [checklistBusyItem, setChecklistBusyItem] = useState<string | null>(null)
   const [enrollingProgram, setEnrollingProgram] = useState<string | null>(null)
   const [unenrollingVinfast, setUnenrollingVinfast] = useState(false)
+  const [unenrollingTesla, setUnenrollingTesla] = useState(false)
   const [unenrollingExpertAssist, setUnenrollingExpertAssist] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
@@ -556,7 +558,11 @@ export default function ShopDetailTabs({
   }, [shop.program_enrollments])
   const vinfastEnrollment = useMemo(() => {
     const rows = Array.isArray(shop.location_program_enrollments) ? shop.location_program_enrollments : []
-    return rows.find((row: any) => row?.program_id === VINFAST_PROGRAM_ID) ?? null
+    return rows.find((row: any) => row?.program_id === VINFAST_PROGRAM_ID && !row.unenrolled_at) ?? null
+  }, [shop.location_program_enrollments])
+  const teslaEnrollment = useMemo(() => {
+    const rows = Array.isArray(shop.location_program_enrollments) ? shop.location_program_enrollments : []
+    return rows.find((row: any) => row?.program_id === TESLA_PROGRAM_ID && !row.unenrolled_at) ?? null
   }, [shop.location_program_enrollments])
   const vinfastChecklistRows = useMemo((): ChecklistRow[] => {
     const rows = Array.isArray(vinfastEnrollment?.program_enrollment_checklist)
@@ -569,6 +575,33 @@ export default function ShopDetailTabs({
       notes: row.notes ?? null,
     }))
   }, [vinfastEnrollment])
+  const teslaChecklistItems = useMemo(() => {
+    const config = getProgramConfig(TESLA_PROGRAM_ID)
+    const rows = Array.isArray(teslaEnrollment?.program_enrollment_checklist)
+      ? teslaEnrollment.program_enrollment_checklist
+      : []
+    const rowsByKey = new Map<
+      string,
+      { completed_at: string | null; completed_by_user_id: string | null }
+    >(
+      rows.map((row: any) => [
+        String(row.item_key ?? ''),
+        {
+          completed_at: row.completed_at ?? null,
+          completed_by_user_id: row.completed_by_user_id ?? null,
+        },
+      ]),
+    )
+    return (config?.checklist ?? []).map(item => {
+      const row = rowsByKey.get(item.key)
+      return {
+        key: item.key,
+        label: item.label,
+        completedAt: row?.completed_at ?? null,
+        completedBy: row?.completed_by_user_id ?? null,
+      }
+    })
+  }, [teslaEnrollment])
   const vinfastChecklistItems = useMemo((): EnrollmentChecklistItem[] => {
     const defs = vinfastChecklistDefinitions()
     const rowsByKey = new Map(vinfastChecklistRows.map(row => [row.item_key, row]))
@@ -678,11 +711,12 @@ export default function ShopDetailTabs({
   const enrolledProgramsCount = useMemo(() => {
     return PROGRAM_CARD_CONFIG.filter(program => {
       if (program.key === 'vinfast') return Boolean(vinfastEnrollment)
+      if (program.key === 'tesla') return Boolean(teslaEnrollment)
       if (program.key === 'expert_assist') return Boolean(expertAssistProgram)
       const enrollment = legacyProgramByKey.get(program.enrollmentKey)
       return enrollment && enrollment.status !== 'not_enrolled'
     }).length
-  }, [expertAssistProgram, legacyProgramByKey, vinfastEnrollment])
+  }, [expertAssistProgram, legacyProgramByKey, teslaEnrollment, vinfastEnrollment])
   const programCardStats = useMemo(() => {
     return PROGRAM_CARD_CONFIG.map(program => {
       const enrollment = legacyProgramByKey.get(program.enrollmentKey)
@@ -700,6 +734,30 @@ export default function ShopDetailTabs({
           pct,
           statusBadge:
             !vinfastEnrollment ? null : completed >= total && total > 0 ? 'Active' : 'In progress',
+        }
+      }
+      if (program.key === 'tesla') {
+        const total = teslaChecklistItems.length
+        const completed = teslaChecklistItems.filter(item => item.completedAt).length
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+        const stage = String(teslaEnrollment?.stage ?? '')
+        const statusBadge = !teslaEnrollment
+          ? null
+          : stage === 'active'
+            ? 'Active'
+            : stage === 'ready'
+              ? 'Ready'
+              : stage === 'disqualified'
+                ? 'Disqualified'
+                : 'In progress'
+        return {
+          ...program,
+          enrolled: Boolean(teslaEnrollment),
+          enrolledAt: teslaEnrollment?.enrolled_at ?? teslaEnrollment?.created_at ?? teslaEnrollment?.updated_at ?? null,
+          completed,
+          total,
+          pct,
+          statusBadge,
         }
       }
       if (program.key === 'expert_assist') {
@@ -730,7 +788,7 @@ export default function ShopDetailTabs({
         statusBadge: !enrolled ? null : enrollment?.status === 'active' ? 'Active' : 'In progress',
       }
     })
-  }, [expertAssistProgram, expertAssistProgress, legacyProgramByKey, vinfastChecklistItems, vinfastEnrollment])
+  }, [expertAssistProgram, expertAssistProgress, legacyProgramByKey, teslaChecklistItems, teslaEnrollment, vinfastChecklistItems, vinfastEnrollment])
   const selectedProgramStats = useMemo(
     () => programCardStats.find(program => program.key === selectedProgram) ?? programCardStats[0],
     [programCardStats, selectedProgram],
@@ -996,6 +1054,14 @@ export default function ShopDetailTabs({
         })
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         if (!res.ok) throw new Error(data.error ?? 'Could not enroll in VinFast')
+      } else if (programKey === TESLA_PROGRAM_ID) {
+        const res = await fetch('/api/tesla/enrollments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ location_id: shop.id }),
+        })
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) throw new Error(data.error ?? 'Could not enroll in Tesla')
       } else if (programKey === EXPERT_ASSIST_PROGRAM_ID) {
         const res = await fetch('/api/expert-assist/enrollments', {
           method: 'POST',
@@ -1062,6 +1128,48 @@ export default function ShopDetailTabs({
       window.alert(e instanceof Error ? e.message : 'Could not unenroll VinFast')
     } finally {
       setUnenrollingVinfast(false)
+    }
+  }
+
+  async function unenrollTeslaProgram() {
+    if (!teslaEnrollment?.id) return
+    if (!window.confirm('Unenroll this shop from Tesla? Checklist history will be preserved.')) return
+    const reasonInput = window.prompt('Optional reason for unenrollment (leave blank to skip):', '')
+    const reason = reasonInput == null ? null : reasonInput.trim() || null
+
+    setUnenrollingTesla(true)
+    try {
+      const res = await fetch(`/api/tesla/enrollments/${teslaEnrollment.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not unenroll Tesla')
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not unenroll Tesla')
+    } finally {
+      setUnenrollingTesla(false)
+    }
+  }
+
+  async function toggleTeslaChecklistItem(itemKey: string, completed: boolean) {
+    if (!teslaEnrollment?.id) return
+    setChecklistBusyItem(itemKey)
+    try {
+      const res = await fetch(`/api/tesla/enrollments/${teslaEnrollment.id}/checklist`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_key: itemKey, completed }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not update checklist item')
+      router.refresh()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Could not update checklist item')
+    } finally {
+      setChecklistBusyItem(null)
     }
   }
 
@@ -2337,6 +2445,19 @@ export default function ShopDetailTabs({
                               {unenrollingVinfast ? 'Unenrolling…' : 'Unenroll'}
                             </button>
                           )}
+                          {card.key === 'tesla' && selectedProgram === 'tesla' && (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation()
+                                void unenrollTeslaProgram()
+                              }}
+                              disabled={unenrollingTesla}
+                              className="rounded border border-red-300 px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {unenrollingTesla ? 'Unenrolling…' : 'Unenroll'}
+                            </button>
+                          )}
                           {card.key === 'expert_assist' && selectedProgram === 'expert_assist' && (
                             <button
                               type="button"
@@ -2356,11 +2477,11 @@ export default function ShopDetailTabs({
                           type="button"
                           onClick={e => {
                             e.stopPropagation()
-                            void enrollProgram(card.enrollmentKey)
+                            void enrollProgram(card.programId)
                           }}
                           className="rounded border border-arctic-300 px-2 py-0.5 text-[11px] font-medium text-onix-700 hover:bg-arctic-50"
                         >
-                          {enrollingProgram === card.enrollmentKey ? 'Enrolling…' : '+ Enroll'}
+                          {enrollingProgram === card.programId ? 'Enrolling…' : '+ Enroll'}
                         </button>
                       )}
                     </div>
@@ -2386,11 +2507,19 @@ export default function ShopDetailTabs({
 
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-onix-700">
-                  {selectedProgram === 'expert_assist' ? 'Expert Assist Status' : 'VinFast Status'}
+                  {selectedProgram === 'expert_assist'
+                    ? 'Expert Assist Status'
+                    : selectedProgram === 'tesla'
+                      ? 'Tesla Status'
+                      : 'VinFast Status'}
                 </span>
                 {selectedProgram === 'vinfast' ? (
                   <span className="text-onix-600">
                     {operationalStatusLoading ? 'Loading…' : operationalStatus ?? '—'}
+                  </span>
+                ) : selectedProgram === 'tesla' ? (
+                  <span className="text-onix-600">
+                    {teslaStageLabel(String(teslaEnrollment?.stage ?? '')) || '—'}
                   </span>
                 ) : null}
               </div>
@@ -2793,9 +2922,66 @@ export default function ShopDetailTabs({
                     })}
                   </div>
                 </div>
+              ) : selectedProgram === 'tesla' ? (
+                <div className="space-y-3 rounded-lg border border-arctic-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-onix-950">Tesla onboarding checklist</h3>
+                      <p className="text-sm text-onix-500">
+                        {selectedProgramStats?.completed ?? 0} of {selectedProgramStats?.total ?? 0} complete
+                        {selectedProgramStats?.enrolledAt
+                          ? ` · started ${formatShortDate(selectedProgramStats.enrolledAt)}`
+                          : ''}
+                      </p>
+                    </div>
+                    <Link
+                      href="/tesla"
+                      className="rounded border border-arctic-300 px-2.5 py-1 text-xs font-medium text-onix-700 hover:bg-arctic-50"
+                    >
+                      Open Tesla board
+                    </Link>
+                  </div>
+                  {teslaEnrollment ? (
+                    <div className="divide-y divide-arctic-100 rounded-lg border border-arctic-200">
+                      {teslaChecklistItems.map(item => (
+                        <div
+                          key={item.key}
+                          className="grid grid-cols-[28px_1fr_auto] gap-2 px-4 py-2.5"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => void toggleTeslaChecklistItem(item.key, !item.completedAt)}
+                            disabled={checklistBusyItem === item.key}
+                            className={`mt-0.5 grid h-[18px] w-[18px] place-items-center rounded border text-xs ${
+                              item.completedAt
+                                ? 'border-emerald-600 bg-emerald-600 text-white'
+                                : 'border-arctic-300 bg-white'
+                            }`}
+                          >
+                            {item.completedAt ? '✓' : ''}
+                          </button>
+                          <div className="text-sm text-onix-800">{item.label}</div>
+                          <div className="text-xs text-onix-500">
+                            {item.completedAt ? (
+                              <>
+                                {formatShortDate(item.completedAt)} · {item.completedBy ?? '—'}
+                              </>
+                            ) : (
+                              '—'
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-onix-600">
+                      Enroll this shop in Tesla to track onboarding progress on the kanban.
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="rounded-lg border border-arctic-200 bg-white p-4 text-sm text-onix-600">
-                  {selectedProgramStats?.label} checklist is coming next. Use VinFast or Expert Assist for full onboarding.
+                  {selectedProgramStats?.label} checklist is coming next. Use VinFast, Tesla, or Expert Assist for full onboarding.
                 </div>
               )}
             </div>

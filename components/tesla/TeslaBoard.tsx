@@ -2,22 +2,22 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { UserPlus } from 'lucide-react'
 import MapView, { type MapViewLocation } from '@/app/(internal)/map/MapView'
 import TeslaCountyTable from '@/components/tesla/TeslaCountyTable'
+import TeslaEnrollSearchModal from '@/components/tesla/TeslaEnrollSearchModal'
 import type { TeslaEnrollmentView } from '@/lib/tesla-enrollments'
 import { TESLA_FIXLANE_ACCOUNT_READY_KEY, TESLA_PORTAL_WALKTHROUGH_KEY } from '@/lib/program-config'
-import { TESLA_STAGES, type TeslaStage } from '@/lib/program-stage'
-
-const STAGE_LABELS: Record<TeslaStage, string> = {
-  not_ready: 'Not Ready',
-  getting_ready: 'Getting Ready',
-  ready: 'Ready',
-  active: 'Active',
-  disqualified: 'Disqualified',
-}
+import {
+  TESLA_KANBAN_STAGES,
+  TESLA_STAGE_DISPLAY,
+  TESLA_STAGES,
+  teslaKanbanDisplayStage,
+  type TeslaStage,
+} from '@/lib/program-stage'
 
 const STAGE_DOT: Record<TeslaStage, string> = {
-  not_ready: 'bg-red-700',
+  not_ready: 'bg-amber-600',
   getting_ready: 'bg-amber-600',
   ready: 'bg-blue-500',
   active: 'bg-green-600',
@@ -25,7 +25,7 @@ const STAGE_DOT: Record<TeslaStage, string> = {
 }
 
 /** Kanban shows Disqualified in a collapsed rail + slide-over panel. */
-const MAIN_KANBAN_STAGES: TeslaStage[] = ['not_ready', 'getting_ready', 'ready', 'active']
+const MAIN_KANBAN_STAGES = TESLA_KANBAN_STAGES
 
 type ViewMode = 'kanban' | 'map' | 'table'
 type CompletionFilter = 'all' | 'complete' | 'incomplete'
@@ -51,6 +51,8 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
   const [openMenuCardId, setOpenMenuCardId] = useState<string | null>(null)
   const [dqPanelOpen, setDqPanelOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [enrollShopModalOpen, setEnrollShopModalOpen] = useState(false)
+  const [enrollBusyLocationId, setEnrollBusyLocationId] = useState<string | null>(null)
 
   useEffect(() => {
     setEnrollments(initialEnrollments)
@@ -137,7 +139,7 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
   )
 
   const teslaStageByLocationId = useMemo(
-    () => Object.fromEntries(filtered.map(e => [e.locationId, e.stage])),
+    () => Object.fromEntries(filtered.map(e => [e.locationId, teslaKanbanDisplayStage(e.stage)])),
     [filtered],
   )
 
@@ -149,9 +151,13 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
       active: [],
       disqualified: [],
     }
-    for (const row of filtered) byStage[row.stage].push(row)
+    for (const row of filtered) {
+      byStage[teslaKanbanDisplayStage(row.stage)].push(row)
+    }
     return byStage
   }, [filtered])
+
+  const enrolledLocationIds = useMemo(() => new Set(enrollments.map(e => e.locationId)), [enrollments])
 
   async function withRefresh(task: () => Promise<void>, enrollmentId: string) {
     setBusyCardId(enrollmentId)
@@ -219,6 +225,27 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
     )
   }
 
+  async function enrollLocation(locationId: string) {
+    setEnrollBusyLocationId(locationId)
+    setError(null)
+    try {
+      const res = await fetch('/api/tesla/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location_id: locationId }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Could not enroll location')
+      setError(null)
+      setEnrollShopModalOpen(false)
+      router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not enroll location')
+    } finally {
+      setEnrollBusyLocationId(null)
+    }
+  }
+
   function clearAllFilters() {
     setShopSurveyFilter('all')
     setTechSurveyFilter('all')
@@ -232,12 +259,15 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
     return (
       <section key={stage} className="rounded-2xl border border-arctic-200 bg-[#f6f4f0] p-3">
         {!hideHeader && (
-          <header className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-xl font-semibold text-onix-900">
-              <span className={`inline-block h-2 w-2 rounded-full ${STAGE_DOT[stage]}`} />
-              {STAGE_LABELS[stage]}
+          <header className="mb-3 flex items-center justify-between gap-2">
+            <h2
+              className="flex min-w-0 items-center gap-2 text-xl font-semibold text-onix-900"
+              title={TESLA_STAGE_DISPLAY[stage].tooltip}
+            >
+              <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${STAGE_DOT[stage]}`} />
+              <span className="truncate">{TESLA_STAGE_DISPLAY[stage].label}</span>
             </h2>
-            <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-onix-500">
+            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-onix-500">
               {cards.length}
             </span>
           </header>
@@ -274,7 +304,7 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
                       onClick={e => e.stopPropagation()}
                       onMouseDown={e => e.stopPropagation()}
                     >
-                      {TESLA_STAGES.map(nextStage => (
+                      {TESLA_STAGES.filter(s => s !== 'not_ready').map(nextStage => (
                         <button
                           key={nextStage}
                           type="button"
@@ -293,7 +323,7 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
                               : 'text-onix-700 hover:bg-arctic-50'
                           }`}
                         >
-                          {STAGE_LABELS[nextStage]}
+                          {TESLA_STAGE_DISPLAY[nextStage].label}
                         </button>
                       ))}
                     </div>
@@ -444,11 +474,20 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
         <div>
           <h1 className="text-4xl font-semibold tracking-tight text-onix-950">Tesla pipeline</h1>
         </div>
-        <div
-          className="inline-flex shrink-0 rounded-lg border border-arctic-300 bg-arctic-50 p-1"
-          role="group"
-          aria-label="View mode"
-        >
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setEnrollShopModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
+            Enroll shop
+          </button>
+          <div
+            className="inline-flex shrink-0 rounded-lg border border-arctic-300 bg-arctic-50 p-1"
+            role="group"
+            aria-label="View mode"
+          >
           {(
             [
               { id: 'kanban' as const, label: 'Kanban' },
@@ -469,6 +508,7 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
               {label}
             </button>
           ))}
+          </div>
         </div>
       </div>
 
@@ -597,7 +637,7 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
       {viewMode === 'kanban' && (
         <>
           <div className="flex min-h-[min(520px,50vh)] flex-col gap-3 lg:flex-row lg:items-stretch">
-            <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {MAIN_KANBAN_STAGES.map(stage => renderKanbanColumn(stage))}
             </div>
 
@@ -641,7 +681,7 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
                     className="flex items-center gap-2 text-lg font-semibold text-onix-900"
                   >
                     <span className={`inline-block h-2 w-2 rounded-full ${STAGE_DOT.disqualified}`} />
-                    {STAGE_LABELS.disqualified}
+                    {TESLA_STAGE_DISPLAY.disqualified.label}
                     <span className="rounded-full bg-arctic-100 px-2 py-0.5 text-xs font-semibold text-onix-600">
                       {grouped.disqualified.length}
                     </span>
@@ -662,6 +702,18 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
           )}
         </>
       )}
+
+      <TeslaEnrollSearchModal
+        open={enrollShopModalOpen}
+        onClose={() => {
+          setEnrollShopModalOpen(false)
+          setError(null)
+        }}
+        enrolledLocationIds={enrolledLocationIds}
+        enrollingLocationId={enrollBusyLocationId}
+        onEnroll={enrollLocation}
+        errorMessage={enrollShopModalOpen ? error : null}
+      />
     </div>
   )
 }

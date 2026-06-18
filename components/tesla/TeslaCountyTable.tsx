@@ -1,15 +1,14 @@
 'use client'
 
 import type { TeslaEnrollmentView } from '@/lib/tesla-enrollments'
-import { TESLA_STAGES, type TeslaStage } from '@/lib/program-stage'
+import {
+  TESLA_KANBAN_STAGES,
+  TESLA_STAGE_DISPLAY,
+  teslaKanbanDisplayStage,
+  type TeslaStage,
+} from '@/lib/program-stage'
 
-const STAGE_LABELS: Record<TeslaStage, string> = {
-  not_ready: 'Not ready',
-  getting_ready: 'Getting ready',
-  ready: 'Ready',
-  active: 'Active',
-  disqualified: 'Disqualified',
-}
+const TABLE_STAGES = [...TESLA_KANBAN_STAGES, 'disqualified'] as const satisfies readonly TeslaStage[]
 
 export default function TeslaCountyTable({ rows }: { rows: TeslaEnrollmentView[] }) {
   const table = buildCountyStageTable(rows)
@@ -23,12 +22,13 @@ export default function TeslaCountyTable({ rows }: { rows: TeslaEnrollmentView[]
               <th className="sticky top-0 z-10 border-b border-arctic-200 bg-arctic-50 px-4 py-3 text-left font-semibold text-onix-900 shadow-[0_1px_0_0_rgb(231,229,228)]">
                 County
               </th>
-              {TESLA_STAGES.map(s => (
+              {TABLE_STAGES.map(s => (
                 <th
                   key={s}
+                  title={TESLA_STAGE_DISPLAY[s].tooltip}
                   className="sticky top-0 z-10 border-b border-arctic-200 bg-arctic-50 px-3 py-3 text-center font-semibold text-onix-800 shadow-[0_1px_0_0_rgb(231,229,228)]"
                 >
-                  {STAGE_LABELS[s]}
+                  {TESLA_STAGE_DISPLAY[s].label}
                 </th>
               ))}
               <th className="sticky top-0 z-10 border-b border-arctic-200 bg-arctic-50 px-3 py-3 text-center font-semibold text-onix-700 shadow-[0_1px_0_0_rgb(231,229,228)]">
@@ -39,7 +39,7 @@ export default function TeslaCountyTable({ rows }: { rows: TeslaEnrollmentView[]
           <tbody>
             {table.length === 0 ? (
               <tr>
-                <td colSpan={TESLA_STAGES.length + 2} className="px-4 py-8 text-center text-onix-500">
+                <td colSpan={TABLE_STAGES.length + 2} className="px-4 py-8 text-center text-onix-500">
                   No shops match the current filters.
                 </td>
               </tr>
@@ -47,7 +47,7 @@ export default function TeslaCountyTable({ rows }: { rows: TeslaEnrollmentView[]
               table.map(row => (
                 <tr key={row.county}>
                   <td className="border-b border-arctic-100 px-4 py-2.5 font-medium text-onix-900">{row.county}</td>
-                  {TESLA_STAGES.map(s => (
+                  {TABLE_STAGES.map(s => (
                     <td key={s} className="border-b border-arctic-100 px-3 py-2.5 text-center tabular-nums text-onix-700">
                       {row.counts[s]}
                     </td>
@@ -81,13 +81,14 @@ function buildCountyStageTable(rows: TeslaEnrollmentView[]) {
       })
     }
     const c = byCounty.get(county)!
-    c[row.stage]++
+    const displayStage = teslaKanbanDisplayStage(row.stage)
+    c[displayStage]++
   }
 
   const out: Row[] = [...byCounty.entries()].map(([county, counts]) => ({
     county,
     counts,
-    total: TESLA_STAGES.reduce((sum, s) => sum + counts[s], 0),
+    total: TABLE_STAGES.reduce((sum, s) => sum + counts[s], 0),
   }))
 
   out.sort((a, b) => a.county.localeCompare(b.county))

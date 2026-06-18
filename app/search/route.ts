@@ -4,7 +4,7 @@ import { activeLocations } from '@/lib/locations-active'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const MAX_PER_GROUP = 4
-/** Wider caps when `context=vinfast-enroll` (VinFast enroll modal); keeps global ⌘K results small. */
+/** Wider caps when `context=vinfast-enroll` or `context=tesla-enroll`; keeps global ⌘K results small. */
 const VINFAST_ENROLL_SHOP_CAP = 20
 const VINFAST_ENROLL_OTHER_CAP = 15
 
@@ -54,7 +54,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(empty)
   }
 
-  const enrollContext = req.nextUrl.searchParams.get('context') === 'vinfast-enroll'
+  const enrollContext =
+    req.nextUrl.searchParams.get('context') === 'vinfast-enroll' ||
+    req.nextUrl.searchParams.get('context') === 'tesla-enroll'
   const shopCap = enrollContext ? VINFAST_ENROLL_SHOP_CAP : MAX_PER_GROUP
   const contactFetchCap = enrollContext ? 40 : 20
   const accountFetchCap = enrollContext ? 40 : 20

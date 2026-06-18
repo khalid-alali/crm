@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deriveProgramStage } from '@/lib/program-stage'
-import { EXPERT_ASSIST_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
+import { EXPERT_ASSIST_PROGRAM_ID, TESLA_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
 
 type EnrollmentRow = {
   id: string
@@ -117,7 +117,12 @@ export async function enrollLocationInProgram(
   if (active) return { enrollmentId: active.id, created: false }
 
   const now = new Date().toISOString()
-  const initialStage = input.programId === EXPERT_ASSIST_PROGRAM_ID ? 'invited' : 'not_ready'
+  const initialStage =
+    input.programId === EXPERT_ASSIST_PROGRAM_ID
+      ? 'invited'
+      : input.programId === TESLA_PROGRAM_ID
+        ? 'getting_ready'
+        : 'not_ready'
   const { data: createdRow, error: createError } = await supabaseAdmin
     .from('location_program_enrollments')
     .insert({
@@ -165,7 +170,7 @@ export async function enrollLocationInProgram(
       programId: input.programId,
       checklistCompletedKeys: completedKeys,
       firstJobCompletedAt: null,
-      currentStage: 'not_ready',
+      currentStage: input.programId === TESLA_PROGRAM_ID ? 'getting_ready' : 'not_ready',
       manualStageOverride: false,
     })
 
