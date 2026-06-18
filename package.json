@@ -45,6 +45,8 @@
     "import:vinfast-shops-csv:apply": "npx tsx scripts/import-vinfast-shops-csv.ts --apply",
     "import:vf-operational-csv": "npx tsx scripts/import-vf-operational-csv.ts",
     "import:vf-operational-csv:apply": "npx tsx scripts/import-vf-operational-csv.ts --apply",
+    "import:shop-facility-survey-csv": "npx tsx scripts/import-shop-facility-survey-csv.ts",
+    "import:shop-facility-survey-csv:apply": "npx tsx scripts/import-shop-facility-survey-csv.ts --apply",
     "validate:bulk-import": "npx tsx scripts/validate-bulk-import.ts",
     "preview:llc-ltd-google-names": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts",
     "preview:llc-ltd-google-names:account": "npx tsx scripts/preview-llc-ltd-google-shop-names.ts --account-id=fa15c3ed-7bca-4225-ac7b-2c6ede80ddad",

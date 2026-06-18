@@ -28,6 +28,7 @@ import ExpertAssistProgramPanel from '@/components/expert-assist/ExpertAssistPro
 import ExpertAssistShopPanel from '@/components/expert-assist/ExpertAssistShopPanel'
 import type { ExpertAssistShopProgramView } from '@/lib/expert-assist-enrollments'
 import { CapabilitiesSection } from '@/components/shop-detail/CapabilitiesSection'
+import { pickFacilitySurvey } from '@/lib/shop-facility-survey'
 import { pickCapabilityProfileState } from '@/lib/capability-profile'
 import ActivityFeed from '@/components/ActivityFeed'
 import StateSelect from '@/components/StateSelect'
@@ -3023,6 +3024,7 @@ export default function ShopDetailTabs({
                 }}
                 profile={pickCapabilityProfileState(shop)}
                 techSurveys={Array.isArray(shop.tech_competency_surveys) ? shop.tech_competency_surveys : []}
+                facilitySurvey={pickFacilitySurvey(shop.shop_facility_surveys)}
                 onSendForm={sendCapabilitiesPortalLink}
               />
               {capabilitiesLinkFeedback && (

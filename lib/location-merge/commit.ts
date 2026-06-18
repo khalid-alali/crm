@@ -144,6 +144,16 @@ export async function commitLocationMerge(
 
   await mergeLocationEnrichment(supabase, body.primaryId, body.secondaryId)
   await supabase.from('tech_competency_surveys').update({ location_id: body.primaryId }).eq('location_id', body.secondaryId)
+  const { data: primaryFacilitySurvey } = await supabase
+    .from('shop_facility_surveys')
+    .select('id')
+    .eq('location_id', body.primaryId)
+    .maybeSingle()
+  if (primaryFacilitySurvey?.id) {
+    await supabase.from('shop_facility_surveys').delete().eq('location_id', body.secondaryId)
+  } else {
+    await supabase.from('shop_facility_surveys').update({ location_id: body.primaryId }).eq('location_id', body.secondaryId)
+  }
   await supabase.from('shop_approved_contacts').update({ shop_id: body.primaryId }).eq('shop_id', body.secondaryId)
   await supabase.from('consult_cases').update({ shop_id: body.primaryId }).eq('shop_id', body.secondaryId)
 

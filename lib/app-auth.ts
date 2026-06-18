@@ -43,6 +43,8 @@ function devBypassSession(): Session {
 
 /** Use instead of getServerSession() so dev bypass applies consistently (layout + API routes). */
 export async function getAppSession(): Promise<Session | null> {
+  if (isAuthBypassEnabled()) return devBypassSession()
+
   let session: Session | null = null
   try {
     session = await getServerSession(authOptions)
@@ -57,6 +59,5 @@ export async function getAppSession(): Promise<Session | null> {
   // Stale cookie (e.g. NEXTAUTH_SECRET rotated) → decrypt fails with JWT_SESSION_ERROR.
   if (hasSessionCookie) await clearStaleNextAuthCookies()
 
-  if (isAuthBypassEnabled()) return devBypassSession()
   return null
 }

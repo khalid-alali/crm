@@ -7,6 +7,8 @@ import { formatHoursForDisplay } from '@/lib/portal-hours-schedule'
 import { formatAllocatedTechsDisplay } from '@/lib/portal-capabilities-form'
 import type { CapabilityProfileState } from '@/lib/capability-profile'
 import { CapabilityProfileBand } from '@/components/shop-detail/CapabilityProfileBand'
+import { VinfastReadinessBand } from '@/components/shop-detail/VinfastReadinessBand'
+import type { FacilitySurveyRow } from '@/lib/vinfast-readiness'
 
 interface CapabilitiesData {
   bar_license_number: string | null
@@ -72,6 +74,7 @@ interface Props {
   location: CapabilitiesData
   profile: CapabilityProfileState
   techSurveys: RawSurvey[]
+  facilitySurvey: FacilitySurveyRow | null
   onSendForm?: () => void
   readOnly?: boolean
 }
@@ -82,6 +85,7 @@ export function CapabilitiesSection({
   location,
   profile,
   techSurveys,
+  facilitySurvey,
   onSendForm,
   readOnly = false,
 }: Props) {
@@ -107,6 +111,10 @@ export function CapabilitiesSection({
 
   const profileBand = (
     <CapabilityProfileBand locationId={locationId} profile={profile} readOnly={readOnly} />
+  )
+
+  const vinfastReadiness = (
+    <VinfastReadinessBand survey={facilitySurvey} locationName={locationName} />
   )
 
   /* State A — no capabilities, no surveys */
@@ -143,6 +151,7 @@ export function CapabilitiesSection({
             ) : null}
           </div>
         </div>
+        {vinfastReadiness}
         {modals}
       </div>
     )
@@ -154,6 +163,7 @@ export function CapabilitiesSection({
       <div className="space-y-6">
         {profileBand}
         <CapabilitiesNudgeBanner onSendForm={onSendForm} />
+        {vinfastReadiness}
         <TechnicianCompetencyPanel
           techCards={techCards}
           onSurveyClick={() => setSurveyModalOpen(true)}
@@ -182,6 +192,8 @@ export function CapabilitiesSection({
       </div>
 
       <ShopCapabilitiesDetailGrid location={location} />
+
+      {vinfastReadiness}
 
       <TechnicianCompetencyPanel
         techCards={techCards}
