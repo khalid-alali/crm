@@ -8,6 +8,7 @@ import Link from '@tiptap/extension-link'
 import { Bold, Italic, Link2, List, ListOrdered } from 'lucide-react'
 import {
   CAPABILITIES_LINK_PLACEHOLDER,
+  ENROLLMENT_PORTAL_LINK_PLACEHOLDER,
   EXPERT_ASSIST_LINK_PLACEHOLDER,
 } from '@/lib/email-template-placeholder-tokens'
 
@@ -185,6 +186,13 @@ function EmailEditorToolbar({ editor }: { editor: Editor }) {
               className="rounded-full bg-sky-50 px-2.5 py-1 font-mono text-[11px] text-sky-900 hover:bg-sky-100"
             >
               {EXPERT_ASSIST_LINK_PLACEHOLDER}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLinkUrl(ENROLLMENT_PORTAL_LINK_PLACEHOLDER)}
+              className="rounded-full bg-violet-50 px-2.5 py-1 font-mono text-[11px] text-violet-900 hover:bg-violet-100"
+            >
+              {ENROLLMENT_PORTAL_LINK_PLACEHOLDER}
             </button>
           </div>
           <div className="mt-3 flex justify-end gap-2">

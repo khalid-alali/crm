@@ -5,6 +5,7 @@ import { getAppSession } from '@/lib/app-auth'
 import { htmlToPlainText } from '@/lib/email-html'
 import { SEED_ONBOARDING_TEMPLATE_ID } from '@/lib/email-template-ids'
 import { injectCapabilitiesIntoEmail } from '@/lib/inject-capabilities-email'
+import { injectEnrollmentPortalIntoEmail } from '@/lib/inject-enrollment-portal-email'
 import { injectExpertAssistIntoEmail } from '@/lib/inject-expert-assist-email'
 import { normalizeRecipientList } from '@/lib/email-recipients'
 import {
@@ -94,6 +95,9 @@ export async function POST(req: NextRequest) {
       const expertInjected = await injectExpertAssistIntoEmail(req, locationId, subjectOut, bodyOut)
       subjectOut = expertInjected.subject
       bodyOut = expertInjected.bodyHtml
+      const enrollmentInjected = injectEnrollmentPortalIntoEmail(req, locationId, subjectOut, bodyOut)
+      subjectOut = enrollmentInjected.subject
+      bodyOut = enrollmentInjected.bodyHtml
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not build email links'
       return NextResponse.json({ error: msg }, { status: 500 })

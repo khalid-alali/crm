@@ -1,12 +1,46 @@
 import { describe, expect, it } from 'vitest'
-import { CAPABILITIES_LINK_DISPLAY_SENTINEL } from './email-template-ids'
+import {
+  CAPABILITIES_LINK_DISPLAY_SENTINEL,
+  ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL,
+} from './email-template-ids'
 import {
   buildCapabilitiesHref,
+  buildEnrollmentPortalHref,
+  emailContentReferencesEnrollmentPortalLink,
   replaceCapabilitiesPreviewWithReal,
   replaceEmailTemplatePlaceholders,
   replaceLegacyCapabilitiesPreviewUrls,
   subjectAndBodyWithPlaceholders,
 } from './email-template-placeholders'
+
+describe('enrollment portal placeholder (isolated from capabilities)', () => {
+  it('builds the /onboarding href from the token', () => {
+    expect(buildEnrollmentPortalHref('https://app.example.com/', 'abc.jwt')).toBe(
+      'https://app.example.com/portal/abc.jwt/onboarding',
+    )
+  })
+
+  it('substitutes enrollment_portal_link and _url, leaving capabilities untouched', () => {
+    const out = replaceEmailTemplatePlaceholders(
+      '<a href="{{enrollment_portal_link}}">Track</a> <a href="{{capabilities_link}}">Profile</a>',
+      {},
+      { enrollmentPortal: 'https://x/portal/t/onboarding', capabilities: 'https://x/portal/t' },
+    )
+    expect(out).toContain('href="https://x/portal/t/onboarding"')
+    expect(out).toContain('href="https://x/portal/t"')
+  })
+
+  it('does not fill enrollment placeholder when only capabilities href is provided', () => {
+    const out = replaceEmailTemplatePlaceholders('{{enrollment_portal_link}}', {}, { capabilities: 'https://x/portal/t' })
+    expect(out).toBe('{{enrollment_portal_link}}')
+  })
+
+  it('detects references via placeholder or display sentinel', () => {
+    expect(emailContentReferencesEnrollmentPortalLink('hi', '{{enrollment_portal_url}}')).toBe(true)
+    expect(emailContentReferencesEnrollmentPortalLink('hi', ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL)).toBe(true)
+    expect(emailContentReferencesEnrollmentPortalLink('hi', '{{capabilities_link}}')).toBe(false)
+  })
+})
 
 describe('replaceEmailTemplatePlaceholders', () => {
   it('substitutes capabilities_link inside href without changing anchor text', () => {
