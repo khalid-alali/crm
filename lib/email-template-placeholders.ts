@@ -1,6 +1,7 @@
 import {
   CAPABILITIES_LINK_DISPLAY_SENTINEL,
   CAPABILITIES_LINK_PREVIEW_TOKEN,
+  ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL,
   EXPERT_ASSIST_LINK_DISPLAY_SENTINEL,
   EXPERT_ASSIST_LINK_PREVIEW_SHOP_ID,
 } from '@/lib/email-template-ids'
@@ -27,9 +28,21 @@ export function buildCapabilitiesHref(baseUrl: string, mode: CapabilitiesLinkMod
   return `${base}/portal/${jwtToken.trim()}`
 }
 
+/**
+ * Build href for the enrollment (onboarding) portal placeholder. Same JWT as the
+ * capabilities link, but the `/onboarding` surface. No preview token: the
+ * `/portal/<token>` capabilities preview is a prefix of this path, so a shared
+ * token would let the capabilities injector corrupt this link via string replace.
+ * The placeholder relies on its display sentinel + `{{enrollment_portal_link}}`.
+ */
+export function buildEnrollmentPortalHref(baseUrl: string, jwtToken: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/portal/${jwtToken.trim()}/onboarding`
+}
+
 export type EmailTemplateLinkHrefs = {
   capabilities?: string
   expertAssist?: string
+  enrollmentPortal?: string
 }
 
 /**
@@ -50,6 +63,10 @@ export function replaceEmailTemplatePlaceholders(
     map.portal_url = hrefs.capabilities
   }
   if (hrefs.expertAssist) map.expert_assist_link = hrefs.expertAssist
+  if (hrefs.enrollmentPortal) {
+    map.enrollment_portal_link = hrefs.enrollmentPortal
+    map.enrollment_portal_url = hrefs.enrollmentPortal
+  }
   return replacePlaceholderTokens(text, map)
 }
 
@@ -95,6 +112,15 @@ export function emailContentReferencesCapabilitiesLink(subject: string, bodyHtml
     /\{\{\s*portal_url\s*\}\}/i.test(s) ||
     s.includes(CAPABILITIES_LINK_DISPLAY_SENTINEL) ||
     s.includes(`/portal/${CAPABILITIES_LINK_PREVIEW_TOKEN}`)
+  )
+}
+
+export function emailContentReferencesEnrollmentPortalLink(subject: string, bodyHtml: string): boolean {
+  const s = `${subject}\0${bodyHtml}`
+  return (
+    /\{\{\s*enrollment_portal_link\s*\}\}/i.test(s) ||
+    /\{\{\s*enrollment_portal_url\s*\}\}/i.test(s) ||
+    s.includes(ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL)
   )
 }
 

@@ -50,18 +50,20 @@ const PROGRAM_CONFIGS: Record<string, ProgramConfig> = {
     id: TESLA_PROGRAM_ID,
     label: 'Tesla',
     checklist: [
-      { key: 'epc', label: 'EPC' },
-      { key: 'toolbox', label: 'Toolbox' },
-      { key: 'laptop', label: 'Laptop' },
-      { key: 'cables', label: 'Cables' },
+      { key: 'epc', label: 'EPC', owner: 'shop' },
+      { key: 'toolbox', label: 'Toolbox', owner: 'shop' },
+      { key: 'laptop', label: 'Laptop', owner: 'shop' },
+      { key: 'cables', label: 'Cables', owner: 'shop' },
       {
         key: TESLA_PORTAL_WALKTHROUGH_KEY,
         label: 'Portal walkthrough',
+        owner: 'fl',
         requiredForStage: false,
       },
       {
         key: TESLA_FIXLANE_ACCOUNT_READY_KEY,
         label: 'Fixlane account ready',
+        owner: 'fl',
         requiredForStage: false,
       },
     ],
@@ -69,7 +71,7 @@ const PROGRAM_CONFIGS: Record<string, ProgramConfig> = {
   multidrive: {
     id: 'multidrive',
     label: 'Multi-drive',
-    checklist: [{ key: 'diagnostics', label: 'Diagnostics setup' }],
+    checklist: [{ key: 'diagnostics', label: 'Diagnostics setup', owner: 'fl' }],
   },
   vinfast: {
     id: VINFAST_PROGRAM_ID,
