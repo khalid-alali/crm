@@ -81,7 +81,7 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
   }, [token])
 
   const current = useMemo(
-    () => programs?.find(p => p.enrollment_id === selected) ?? null,
+    () => programs?.find(p => p.enrollment_id === selected) ?? programs?.[0] ?? null,
     [programs, selected],
   )
 
@@ -126,7 +126,7 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
     )
   }
 
-  if (!programs || !current) {
+  if (programs === null) {
     return (
       <Shell>
         <div className="flex items-center gap-2 py-24 text-[#5f6571]">
@@ -136,13 +136,18 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
     )
   }
 
-  if (programs.length === 0) {
+  if (programs.length === 0 || !current) {
     return (
       <Shell>
         <div className="mx-auto max-w-md py-24 text-center">
-          <h1 className="text-xl font-semibold text-[#0f1114]">No programs yet</h1>
+          <Clock className="mx-auto text-[#687cf9]" size={26} aria-hidden />
+          <h1 className="mt-3 text-xl font-semibold text-[#0f1114]">Nothing to set up yet</h1>
           <p className={`mt-2 text-sm ${MUTED}`}>
-            Your programs will appear here once your Fixlane rep adds them.
+            You're all set for now. When Fixlane adds you to a program, your onboarding
+            steps show up here — and we'll email you.
+          </p>
+          <p className={`mt-3 text-xs ${MUTED}`}>
+            Questions? <a href="mailto:shops@fixlane.com" className="text-[#687cf9]">shops@fixlane.com</a>
           </p>
         </div>
       </Shell>
