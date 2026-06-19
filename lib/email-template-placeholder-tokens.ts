@@ -17,3 +17,6 @@ export const CAPABILITIES_LINK_PLACEHOLDER = '{{capabilities_link}}' as const
 
 /** Expert Assist web intake — use via the body toolbar Link popover (not the merge-field sidebar). */
 export const EXPERT_ASSIST_LINK_PLACEHOLDER = '{{expert_assist_link}}' as const
+
+/** Shop onboarding portal (/portal/<token>/onboarding) — use via the body toolbar Link popover. */
+export const ENROLLMENT_PORTAL_LINK_PLACEHOLDER = '{{enrollment_portal_link}}' as const
