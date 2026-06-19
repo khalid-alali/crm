@@ -482,8 +482,9 @@ export default function EmailTemplateForm({ mode, templateId }: Props) {
               ))}
             </div>
             <p className="mt-4 text-[10px] leading-snug text-onix-500">
-              For <span className="font-mono text-onix-700">{'{{capabilities_link}}'}</span> or{' '}
-              <span className="font-mono text-onix-700">{'{{expert_assist_link}}'}</span>, select link text in the
+              For <span className="font-mono text-onix-700">{'{{capabilities_link}}'}</span>,{' '}
+              <span className="font-mono text-onix-700">{'{{expert_assist_link}}'}</span>, or{' '}
+              <span className="font-mono text-onix-700">{'{{enrollment_portal_link}}'}</span>, select link text in the
               body, click the toolbar <strong>Link</strong> button, then choose the placeholder in that dialog.
             </p>
           </div>

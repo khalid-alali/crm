@@ -624,8 +624,9 @@ export default function EmailModal({
                               ))}
                             </div>
                             <p className="mt-2 text-[10px] leading-snug text-onix-500">
-                              For <span className="font-mono text-onix-700">{'{{capabilities_link}}'}</span> or{' '}
-                              <span className="font-mono text-onix-700">{'{{expert_assist_link}}'}</span>, use the
+                              For <span className="font-mono text-onix-700">{'{{capabilities_link}}'}</span>,{' '}
+                              <span className="font-mono text-onix-700">{'{{expert_assist_link}}'}</span>, or{' '}
+                              <span className="font-mono text-onix-700">{'{{enrollment_portal_link}}'}</span>, use the
                               body toolbar <strong>Link</strong> button and pick the placeholder there.
                             </p>
                           </div>
