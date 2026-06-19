@@ -51,7 +51,10 @@ const PROGRAM_CONFIGS: Record<string, ProgramConfig> = {
     label: 'Tesla',
     checklist: [
       { key: 'epc', label: 'EPC', owner: 'shop' },
-      { key: 'toolbox', label: 'Toolbox', owner: 'shop' },
+      // Toolbox is optional for the shop: most buy it after their first Tesla job,
+      // so it must NOT gate the getting_ready → ready transition. The shop-facing
+      // "Optional" badge is set separately in lib/portal-checklist.ts.
+      { key: 'toolbox', label: 'Toolbox', owner: 'shop', requiredForStage: false },
       { key: 'laptop', label: 'Laptop', owner: 'shop' },
       { key: 'cables', label: 'Cables', owner: 'shop' },
       {
@@ -214,6 +217,15 @@ const PROGRAM_CONFIGS: Record<string, ProgramConfig> = {
         owner: 'fl',
         order: 11,
         prerequisites: [],
+        requiredForStage: false,
+      },
+      {
+        key: 'usb_a_cables',
+        label: 'USB-A cables purchased',
+        phase: 2,
+        phaseLabel: 'Setup, training & equipment',
+        owner: 'shop',
+        order: 12,
         requiredForStage: false,
       },
       {

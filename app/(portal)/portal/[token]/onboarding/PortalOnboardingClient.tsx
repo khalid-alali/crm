@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Clock, Loader2, Lock } from 'lucide-react'
+import { Check, ChevronDown, Clock, ExternalLink, Loader2, Lock } from 'lucide-react'
+
+type ItemLink = { label: string; url: string; primary?: boolean }
 
 // Mirrors the GET /api/portal/[token]/checklist response.
 type Item = {
@@ -10,6 +12,11 @@ type Item = {
   owner: 'fl' | 'vf' | 'shop'
   side: 'shop' | 'fixlane'
   completable: boolean
+  optional: boolean
+  explainer?: string
+  note?: string
+  spec?: [string, string][]
+  links?: ItemLink[]
   phase?: number
   phaseLabel?: string
   completedAt: string | null
@@ -64,10 +71,18 @@ function ProgressRing({ pct, active }: { pct: number; active: boolean }) {
   )
 }
 
+// The progress denominator is the shop's OWN required steps: Fixlane-handled
+// rows and shop-optional steps (e.g. Tesla Toolbox) are shown but never block
+// reaching 100%.
+function countedItems(items: Item[]): Item[] {
+  return items.filter(i => i.side === 'shop' && !i.optional)
+}
+
 function programPct(p: Program): number {
-  if (p.items.length === 0) return p.stage === 'active' ? 100 : 0
-  const done = p.items.filter(i => i.completedAt).length
-  return Math.round((done / p.items.length) * 100)
+  const counted = countedItems(p.items)
+  if (counted.length === 0) return p.stage === 'active' ? 100 : 0
+  const done = counted.filter(i => i.completedAt).length
+  return Math.round((done / counted.length) * 100)
 }
 
 const OWNER_CHIP: Record<Item['owner'], { label: string; cls: string }> = {
@@ -185,8 +200,10 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
     g.items.some(it => it.completable && !it.completedAt && !it.blocked),
   )
   const currentPhaseNum = shopActionPhaseIdx >= 0 ? phasedGroups[shopActionPhaseIdx].phase : null
-  const totalDone = current.items.filter(i => i.completedAt).length
-  const allDone = totalDone === current.items.length
+  const counted = countedItems(current.items)
+  const totalDone = counted.filter(i => i.completedAt).length
+  const totalCounted = counted.length
+  const allDone = totalDone === totalCounted
   const pct = programPct(current)
 
   return (
@@ -271,7 +288,7 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
                   Onboarding progress
                 </span>
                 <span className={`text-xs ${MUTED}`}>
-                  {totalDone} of {current.items.length} steps
+                  {totalDone} of {totalCounted} steps
                 </span>
               </div>
               <div className="h-1 overflow-hidden rounded-full bg-[#ececf0]">
@@ -361,46 +378,132 @@ function ItemRow({
   const done = !!item.completedAt
   const chip = OWNER_CHIP[item.owner]
   const isShopAction = item.completable && !done && !item.blocked
+  const hasDetail = !!(
+    item.explainer ||
+    item.note ||
+    (item.spec && item.spec.length) ||
+    (item.links && item.links.length)
+  )
+  const [open, setOpen] = useState(false)
+
   return (
-    <div className={`flex items-start gap-3 border-b ${HAIR} py-3.5 ${item.blocked ? 'opacity-55' : ''}`}>
-      <span className="mt-0.5 flex-none" aria-hidden>
-        {done ? (
-          <Check size={18} className="text-[#687cf9]" strokeWidth={2.5} />
-        ) : item.side === 'fixlane' ? (
-          <Clock size={18} className="text-[#687cf9]" />
-        ) : (
-          <span className="block h-4 w-4 rounded-full border-2 border-[#d7dade]" />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-[15px] font-medium text-[#0f1114]">{item.label}</span>
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${chip.cls}`}>{chip.label}</span>
-        </div>
-        {item.blocked && item.unlocksAfterLabel && (
-          <p className={`mt-1 flex items-center gap-1 text-xs ${MUTED}`}>
-            <Lock size={11} aria-hidden /> Unlocks after: {item.unlocksAfterLabel}
-          </p>
-        )}
-      </div>
-      <div className="flex-none">
-        {done ? (
-          <span className="flex items-center gap-1 rounded bg-[#cfffcd] px-2 py-0.5 text-[11px] font-medium text-[#1f6b2e]">
-            <Check size={12} strokeWidth={3} aria-hidden /> Done
-          </span>
-        ) : isShopAction ? (
+    <div className={`border-b ${HAIR} ${item.blocked ? 'opacity-55' : ''}`}>
+      <div className="flex items-start gap-3 py-3.5">
+        <span className="mt-0.5 flex-none" aria-hidden>
+          {done ? (
+            <Check size={18} className="text-[#687cf9]" strokeWidth={2.5} />
+          ) : item.side === 'fixlane' ? (
+            <Clock size={18} className="text-[#687cf9]" />
+          ) : (
+            <span className="block h-4 w-4 rounded-full border-2 border-[#d7dade]" />
+          )}
+        </span>
+
+        {hasDetail ? (
           <button
-            disabled={saving}
-            onClick={onComplete}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            style={{ background: VIOLET }}
+            type="button"
+            onClick={() => setOpen(o => !o)}
+            aria-expanded={open}
+            className="min-w-0 flex-1 text-left"
           >
-            {saving ? 'Saving…' : 'Mark done'}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-[15px] font-medium text-[#0f1114]">{item.label}</span>
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${chip.cls}`}>{chip.label}</span>
+              {item.optional && (
+                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                  Optional
+                </span>
+              )}
+              <ChevronDown
+                size={15}
+                className={`text-[#9aa1ab] transition-transform ${open ? 'rotate-180' : ''}`}
+                aria-hidden
+              />
+            </div>
+            {item.blocked && item.unlocksAfterLabel && (
+              <p className={`mt-1 flex items-center gap-1 text-xs ${MUTED}`}>
+                <Lock size={11} aria-hidden /> Unlocks after: {item.unlocksAfterLabel}
+              </p>
+            )}
           </button>
-        ) : item.side === 'fixlane' && !item.blocked ? (
-          <span className={`rounded bg-[#eef0f3] px-2 py-0.5 text-[11px] ${MUTED}`}>In progress</span>
-        ) : null}
+        ) : (
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-[15px] font-medium text-[#0f1114]">{item.label}</span>
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${chip.cls}`}>{chip.label}</span>
+              {item.optional && (
+                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                  Optional
+                </span>
+              )}
+            </div>
+            {item.blocked && item.unlocksAfterLabel && (
+              <p className={`mt-1 flex items-center gap-1 text-xs ${MUTED}`}>
+                <Lock size={11} aria-hidden /> Unlocks after: {item.unlocksAfterLabel}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="flex-none">
+          {done ? (
+            <span className="flex items-center gap-1 rounded bg-[#cfffcd] px-2 py-0.5 text-[11px] font-medium text-[#1f6b2e]">
+              <Check size={12} strokeWidth={3} aria-hidden /> Done
+            </span>
+          ) : isShopAction ? (
+            <button
+              disabled={saving}
+              onClick={onComplete}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              style={{ background: VIOLET }}
+            >
+              {saving ? 'Saving…' : 'Mark done'}
+            </button>
+          ) : item.side === 'fixlane' && !item.blocked ? (
+            <span className={`rounded bg-[#eef0f3] px-2 py-0.5 text-[11px] ${MUTED}`}>In progress</span>
+          ) : null}
+        </div>
       </div>
+
+      {open && hasDetail && (
+        <div className="pb-4 pl-7 pr-1">
+          {item.explainer && (
+            <p className="mb-2 text-[13.5px] font-medium text-[#0f1114]">{item.explainer}</p>
+          )}
+          {item.note && <p className={`mb-3 text-[13px] ${MUTED}`}>{item.note}</p>}
+          {item.spec && item.spec.length > 0 && (
+            <dl className="mb-3 space-y-1.5">
+              {item.spec.map(([k, v]) => (
+                <div key={k} className="flex gap-2 text-[13px]">
+                  <dt className="w-24 flex-none font-medium text-[#9aa1ab]">{k}</dt>
+                  <dd className="text-[#3f474f]">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {item.links && item.links.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {item.links.map(link => (
+                <a
+                  key={link.url}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium ${
+                    link.primary
+                      ? 'text-white'
+                      : `border border-[#d7dade] bg-white text-[#0f1114] hover:bg-[#f4f5f7]`
+                  }`}
+                  style={link.primary ? { background: VIOLET } : undefined}
+                >
+                  {link.label}
+                  <ExternalLink size={14} aria-hidden />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
