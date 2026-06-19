@@ -28,6 +28,23 @@ const VIOLET = '#687cf9'
 const MUTED = 'text-[#5f6571]'
 const HAIR = 'border-[#0f1114]/10'
 
+type PhaseGroup = { phase: number | null; label: string; items: Item[]; done: boolean }
+
+function groupByPhase(items: Item[]): PhaseGroup[] {
+  const groups: PhaseGroup[] = []
+  for (const it of items) {
+    const phase = it.phase ?? null
+    let g = groups.find(x => x.phase === phase)
+    if (!g) {
+      g = { phase, label: it.phaseLabel ?? '', items: [], done: true }
+      groups.push(g)
+    }
+    g.items.push(it)
+    if (!it.completedAt) g.done = false
+  }
+  return groups
+}
+
 function ProgressRing({ pct, active }: { pct: number; active: boolean }) {
   if (pct >= 100) {
     return (
@@ -51,6 +68,12 @@ function programPct(p: Program): number {
   if (p.items.length === 0) return p.stage === 'active' ? 100 : 0
   const done = p.items.filter(i => i.completedAt).length
   return Math.round((done / p.items.length) * 100)
+}
+
+const OWNER_CHIP: Record<Item['owner'], { label: string; cls: string }> = {
+  shop: { label: 'You', cls: 'bg-[#687cf9]/10 text-[#3f47c4]' },
+  fl: { label: 'Fixlane', cls: 'bg-[#eef0f3] text-[#5f6571]' },
+  vf: { label: 'VinFast', cls: 'bg-amber-50 text-amber-700' },
 }
 
 export default function PortalOnboardingClient({ token }: { token: string }) {
@@ -154,16 +177,21 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
     )
   }
 
-  const shopItems = current.items.filter(i => i.side === 'shop')
-  const fixlaneItems = current.items.filter(i => i.side === 'fixlane')
-  const actionable = shopItems.filter(i => !i.completedAt && !i.blocked)
-  const upNext = shopItems.filter(i => !i.completedAt && i.blocked)
-  const doneShop = shopItems.filter(i => i.completedAt)
+  const phases = groupByPhase(current.items)
+  const hasPhases = phases.some(g => g.phase !== null)
+  const phasedGroups = phases.filter(g => g.phase !== null)
+  // Shop-centric "current phase": the earliest phase with a step the shop can act on now.
+  const shopActionPhaseIdx = phasedGroups.findIndex(g =>
+    g.items.some(it => it.completable && !it.completedAt && !it.blocked),
+  )
+  const currentPhaseNum = shopActionPhaseIdx >= 0 ? phasedGroups[shopActionPhaseIdx].phase : null
+  const totalDone = current.items.filter(i => i.completedAt).length
+  const allDone = totalDone === current.items.length
   const pct = programPct(current)
 
   return (
     <Shell>
-      <div className="flex flex-col gap-0 md:flex-row">
+      <div className="flex flex-col md:flex-row">
         {/* Sidebar / program switcher */}
         <aside className={`border-b ${HAIR} p-5 md:w-60 md:flex-none md:border-b-0 md:border-r`}>
           <div className="flex items-center gap-2">
@@ -237,65 +265,143 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
             </div>
           ) : (
             <>
+              {/* Overall progress + current-phase orientation */}
               <div className="mt-6 mb-1 flex items-center justify-between">
                 <span className={`text-[11px] font-medium uppercase tracking-wider ${MUTED}`}>
                   Onboarding progress
                 </span>
                 <span className={`text-xs ${MUTED}`}>
-                  {current.items.filter(i => i.completedAt).length} of {current.items.length} steps
+                  {totalDone} of {current.items.length} steps
                 </span>
               </div>
               <div className="h-1 overflow-hidden rounded-full bg-[#ececf0]">
                 <div className="h-full bg-[#0f1114]" style={{ width: `${pct}%` }} />
               </div>
+              {hasPhases && shopActionPhaseIdx >= 0 ? (
+                <p className={`mt-2 text-xs ${MUTED}`}>
+                  <span className="font-medium text-[#0f1114]">Your next step</span> · Phase{' '}
+                  {phasedGroups[shopActionPhaseIdx].phase} of {phasedGroups.length} ·{' '}
+                  {phasedGroups[shopActionPhaseIdx].label}
+                </p>
+              ) : hasPhases && !allDone ? (
+                <p className={`mt-2 text-xs ${MUTED}`}>
+                  Nothing for you right now — Fixlane is handling the next steps, and we'll email you
+                  when there's something for you to do.
+                </p>
+              ) : null}
 
-              {shopItems.length > 0 && (
-                <Section title="Your steps" count={`${actionable.length} to do now`}>
-                  {actionable.map(item => (
-                    <Row key={item.key} item={item}>
-                      <button
-                        disabled={saving === item.key}
-                        onClick={() => complete(item, current)}
-                        className="flex-none rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                        style={{ background: VIOLET }}
-                      >
-                        {saving === item.key ? 'Saving…' : 'Mark done'}
-                      </button>
-                    </Row>
-                  ))}
-                  {upNext.map(item => (
-                    <Row key={item.key} item={item} dim>
-                      <span className={`flex items-center gap-1 text-xs ${MUTED}`}>
-                        <Lock size={12} aria-hidden /> Unlocks after: {item.unlocksAfterLabel}
-                      </span>
-                    </Row>
-                  ))}
-                  {doneShop.map(item => (
-                    <Row key={item.key} item={item}>
-                      <DoneTag />
-                    </Row>
-                  ))}
-                </Section>
-              )}
-
-              {fixlaneItems.length > 0 && (
-                <Section title="Fixlane is handling this">
-                  {fixlaneItems.map(item => (
-                    <Row key={item.key} item={item} fixlane>
-                      {item.completedAt ? (
-                        <DoneTag />
-                      ) : (
-                        <span className={`rounded bg-[#eef0f3] px-2 py-0.5 text-[11px] ${MUTED}`}>In progress</span>
+              {/* Phase-grouped checklist */}
+              <div className="mt-6 space-y-7">
+                {phases.map(g => {
+                  const phaseDone = g.items.filter(it => it.completedAt).length
+                  const isCurrent = g.phase !== null && g.phase === currentPhaseNum
+                  return (
+                    <section key={g.phase ?? 'general'}>
+                      {g.phase !== null && (
+                        <div className="mb-1 flex items-center gap-2.5">
+                          <PhaseBadge n={g.phase} done={g.done} current={isCurrent} />
+                          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#0f1114]">
+                            {g.label}
+                          </h2>
+                          <span className={`ml-auto text-xs ${MUTED}`}>
+                            {phaseDone}/{g.items.length}
+                          </span>
+                        </div>
                       )}
-                    </Row>
-                  ))}
-                </Section>
-              )}
+                      <div className={g.phase !== null ? 'md:pl-[30px]' : ''}>
+                        {g.items.map(item => (
+                          <ItemRow
+                            key={item.key}
+                            item={item}
+                            saving={saving === item.key}
+                            onComplete={() => complete(item, current)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )
+                })}
+              </div>
             </>
           )}
         </main>
       </div>
     </Shell>
+  )
+}
+
+function PhaseBadge({ n, done, current }: { n: number; done: boolean; current: boolean }) {
+  if (done) {
+    return (
+      <span className="flex h-[22px] w-[22px] flex-none items-center justify-center rounded-full bg-[#cfffcd] text-[#1f6b2e]">
+        <Check size={13} strokeWidth={3} aria-hidden />
+      </span>
+    )
+  }
+  return (
+    <span
+      className={`flex h-[22px] w-[22px] flex-none items-center justify-center rounded-full text-[11px] font-semibold ${
+        current ? 'bg-[#687cf9] text-white' : 'border border-[#d7dade] text-[#5f6571]'
+      }`}
+    >
+      {n}
+    </span>
+  )
+}
+
+function ItemRow({
+  item,
+  saving,
+  onComplete,
+}: {
+  item: Item
+  saving: boolean
+  onComplete: () => void
+}) {
+  const done = !!item.completedAt
+  const chip = OWNER_CHIP[item.owner]
+  const isShopAction = item.completable && !done && !item.blocked
+  return (
+    <div className={`flex items-start gap-3 border-b ${HAIR} py-3.5 ${item.blocked ? 'opacity-55' : ''}`}>
+      <span className="mt-0.5 flex-none" aria-hidden>
+        {done ? (
+          <Check size={18} className="text-[#687cf9]" strokeWidth={2.5} />
+        ) : item.side === 'fixlane' ? (
+          <Clock size={18} className="text-[#687cf9]" />
+        ) : (
+          <span className="block h-4 w-4 rounded-full border-2 border-[#d7dade]" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[15px] font-medium text-[#0f1114]">{item.label}</span>
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${chip.cls}`}>{chip.label}</span>
+        </div>
+        {item.blocked && item.unlocksAfterLabel && (
+          <p className={`mt-1 flex items-center gap-1 text-xs ${MUTED}`}>
+            <Lock size={11} aria-hidden /> Unlocks after: {item.unlocksAfterLabel}
+          </p>
+        )}
+      </div>
+      <div className="flex-none">
+        {done ? (
+          <span className="flex items-center gap-1 rounded bg-[#cfffcd] px-2 py-0.5 text-[11px] font-medium text-[#1f6b2e]">
+            <Check size={12} strokeWidth={3} aria-hidden /> Done
+          </span>
+        ) : isShopAction ? (
+          <button
+            disabled={saving}
+            onClick={onComplete}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            style={{ background: VIOLET }}
+          >
+            {saving ? 'Saving…' : 'Mark done'}
+          </button>
+        ) : item.side === 'fixlane' && !item.blocked ? (
+          <span className={`rounded bg-[#eef0f3] px-2 py-0.5 text-[11px] ${MUTED}`}>In progress</span>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
@@ -306,66 +412,5 @@ function Shell({ children }: { children: React.ReactNode }) {
         {children}
       </div>
     </div>
-  )
-}
-
-function Section({
-  title,
-  count,
-  children,
-}: {
-  title: string
-  count?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="mt-8">
-      <div className="mb-1 flex items-baseline gap-2">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#0f1114]">{title}</h2>
-        {count && <span className={`text-xs ${MUTED}`}>{count}</span>}
-      </div>
-      <div>{children}</div>
-    </section>
-  )
-}
-
-function Row({
-  item,
-  children,
-  dim,
-  fixlane,
-}: {
-  item: Item
-  children: React.ReactNode
-  dim?: boolean
-  fixlane?: boolean
-}) {
-  return (
-    <div
-      className={`flex items-start gap-4 border-b ${HAIR} py-4 ${dim ? 'opacity-55' : ''}`}
-    >
-      <span className="mt-0.5 flex-none" aria-hidden>
-        {item.completedAt ? (
-          <Check size={18} className="text-[#687cf9]" strokeWidth={2.5} />
-        ) : fixlane ? (
-          <Clock size={18} className="text-[#687cf9]" />
-        ) : (
-          <span className="block h-4 w-4 rounded-full border-2 border-[#d7dade]" />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[15px] font-semibold text-[#0f1114]">{item.label}</p>
-        {item.phaseLabel && <p className={`mt-0.5 text-xs ${MUTED}`}>{item.phaseLabel}</p>}
-      </div>
-      <div className="flex-none">{children}</div>
-    </div>
-  )
-}
-
-function DoneTag() {
-  return (
-    <span className="flex items-center gap-1 rounded bg-[#cfffcd] px-2 py-0.5 text-[11px] font-medium text-[#1f6b2e]">
-      <Check size={12} strokeWidth={3} aria-hidden /> Done
-    </span>
   )
 }
