@@ -24,11 +24,33 @@ import {
   type ProgramChecklistItem,
 } from '@/lib/program-config'
 
+/** A resource button shown in an item's expanded detail (external link). */
+export type ShopChecklistLink = {
+  label: string
+  url: string
+  /** Render as the filled primary button. Default false (secondary). */
+  primary?: boolean
+}
+
 type ShopChecklistMeta = {
   /** Plain-language label shown to the shop. Falls back to the catalog label. */
   shopLabel?: string
   /** Shop can mark this item complete from the portal. Default false (read-only). */
   completable?: boolean
+  /** Bold lead line shown when the item is expanded — why this step matters. */
+  explainer?: string
+  /** Muted secondary line under the explainer — logistics / cost / caveats. */
+  note?: string
+  /** Optional key/value spec rows (e.g. laptop requirements). */
+  spec?: [string, string][]
+  /** External resource buttons (EPC signup, eBay/Amazon listing, etc.). */
+  links?: ShopChecklistLink[]
+  /**
+   * Shop-facing "Optional" badge + excluded from the shop progress denominator.
+   * Distinct from the catalog's requiredForStage (internal stage logic): a step
+   * can be optional to the shop here without touching how stages derive.
+   */
+  optional?: boolean
 }
 
 // Presence of a key here = shop_visible. Curated deliberately: internal ops
@@ -50,16 +72,71 @@ const SHOP_VISIBLE: Record<string, Record<string, ShopChecklistMeta>> = {
     technical_training_completed: { shopLabel: 'Complete your technical training', completable: true },
     wall_charger_installed: { shopLabel: 'Confirm your wall charger is installed', completable: true },
     owner_webinar_complete: { shopLabel: 'Complete the owner webinar', completable: true },
+    usb_a_cables: {
+      shopLabel: 'Purchase USB-A cables for VinFast repairs',
+      completable: true,
+      explainer:
+        'These USB-A cables connect your laptop to the vehicle for VinFast diagnostics. Grab a set so you’re ready the moment VinFast work comes in.',
+      links: [{ label: 'Buy on Amazon', url: 'https://www.amazon.com/dp/B07KJFWYXF', primary: true }],
+    },
   },
   [TESLA_PROGRAM_ID]: {
     // Tesla setup is almost entirely shop-side (matches the Tesla/EV inspiration).
-    epc: { shopLabel: 'Create your Tesla EPC account', completable: true },
-    toolbox: { shopLabel: 'Subscribe to Tesla Toolbox', completable: true },
-    laptop: { shopLabel: 'Configure your diagnostics laptop', completable: true },
-    cables: { shopLabel: 'Get the required diagnostic cables', completable: true },
+    epc: {
+      shopLabel: 'Create your Tesla EPC account',
+      completable: true,
+      explainer:
+        'Your EPC account is how you look up and order Tesla parts. No account, no parts — and no parts means no repair.',
+      note: "Sign up using your shop's business details. Approval usually lands within a day or two.",
+      links: [{ label: 'Open Tesla EPC signup', url: 'https://epc.tesla.com', primary: true }],
+    },
+    toolbox: {
+      shopLabel: 'Subscribe to Tesla Toolbox',
+      completable: true,
+      optional: true,
+      explainer:
+        "Toolbox is Tesla's diagnostic software — how you read and clear fault codes, run tests, and finish most repairs. This is the brains of the operation.",
+      note: "Toolbox runs $700/year, and you don't have to buy it before you're approved. Most shops wait until their first Tesla job, then subscribe — no reason to start the annual clock early.",
+      links: [
+        {
+          label: 'Go to Toolbox subscription',
+          url: 'https://service.tesla.com/en-US/diagnostic-software',
+          primary: true,
+        },
+      ],
+    },
+    laptop: {
+      shopLabel: 'Configure your diagnostics laptop',
+      completable: true,
+      explainer:
+        "Toolbox only runs on a properly set-up machine. Get your laptop dialed in now so you're ready the moment a Tesla rolls in.",
+      note: 'Toolbox is Windows-only and picky about hardware. Match this spec, then install Toolbox once your subscription is active.',
+      spec: [
+        ['OS', 'Windows 10 or 11 (64-bit)'],
+        ['Memory', '16 GB RAM minimum'],
+        ['Ports', 'USB-A and an Ethernet port (or a USB-C adapter)'],
+        ['Network', 'Wired internet in the bay'],
+      ],
+    },
+    cables: {
+      shopLabel: 'Get the required diagnostic cables',
+      completable: true,
+      explainer:
+        "These cables connect your laptop to the vehicle. Without them, Toolbox can't talk to the car — and you can't run a single diagnostic.",
+      note: "Order from the approved supplier so you're covered across model years.",
+      links: [{ label: 'View cables on eBay', url: 'https://www.ebay.com/itm/126386558302', primary: true }],
+    },
     // Fixlane side — read-only. (portal_walkthrough = Fixlane walks you through it.)
-    [TESLA_PORTAL_WALKTHROUGH_KEY]: { shopLabel: 'Portal walkthrough' },
-    [TESLA_FIXLANE_ACCOUNT_READY_KEY]: { shopLabel: 'Fixlane account ready' },
+    [TESLA_PORTAL_WALKTHROUGH_KEY]: {
+      shopLabel: 'Portal walkthrough',
+      explainer:
+        'This is how you receive jobs, submit findings, talk to RepairWise, and get paid. A few minutes here saves you headaches on every job after.',
+    },
+    [TESLA_FIXLANE_ACCOUNT_READY_KEY]: {
+      shopLabel: 'Fixlane account ready',
+      explainer:
+        "We review your setup and flip the switch. Once you're approved, Tesla jobs start coming your way.",
+    },
   },
   multidrive: {
     // Fixlane sets up the shop's PartsTech account — read-only on the shop side.
@@ -74,6 +151,13 @@ export type ShopChecklistItem = {
   /** "shop" = the shop's own step; "fixlane" = Fixlane/VinFast is handling it. */
   side: 'shop' | 'fixlane'
   completable: boolean
+  /** Shop-facing "Optional" — excluded from the shop progress denominator. */
+  optional: boolean
+  /** Expanded-detail content (all optional). */
+  explainer?: string
+  note?: string
+  spec?: [string, string][]
+  links?: ShopChecklistLink[]
   phase?: 1 | 2 | 3 | 4 | 5
   phaseLabel?: string
   prerequisites: ChecklistPrerequisite[]
@@ -108,6 +192,11 @@ export function shopVisibleChecklist(programId: string): ShopChecklistItem[] {
         owner,
         side: ownerToSide(owner),
         completable: meta.completable === true,
+        optional: meta.optional === true,
+        explainer: meta.explainer,
+        note: meta.note,
+        spec: meta.spec,
+        links: meta.links,
         phase: item.phase,
         phaseLabel: item.phaseLabel,
         prerequisites: item.prerequisites ?? [],
