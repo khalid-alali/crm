@@ -88,7 +88,9 @@ const SHOP_VISIBLE: Record<string, Record<string, ShopChecklistMeta>> = {
       explainer:
         'Your EPC account is how you look up and order Tesla parts. No account, no parts — and no parts means no repair.',
       note: "Sign up using your shop's business details. Approval usually lands within a day or two.",
-      links: [{ label: 'Open Tesla EPC signup', url: 'https://epc.tesla.com', primary: true }],
+      links: [
+        { label: 'Open Tesla EPC signup', url: 'https://parts.tesla.com/en-US/landingpage', primary: true },
+      ],
     },
     toolbox: {
       shopLabel: 'Subscribe to Tesla Toolbox',
@@ -216,6 +218,19 @@ export function isShopCompletable(programId: string, itemKey: string): boolean {
  */
 export function isShopOnboardingProgram(programId: string): boolean {
   return SHOP_VISIBLE[programId] !== undefined
+}
+
+/** Default "Need help?" contact when a program has no dedicated owner. */
+export const DEFAULT_HELP_EMAIL = 'shops@fixlane.com'
+
+// Per-program "Need help?" contact shown in the shop portal sidebar.
+const PROGRAM_HELP_EMAIL: Record<string, string> = {
+  [TESLA_PROGRAM_ID]: 'justin@fixlane.com',
+  [VINFAST_PROGRAM_ID]: 'nic@fixlane.com',
+}
+
+export function programHelpEmail(programId: string): string {
+  return PROGRAM_HELP_EMAIL[programId] ?? DEFAULT_HELP_EMAIL
 }
 
 /**

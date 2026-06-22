@@ -28,6 +28,7 @@ type Program = {
   program_id: string
   program_label: string
   stage: string
+  help_email: string
   items: Item[]
 }
 
@@ -243,8 +244,8 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
           </nav>
           <div className="mt-8 hidden md:block">
             <p className="text-sm font-medium text-[#0f1114]">Need help?</p>
-            <a href="mailto:shops@fixlane.com" className="text-xs text-[#687cf9]">
-              shops@fixlane.com
+            <a href={`mailto:${current.help_email}`} className="text-xs text-[#687cf9]">
+              {current.help_email}
             </a>
           </div>
         </aside>
