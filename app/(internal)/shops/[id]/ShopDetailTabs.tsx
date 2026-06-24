@@ -611,6 +611,7 @@ export default function ShopDetailTabs({
       routablePaymentMethodCount: Number(shop.routable_payment_method_count ?? 0),
       vfGoLiveWeek: shop.vf_go_live_week ?? null,
       firstJobCompletedAt: vinfastEnrollment?.first_job_completed_at ?? null,
+      vinfastStoreCode: shop.admin_vinfast_store_code ?? null,
     }
     const { itemsByPhase, labelByKey } = buildVinfastChecklistMaps(defs)
     const completedAtByKey = new Map<string, string | null>()
@@ -636,7 +637,8 @@ export default function ShopDetailTabs({
           !row?.completed_at &&
           (def.key === 'routable_payout_method_linked' ||
             def.key === 'go_live_week_set' ||
-            def.key === 'first_booking_received')
+            def.key === 'first_booking_received' ||
+            def.key === 'dealer_code_in_admin')
         let completedBy: string | null = row?.completed_by_user_id ?? null
         if (isVirtualComplete) completedBy = 'auto'
         return {
@@ -658,6 +660,7 @@ export default function ShopDetailTabs({
       })
       .sort((a, b) => (a.phase === b.phase ? a.order - b.order : a.phase - b.phase))
   }, [
+    shop.admin_vinfast_store_code,
     shop.routable_payment_method_count,
     shop.vf_go_live_week,
     vinfastEnrollment,
@@ -2683,7 +2686,7 @@ export default function ShopDetailTabs({
                         ) {
                           return (
                             <a
-                              href="https://app.repairwise.pro/admin/stock-orders"
+                              href="https://app.fixlane.com/admin/stock-orders"
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
@@ -2707,7 +2710,27 @@ export default function ShopDetailTabs({
                         if (item.key === 'shop_activated') {
                           return hasAdminShopLink ? (
                             <a
-                              href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
+                              href={`https://app.fixlane.com/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                            >
+                              Open admin
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={openAdminMatchModal}
+                              className="h-6 rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
+                            >
+                              Link admin
+                            </button>
+                          )
+                        }
+                        if (item.key === 'dealer_code_in_admin') {
+                          return hasAdminShopLink ? (
+                            <a
+                              href={`https://app.fixlane.com/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
@@ -2864,6 +2887,13 @@ export default function ShopDetailTabs({
                                   </div>
                                   <div className="text-xs text-onix-500">
                                     {formatShortDate(item.completedAt)} · {item.completedBy ?? '—'}
+                                    {item.key === 'dealer_code_in_admin' &&
+                                    typeof shop.admin_vinfast_store_code === 'string' &&
+                                    shop.admin_vinfast_store_code.trim() ? (
+                                      <span className="mt-0.5 block font-medium text-onix-700">
+                                        {shop.admin_vinfast_store_code.trim()}
+                                      </span>
+                                    ) : null}
                                   </div>
                                 </div>
                               ))}
@@ -3067,7 +3097,7 @@ export default function ShopDetailTabs({
                           Change link
                         </button>
                         <a
-                          href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
+                          href={`https://app.fixlane.com/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="rounded-lg border border-arctic-300 px-3 py-1.5 text-sm text-onix-800 hover:bg-arctic-50"

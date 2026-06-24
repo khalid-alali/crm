@@ -104,6 +104,20 @@ export default async function ShopDetailPage({
     ownerName: primaryContactDisplayName || null,
   }).catch(() => null)
 
+  const cacheShopId =
+    typeof shop.motherduck_shop_id === 'string' && shop.motherduck_shop_id.trim()
+      ? shop.motherduck_shop_id.trim()
+      : id
+  const { data: statusCache } = await supabaseAdmin
+    .from('shop_status_cache')
+    .select('vinfast_store_code')
+    .eq('shop_id', cacheShopId)
+    .maybeSingle()
+  const adminVinfastStoreCode =
+    typeof statusCache?.vinfast_store_code === 'string' && statusCache.vinfast_store_code.trim()
+      ? statusCache.vinfast_store_code.trim()
+      : null
+
   return (
     <div className="p-6">
       {mergedFromBanner && (
@@ -125,7 +139,7 @@ export default async function ShopDetailPage({
         }}
       />
       <ShopDetailTabs
-        shop={shop as any}
+        shop={{ ...shop, admin_vinfast_store_code: adminVinfastStoreCode } as any}
         siblingLocations={siblingLocations}
         defaultTab={tab ?? 'activity'}
         senderName={session?.user?.name ?? session?.user?.email ?? 'RepairWise'}

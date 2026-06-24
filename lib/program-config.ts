@@ -111,6 +111,16 @@ const PROGRAM_CONFIGS: Record<string, ProgramConfig> = {
         requiredForStage: false,
       },
       {
+        key: 'dealer_code_in_admin',
+        label: 'Input VinFast Store Code in Admin',
+        phase: 1,
+        phaseLabel: 'Labor rate approval',
+        owner: 'fl',
+        order: 4,
+        prerequisites: ['labor_rate_approved'],
+        requiredForStage: false,
+      },
+      {
         key: 'vf_email_sent',
         label: 'Request VinFast IT Setup',
         phase: 2,

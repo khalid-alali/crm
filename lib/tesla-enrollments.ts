@@ -100,9 +100,52 @@ function isHighSignalShopName(name: string | null | undefined): boolean {
   return HIGH_SIGNAL_NAME_RE.test(name)
 }
 
+/** One-time cleanup: auto-enrolled Tesla rows that sat in the old Not ready column. */
+async function unenrollLegacyTeslaNotReadyAutoEnrollments(supabaseAdmin: SupabaseClient): Promise<void> {
+  const { data: candidates, error: findError } = await supabaseAdmin
+    .from('location_program_enrollments')
+    .select('id')
+    .eq('program_id', TESLA_PROGRAM_ID)
+    .is('unenrolled_at', null)
+    .is('enrolled_by_user_id', null)
+    .eq('stage', 'not_ready')
+    .is('first_job_completed_at', null)
+
+  if (findError) throw new Error(findError.message)
+  if (!candidates?.length) return
+
+  const ids = candidates.map(row => row.id as string)
+
+  const { data: withProgress, error: checklistError } = await supabaseAdmin
+    .from('program_enrollment_checklist')
+    .select('enrollment_id')
+    .in('enrollment_id', ids)
+    .not('completed_at', 'is', null)
+
+  if (checklistError) throw new Error(checklistError.message)
+
+  const hasProgress = new Set((withProgress ?? []).map(row => row.enrollment_id as string))
+  const toUnenroll = ids.filter(id => !hasProgress.has(id))
+  if (toUnenroll.length === 0) return
+
+  const now = new Date().toISOString()
+  const { error: updateError } = await supabaseAdmin
+    .from('location_program_enrollments')
+    .update({
+      unenrolled_at: now,
+      unenroll_reason: 'Removed legacy Tesla Not ready auto-enrollment',
+      last_touched_at: now,
+    })
+    .in('id', toUnenroll)
+
+  if (updateError) throw new Error(updateError.message)
+}
+
 export async function listTeslaEnrollments(
   supabaseAdmin: SupabaseClient,
 ): Promise<TeslaEnrollmentView[]> {
+  await unenrollLegacyTeslaNotReadyAutoEnrollments(supabaseAdmin)
+
   const { data: enrollmentsData, error: enrollmentsError } = await supabaseAdmin
     .from('location_program_enrollments')
     .select(

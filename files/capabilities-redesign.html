@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shop Capabilities — Redesign Reference</title>
+<style>
+  :root{
+    --ink:#18181b; --muted:#71717a; --faint:#a1a1aa;
+    --line:#e4e4e7; --line-soft:#f1f1f4; --bg:#f9f9fb; --card:#ffffff;
+    --green:#16a34a; --red:#dc2626; --amber:#b45309;
+    --violet:#6d5ee6; --violet-soft:#ede9fe; --violet-ink:#5b3fc4; --violet-line:#c4b5fd;
+    --radius:8px; --radius-lg:12px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1200px;margin:0 auto;padding:28px 32px 80px;}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--radius-lg);padding:6px;margin-bottom:28px;}
+  .tab{padding:9px 16px;border-radius:var(--radius);font-size:14px;color:var(--muted);cursor:pointer;}
+  .tab.active{background:var(--ink);color:#fff;font-weight:500;}
+  .tab .pill{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
+    padding:0 5px;margin-left:6px;border-radius:9px;background:var(--line);color:var(--muted);font-size:11px;}
+
+  .section-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;margin:0 0 14px;}
+  .meta{font-size:13px;color:var(--faint);}
+
+  /* profile band */
+  .band{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);
+    padding:20px 22px;margin-bottom:28px;}
+  .band-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+  .prof-row{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:20px;padding:11px 0;}
+  .prof-row + .prof-row{border-top:1px solid var(--line-soft);}
+  .prof-label{font-size:14px;color:var(--muted);}
+  .prof-sub{display:block;font-size:12px;color:var(--faint);margin-top:1px;}
+
+  /* segmented control */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+    background:var(--card);}
+  .seg button{appearance:none;border:0;background:transparent;cursor:pointer;
+    padding:8px 16px;font-size:13px;color:var(--muted);font-family:inherit;
+    border-right:1px solid var(--line);transition:background .12s,color .12s;white-space:nowrap;}
+  .seg button:last-child{border-right:0;}
+  .seg button:hover{background:#fafafa;}
+  .seg button[aria-checked="true"]{background:var(--ink);color:#fff;font-weight:500;}
+  .seg.ev button[aria-checked="true"]{background:var(--violet);color:#fff;}
+  .unset{font-size:12px;color:var(--faint);margin-left:12px;}
+  .unset.hidden{display:none;}
+
+  /* generic page sections */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 56px;}
+  .cap-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-bottom:8px;}
+  .stat .n{font-size:30px;font-weight:600;line-height:1.1;}
+  .stat .l{font-size:13px;color:var(--muted);margin-top:2px;}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;
+    border-top:1px solid var(--line-soft);font-size:14px;}
+  .row:first-child{border-top:0;}
+  .val{color:var(--muted);font-size:13px;}
+  .ic{font-size:15px;font-weight:700;}
+  .ic.ok{color:var(--green);} .ic.no{color:var(--red);}
+  .block{margin-bottom:30px;}
+  hr.div{border:0;border-top:1px solid var(--line);margin:30px 0;}
+
+  .chip{display:inline-block;padding:4px 11px;border:1px solid var(--line);border-radius:14px;
+    font-size:13px;margin:0 6px 6px 0;background:var(--card);}
+  .chip.ev{background:var(--violet-soft);border-color:var(--violet-line);color:var(--violet-ink);}
+  .tech{border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px;}
+  .tech-grid{display:grid;grid-template-columns:110px 1fr;gap:10px 16px;align-items:start;
+    margin-top:14px;font-size:13px;}
+  .tech-grid .k{color:var(--muted);padding-top:4px;}
+  .stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:20px;margin:16px 0 22px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="tabs">
+    <div class="tab">Activity</div>
+    <div class="tab">Tasks</div>
+    <div class="tab">Contracts</div>
+    <div class="tab">Programs<span class="pill">1</span></div>
+    <div class="tab active">Capabilities</div>
+    <div class="tab">Expert Assist</div>
+    <div class="tab">Admin</div>
+  </div>
+
+  <!-- ===== NEW: CAPABILITY PROFILE BAND ===== -->
+  <div class="band">
+    <div class="band-head">
+      <p class="section-label" style="margin:0;">Capability profile</p>
+      <span class="meta">Set manually · used for routing</span>
+    </div>
+
+    <div class="prof-row">
+      <div class="prof-label">Eligibility<span class="prof-sub">What can route here</span></div>
+      <div>
+        <span class="seg ev" role="radiogroup" aria-label="Eligibility" data-dim="eligibility">
+          <button role="radio" aria-checked="false" data-val="tesla_ev">Tesla + EV ready</button>
+          <button role="radio" aria-checked="false" data-val="tesla">Tesla ready</button>
+          <button role="radio" aria-checked="false" data-val="ev">EV ready</button>
+          <button role="radio" aria-checked="false" data-val="none">No EVs</button>
+        </span>
+        <span class="unset">Not set</span>
+      </div>
+    </div>
+
+    <div class="prof-row">
+      <div class="prof-label">Auto<span class="prof-sub">General mechanical</span></div>
+      <div>
+        <span class="seg" role="radiogroup" aria-label="Auto depth" data-dim="auto">
+          <button role="radio" aria-checked="false" data-val="light">Light</button>
+          <button role="radio" aria-checked="false" data-val="heavy">Heavy</button>
+        </span>
+        <span class="unset">Not set</span>
+      </div>
+    </div>
+
+    <div class="prof-row">
+      <div class="prof-label">Low voltage<span class="prof-sub">12V electrical</span></div>
+      <div>
+        <span class="seg" role="radiogroup" aria-label="Low voltage depth" data-dim="lv">
+          <button role="radio" aria-checked="false" data-val="light">Light</button>
+          <button role="radio" aria-checked="false" data-val="heavy">Heavy</button>
+        </span>
+        <span class="unset">Not set</span>
+      </div>
+    </div>
+
+    <div class="prof-row">
+      <div class="prof-label">High voltage<span class="prof-sub">EV traction system</span></div>
+      <div>
+        <span class="seg ev" role="radiogroup" aria-label="High voltage depth" data-dim="hv">
+          <button role="radio" aria-checked="false" data-val="light">Light</button>
+          <button role="radio" aria-checked="false" data-val="heavy">Heavy</button>
+          <button role="radio" aria-checked="false" data-val="heavy_plus">Heavy+</button>
+        </span>
+        <span class="unset">Not set</span>
+      </div>
+    </div>
+
+    <div class="prof-row">
+      <div class="prof-label">ADAS<span class="prof-sub">Calibration</span></div>
+      <div>
+        <span class="seg" role="radiogroup" aria-label="ADAS depth" data-dim="adas">
+          <button role="radio" aria-checked="false" data-val="light">Light</button>
+          <button role="radio" aria-checked="false" data-val="heavy">Heavy</button>
+        </span>
+        <span class="unset">Not set</span>
+      </div>
+    </div>
+  </div>
+  <!-- ===== END BAND ===== -->
+
+  <div style="display:flex;justify-content:space-between;align-items:baseline;">
+    <p class="section-label">Shop capabilities</p>
+    <span class="meta">Submitted Apr 23, 2026</span>
+  </div>
+
+  <div class="block">
+    <p class="section-label">Capacity</p>
+    <div class="cap-stats">
+      <div class="stat"><div class="n">2 / 4</div><div class="l">Techs on Fixlane</div></div>
+      <div class="stat"><div class="n">3</div><div class="l">Daily capacity</div></div>
+      <div class="stat"><div class="n">12</div><div class="l">Weekly capacity</div></div>
+      <div class="stat"><div class="n">2</div><div class="l">2-post lifts</div></div>
+    </div>
+  </div>
+
+  <div class="block">
+    <p class="section-label">Service capabilities</p>
+    <div class="grid2">
+      <div>
+        <div class="row"><span>HV battery / scissor table</span><span class="ic ok">✓</span></div>
+        <div class="row"><span>Wheel alignment</span><span class="ic ok">✓</span></div>
+        <div class="row"><span>Tire R/R + balance</span><span class="ic ok">✓</span></div>
+        <div class="row"><span>A/C service</span><span class="ic ok">✓</span></div>
+      </div>
+      <div>
+        <div class="row"><span>Forklift</span><span class="ic no">✕</span></div>
+        <div class="row"><span>ADAS calibration</span><span class="val">Sublet</span></div>
+        <div class="row"><span>Body work</span><span class="ic no">✕</span></div>
+        <div class="row"><span>Windshield replacement</span><span class="val">Sublet</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <p class="section-label">Operational</p>
+    <div class="grid2">
+      <div>
+        <div class="row"><span>Warranty</span><span class="val">12mo 12k miles</span></div>
+        <div class="row"><span>After-hours tow-ins</span><span class="ic ok">✓</span></div>
+        <div class="row"><span>Hours</span><span class="val">mon–sat 8–5:30</span></div>
+      </div>
+      <div>
+        <div class="row"><span>Parking spots</span><span class="val">15</span></div>
+        <div class="row"><span>Night-drops</span><span class="ic ok">✓</span></div>
+        <div class="row"><span>BAR license</span><span class="val">293349</span></div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="div" />
+
+  <div style="display:flex;justify-content:space-between;align-items:baseline;">
+    <div>
+      <p class="section-label" style="margin-bottom:4px;">Technician competency</p>
+      <span class="meta">1 surveyed · Latest Apr 23</span>
+    </div>
+    <span class="seg"><button style="color:var(--ink);">⊹ Survey a technician</button></span>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="n">0</div><div class="l">HV certified</div></div>
+    <div class="stat"><div class="n">1</div><div class="l">AC (EPA 609)</div></div>
+    <div class="stat"><div class="n">1</div><div class="l">ASE certified</div></div>
+    <div class="stat"><div class="n">0</div><div class="l">OEM warranty exp</div></div>
+    <div class="stat"><div class="n">1</div><div class="l">Own HV meter</div></div>
+  </div>
+
+  <div class="tech">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div><strong>David Higgins</strong> <span class="meta">5+ years · Surveyed Apr 23, 2026</span></div>
+      <div>
+        <span class="chip">HV cert ✕</span>
+        <span class="chip ev">AC cert ✓</span>
+        <span class="chip ev">HV meter ✓</span>
+        <span class="chip">OEM warranty ✕</span>
+      </div>
+    </div>
+    <div class="tech-grid">
+      <div class="k">ASE certs</div><div><span class="chip">A6 Electrical</span><span class="chip">A5 – Brakes</span><span class="chip">A7 Heating &amp; A/C</span><span class="chip">A8 Engine Perf.</span><span class="chip">A4 – Suspension &amp; Steering</span></div>
+      <div class="k">Vehicles</div><div><span class="chip">Domestic</span><span class="chip">European</span><span class="chip">Asian</span></div>
+      <div class="k">Regular work</div><div><span class="chip">Maintenance</span><span class="chip">R&amp;R</span><span class="chip">Engine perf. diag</span><span class="chip">Electrical diag</span></div>
+      <div class="k">EV brands</div><div><span class="chip ev">Tesla</span><span class="chip ev">Domestic EVs</span><span class="chip ev">Asian EVs</span></div>
+      <div class="k">EV/HV repairs</div><div><span class="chip">HV Battery R&amp;R</span><span class="chip">Software updates</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.seg[role="radiogroup"]').forEach(function(group){
+    var unset = group.parentElement.querySelector('.unset');
+    group.querySelectorAll('button[role="radio"]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        group.querySelectorAll('button[role="radio"]').forEach(function(b){ b.setAttribute('aria-checked','false'); });
+        btn.setAttribute('aria-checked','true');
+        if (unset) unset.classList.add('hidden');
+        // persistence hook: group.dataset.dim -> btn.dataset.val
+      });
+    });
+  });
+</script>
+</body>
+</html>

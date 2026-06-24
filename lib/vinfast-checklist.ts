@@ -34,6 +34,12 @@ export type VinfastCompletionContext = {
   routablePaymentMethodCount: number
   vfGoLiveWeek: string | null | undefined
   firstJobCompletedAt: string | null | undefined
+  /** From `shop_status_cache.vinfast_store_code` when admin shop is linked. */
+  vinfastStoreCode: string | null | undefined
+}
+
+export function hasVinfastStoreCode(value: string | null | undefined): boolean {
+  return typeof value === 'string' && value.trim().length > 0
 }
 
 export function rowForCanonicalKey(
@@ -68,6 +74,9 @@ export function getVinfastEffectiveCompletedAt(
   if (itemKey === 'first_booking_received') {
     const j = ctx.firstJobCompletedAt
     if (typeof j === 'string' && j.trim() && !Number.isNaN(Date.parse(j))) return j
+  }
+  if (itemKey === 'dealer_code_in_admin') {
+    if (hasVinfastStoreCode(ctx.vinfastStoreCode)) return new Date().toISOString()
   }
 
   return null

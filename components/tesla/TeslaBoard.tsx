@@ -12,7 +12,6 @@ import {
   TESLA_KANBAN_STAGES,
   TESLA_STAGE_DISPLAY,
   TESLA_STAGES,
-  teslaKanbanDisplayStage,
   type TeslaStage,
 } from '@/lib/program-stage'
 
@@ -139,7 +138,7 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
   )
 
   const teslaStageByLocationId = useMemo(
-    () => Object.fromEntries(filtered.map(e => [e.locationId, teslaKanbanDisplayStage(e.stage)])),
+    () => Object.fromEntries(filtered.map(e => [e.locationId, e.stage])),
     [filtered],
   )
 
@@ -152,7 +151,8 @@ export default function TeslaBoard({ initialEnrollments, mapLocations }: Props) 
       disqualified: [],
     }
     for (const row of filtered) {
-      byStage[teslaKanbanDisplayStage(row.stage)].push(row)
+      if (row.stage === 'not_ready') continue
+      byStage[row.stage].push(row)
     }
     return byStage
   }, [filtered])

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyCapabilitiesPortalToken } from '@/lib/portal-token'
 import { getProgramConfig } from '@/lib/program-config'
 import { deriveProgramStage, isTeslaStage } from '@/lib/program-stage'
-import { isShopOnboardingProgram, resolveShopChecklist } from '@/lib/portal-checklist'
+import { isShopOnboardingProgram, programHelpEmail, resolveShopChecklist } from '@/lib/portal-checklist'
 import {
   assertEnrollmentOwned,
   assertShopCompletable,
@@ -56,6 +56,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       program_id: enrollment.program_id,
       program_label: getProgramConfig(enrollment.program_id)?.label ?? enrollment.program_id,
       stage: enrollment.stage,
+      help_email: programHelpEmail(enrollment.program_id),
       items,
     }
   })
