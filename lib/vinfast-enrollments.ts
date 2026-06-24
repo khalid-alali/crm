@@ -3,7 +3,7 @@ import { activeLocations } from '@/lib/locations-active'
 import { toCardView, type LaborRateApprovalCardView } from '@/lib/labor-rate-approval/row'
 import type { LaborRateApprovalRow } from '@/lib/labor-rate-approval/types'
 import { VINFAST_PROGRAM_ID, getProgramConfig } from '@/lib/program-config'
-import { rowForCanonicalKey, type VinfastChecklistRow } from '@/lib/vinfast-checklist'
+import { getVinfastEffectiveCompletedAt, rowForCanonicalKey, type VinfastChecklistRow, type VinfastCompletionContext } from '@/lib/vinfast-checklist'
 import { getMissingChecklistKeys, isTeslaStage, type TeslaStage } from '@/lib/program-stage'
 
 type EnrollmentRow = {
@@ -56,6 +56,7 @@ type ShopStatusCacheRow = {
   is_active: boolean | null
   max_jobs_per_day: number | null
   max_jobs_per_week: number | null
+  vinfast_store_code: string | null
 }
 
 const BATCH_SIZE = 200
@@ -223,7 +224,7 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
   )
   const { data: cacheData, error: cacheError } = await supabaseAdmin
     .from('shop_status_cache')
-    .select('shop_id, is_vinfast_shop, is_active, max_jobs_per_day, max_jobs_per_week')
+    .select('shop_id, is_vinfast_shop, is_active, max_jobs_per_day, max_jobs_per_week, vinfast_store_code')
     .in('shop_id', cacheKeys)
   if (cacheError) throw new Error(cacheError.message)
 
@@ -261,19 +262,28 @@ export async function listVinfastEnrollments(supabaseAdmin: SupabaseClient): Pro
     const loc = locationById.get(enrollment.location_id)
     const rows = checklistByEnrollment.get(enrollment.id) ?? []
     const rowsByKey = new Map(rows.map(row => [row.item_key, row]))
+    const cacheKey = loc?.motherduck_shop_id ?? enrollment.location_id
+    const cache = cacheByShopId.get(cacheKey)
+    const completionCtx: VinfastCompletionContext = {
+      rowsByKey: rowsByKey as Map<string, VinfastChecklistRow>,
+      routablePaymentMethodCount: 0,
+      vfGoLiveWeek: null,
+      firstJobCompletedAt: enrollment.first_job_completed_at,
+      vinfastStoreCode: (cache?.vinfast_store_code as string | null) ?? null,
+    }
 
     const checklist = checklistDef.map(item => {
       const row = rowForCanonicalKey(item.key, rowsByKey as Map<string, VinfastChecklistRow>)
       return {
         itemKey: item.key,
         label: item.label,
-        completedAt: row?.completed_at ?? null,
+        completedAt: getVinfastEffectiveCompletedAt(item.key, item, completionCtx),
         notes: row?.notes ?? null,
       }
     })
 
     const canonicalCompletedKeys = checklistDef
-      .filter(def => Boolean(rowForCanonicalKey(def.key, rowsByKey as Map<string, VinfastChecklistRow>)?.completed_at))
+      .filter(def => Boolean(getVinfastEffectiveCompletedAt(def.key, def, completionCtx)))
       .map(def => def.key)
 
     const normalizedStage = normalizeVinfastStage({
