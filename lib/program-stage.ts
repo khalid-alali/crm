@@ -31,11 +31,6 @@ export function isTeslaStage(value: string): value is TeslaStage {
   return TESLA_STAGES.includes(value as TeslaStage)
 }
 
-/** Legacy `not_ready` rows render in the Onboarding column. */
-export function teslaKanbanDisplayStage(stage: TeslaStage): TeslaStage {
-  return stage === 'not_ready' ? 'getting_ready' : stage
-}
-
 export function teslaStageLabel(stage: string): string {
   return isTeslaStage(stage) ? TESLA_STAGE_DISPLAY[stage].label : stage
 }

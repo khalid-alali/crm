@@ -4,7 +4,6 @@ import type { TeslaEnrollmentView } from '@/lib/tesla-enrollments'
 import {
   TESLA_KANBAN_STAGES,
   TESLA_STAGE_DISPLAY,
-  teslaKanbanDisplayStage,
   type TeslaStage,
 } from '@/lib/program-stage'
 
@@ -81,8 +80,8 @@ function buildCountyStageTable(rows: TeslaEnrollmentView[]) {
       })
     }
     const c = byCounty.get(county)!
-    const displayStage = teslaKanbanDisplayStage(row.stage)
-    c[displayStage]++
+    if (row.stage === 'not_ready') continue
+    c[row.stage]++
   }
 
   const out: Row[] = [...byCounty.entries()].map(([county, counts]) => ({

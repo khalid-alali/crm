@@ -2683,7 +2683,7 @@ export default function ShopDetailTabs({
                         ) {
                           return (
                             <a
-                              href="https://app.repairwise.pro/admin/stock-orders"
+                              href="https://app.fixlane.com/admin/stock-orders"
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
@@ -2707,7 +2707,7 @@ export default function ShopDetailTabs({
                         if (item.key === 'shop_activated') {
                           return hasAdminShopLink ? (
                             <a
-                              href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
+                              href={`https://app.fixlane.com/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex h-6 items-center rounded border border-arctic-300 px-2 text-xs text-onix-700 hover:bg-arctic-50"
@@ -3067,7 +3067,7 @@ export default function ShopDetailTabs({
                           Change link
                         </button>
                         <a
-                          href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
+                          href={`https://app.fixlane.com/admin/shops/${encodeURIComponent(currentAdminShopId)}/edit`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="rounded-lg border border-arctic-300 px-3 py-1.5 text-sm text-onix-800 hover:bg-arctic-50"

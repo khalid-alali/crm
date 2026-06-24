@@ -258,7 +258,7 @@ export default function ShopTable({ shops, selection, showDisqualifiedReasonColu
               <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
                 {shop.motherduck_shop_id ? (
                   <a
-                    href={`https://app.repairwise.pro/admin/shops/${encodeURIComponent(shop.motherduck_shop_id)}/edit`}
+                    href={`https://app.fixlane.com/admin/shops/${encodeURIComponent(shop.motherduck_shop_id)}/edit`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-brand-600 hover:underline whitespace-nowrap"

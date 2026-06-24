@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>CRM Portal Onboarding Checklist - Engineering Map</title>
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--text-primary, #333);
+  background: var(--bg-primary, #fff);
+  margin: 0;
+  padding: 20px;
+}
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+h1 {
+  border-bottom: 3px solid var(--accent-primary, #0066cc);
+  padding-bottom: 10px;
+  margin-bottom: 30px;
+}
+h2 {
+  margin-top: 40px;
+  margin-bottom: 15px;
+  color: var(--text-secondary, #555);
+  font-size: 1.3em;
+  border-left: 4px solid var(--accent-primary, #0066cc);
+  padding-left: 12px;
+}
+h3 {
+  margin-top: 20px;
+  font-size: 1.1em;
+  color: var(--text-secondary, #666);
+}
+.section {
+  margin-bottom: 40px;
+}
+.subsection {
+  margin-left: 20px;
+  margin-bottom: 25px;
+}
+.code-block {
+  background: var(--bg-secondary, #f5f5f5);
+  border-left: 3px solid var(--accent-secondary, #0099ff);
+  padding: 12px 15px;
+  margin: 10px 0;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 0.9em;
+  overflow-x: auto;
+  border-radius: 3px;
+}
+.file-path {
+  font-weight: 600;
+  color: var(--accent-primary, #0066cc);
+  margin-top: 15px;
+  margin-bottom: 8px;
+}
+.key-fact {
+  background: var(--bg-secondary, #f0f8ff);
+  border-left: 4px solid var(--accent-secondary, #0099ff);
+  padding: 12px 15px;
+  margin: 12px 0;
+  border-radius: 3px;
+}
+.flag {
+  background: var(--bg-secondary, #ffe6e6);
+  border-left: 4px solid #ff6b6b;
+  padding: 12px 15px;
+  margin: 12px 0;
+  border-radius: 3px;
+  color: #cc0000;
+  font-weight: 500;
+}
+.success {
+  background: var(--bg-secondary, #e6ffe6);
+  border-left: 4px solid #22c55e;
+  padding: 12px 15px;
+  margin: 12px 0;
+  border-radius: 3px;
+}
+.note {
+  font-style: italic;
+  color: var(--text-secondary, #777);
+  margin: 10px 0;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+  background: var(--bg-primary, #fff);
+}
+th, td {
+  border: 1px solid var(--border-color, #ddd);
+  padding: 12px;
+  text-align: left;
+}
+th {
+  background: var(--bg-secondary, #f5f5f5);
+  font-weight: 600;
+  color: var(--text-primary, #333);
+}
+td code {
+  background: var(--bg-secondary, #f0f0f0);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+.auth-flow {
+  background: var(--bg-secondary, #f9f9f9);
+  border: 1px solid var(--border-color, #ddd);
+  padding: 15px;
+  margin: 15px 0;
+  border-radius: 5px;
+}
+ul, ol {
+  margin: 10px 0;
+  padding-left: 25px;
+}
+li {
+  margin: 8px 0;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>CRM Portal Onboarding Checklist - Engineering Map</h1>
+<p style="margin-bottom: 30px; color: #666;">Precise technical reference for building a shop-facing onboarding checklist view</p>
+
+<div class="section">
+<h2>1. PORTAL AUTHENTICATION</h2>
+
+<div class="subsection">
+<h3>JWT Token Generation & Verification</h3>
+
+<div class="file-path">/lib/portal-token.ts</div>
+<div class="key-fact">
+  <strong>Secret:</strong> <code>PORTAL_JWT_SECRET</code> env var (required)<br>
+  <strong>Expiry:</strong> 30 days<br>
+  <strong>Type field:</strong> <code>'portal'</code> for capabilities portal
+</div>
+
+<p><strong>PortalJwtPayload structure:</strong></p>
+<div class="code-block">
+type PortalJwtPayload = {
+  locationId: string
+  type?: string  // 'portal' for new tokens
+}
+</div>
+
+<p><strong>Token signing (line 12-13):</strong></p>
+<div class="code-block">
+jwt.sign({ locationId, type: 'portal' }, secret(), { expiresIn: '30d' })
+</div>
+
+<p><strong>Verification function (line 16-22):</strong></p>
+<div class="code-block">
+verifyCapabilitiesPortalToken(token: string): { locationId: string }
+  - Validates token type === 'portal'
+  - Returns { locationId }
+  - Throws on invalid/expired tokens
+</div>
+
+<h3>Token Generation Route</h3>
+
+<div class="file-path">/app/api/portal/generate-token/route.ts</div>
+<p><strong>POST /api/portal/generate-token</strong></p>
+<ul>
+  <li>Requires NextAuth session (internal: BDR/admin only)</li>
+  <li>Request body: <code>{ locationId: string }</code></li>
+  <li>Calls <code>signCapabilitiesPortalToken(locationId)</code></li>
+  <li>Response: <code>{ token: string, portalUrl: string }</code></li>
+</ul>
+
+<h3>Portal Data Fetching</h3>
+
+<div class="file-path">/app/api/portal/location/route.ts</div>
+<p><strong>GET /api/portal/location?token=...</strong></p>
+<ul>
+  <li>Token verified via <code>verifyCapabilitiesPortalToken(token)</code></li>
+  <li>Uses <code>supabaseAdmin</code> (service role)</li>
+  <li>No RLS checks - relies on JWT + service role</li>
+  <li>Selects 27 location fields including capabilities</li>
+  <li>Returns location + primary contact data</li>
+</ul>
+
+<h3>Autosave (Patch Updates)</h3>
+
+<div class="file-path">/app/api/portal/autosave/route.ts</div>
+<p><strong>PATCH /api/portal/autosave</strong></p>
+<ul>
+  <li>Token verified via <code>verifyCapabilitiesPortalToken(token)</code></li>
+  <li>Uses <code>supabaseAdmin</code> (service role)</li>
+  <li>Validates each field in patch object</li>
+  <li>Updates <code>locations</code> table</li>
+</ul>
+
+<h3>Security Summary</h3>
+
+<div class="key-fact">
+  <strong>Auth Mechanism:</strong> JWT (stateless)<br>
+  <strong>Supabase Client:</strong> Service role key (admin client)<br>
+  <strong>RLS:</strong> NOT used - JWT is the boundary<br>
+  <strong>Mapping:</strong> One JWT → one location_id (1:1)<br>
+  <strong>Scope:</strong> Can read/write location record for that location_id only
+</div>
+
+</div>
+</div>
+
+<div class="section">
+<h2>2. CHECKLIST ENGINE & DATA SHAPE</h2>
+
+<h3>ProgramChecklistItem Type</h3>
+
+<div class="file-path">/lib/program-config.ts (lines 17-35)</div>
+<div class="code-block">
+type ProgramChecklistItem = {
+  key: string                           // canonical identifier
+  label: string                         // UI label
+  phase?: 1 | 2 | 3 | 4 | 5             // phase number
+  phaseLabel?: string                   // e.g. "Setup, training & equipment"
+  owner?: 'fl' | 'vf' | 'shop'          // Fixlane, VinFast, or Shop
+  description?: string                  // optional detail
+  tooltip?: string                      // multi-line help text
+  actionLabel?: string                  // button label, e.g. "Email", "Order"
+  order?: number                        // sort within phase
+  prerequisites?: ChecklistPrerequisite[] // blocking conditions
+  requiredForStage?: boolean             // default true; false = optional
+}
+</div>
+
+<h3>Owner Values</h3>
+
+<table>
+<tr>
+  <th>Value</th>
+  <th>Meaning</th>
+</tr>
+<tr>
+  <td><code>'fl'</code></td>
+  <td>Fixlane internal responsibility</td>
+</tr>
+<tr>
+  <td><code>'vf'</code></td>
+  <td>VinFast responsibility</td>
+</tr>
+<tr>
+  <td><code>'shop'</code></td>
+  <td>Shop responsibility</td>
+</tr>
+</table>
+
+<h3>Visibility / Audience Flag</h3>
+
+<div class="flag">
+  <strong>NO shop_visible / audience flag exists today.</strong> You must introduce this field to control portal visibility.
+</div>
+
+<h3>Completion Storage (program_enrollment_checklist)</h3>
+
+<div class="file-path">/supabase/migrations/023_tesla_program_enrollments.sql (lines 29-39)</div>
+
+<table>
+<tr>
+  <th>Column</th>
+  <th>Type</th>
+</tr>
+<tr>
+  <td><code>id</code></td>
+  <td>uuid</td>
+</tr>
+<tr>
+  <td><code>enrollment_id</code></td>
+  <td>uuid (FK to location_program_enrollments)</td>
+</tr>
+<tr>
+  <td><code>item_key</code></td>
+  <td>text</td>
+</tr>
+<tr>
+  <td><code>completed_at</code></td>
+  <td>timestamptz (null if incomplete)</td>
+</tr>
+<tr>
+  <td><code>completed_by_user_id</code></td>
+  <td>text (email of user who marked complete)</td>
+</tr>
+<tr>
+  <td><code>notes</code></td>
+  <td>text (optional)</td>
+</tr>
+<tr>
+  <td><code>created_at</code></td>
+  <td>timestamptz</td>
+</tr>
+<tr>
+  <td><code>updated_at</code></td>
+  <td>timestamptz</td>
+</tr>
+</table>
+
+<p><strong>Unique constraint:</strong> <code>(enrollment_id, item_key)</code></p>
+
+</div>
+</div>
+
+<div class="section">
+<h2>3. CHECKLIST APIs (READ & UPDATE)</h2>
+
+<h3>Mark Item Complete (PATCH)</h3>
+
+<div class="file-path">/app/api/tesla/enrollments/[id]/checklist/route.ts</div>
+
+<p><strong>PATCH /api/tesla/enrollments/[id]/checklist</strong></p>
+
+<p><strong>Request body:</strong></p>
+<div class="code-block">
+{
+  item_key: string        // required, lowercase
+  completed?: boolean     // true = mark done
+  notes?: string | null   // optional notes
+}
+</div>
+
+<p><strong>Auth:</strong> NextAuth session (internal admin only)</p>
+
+<p><strong>Checklist Upsert Logic (lines 71-83):</strong></p>
+<div class="code-block">
+const checklistPatch = {
+  enrollment_id: id,
+  item_key: itemKey,
+  completed_at: completed ? new Date().toISOString() : null,
+  completed_by_user_id: completed ? session.user?.email : null,
+  updated_at: new Date().toISOString()
+}
+supabaseAdmin
+  .from('program_enrollment_checklist')
+  .upsert(checklistPatch, { onConflict: 'enrollment_id,item_key' })
+</div>
+
+<h3>Authorization</h3>
+
+<div class="key-fact">
+  <strong>Current:</strong> All checklist PATCH requires NextAuth session (internal admin/FL only)<br>
+  <strong>No portal user can call checklist endpoints today.</strong> This is a new capability for onboarding view.
+</div>
+
+</div>
+</div>
+
+<div class="section">
+<h2>4. ENROLLMENTS TABLE & QUERIES</h2>
+
+<h3>location_program_enrollments Columns</h3>
+
+<div class="file-path">/supabase/migrations/023_tesla_program_enrollments.sql + 031_vinfast_enrollment_lifecycle.sql</div>
+
+<table>
+<tr>
+  <th>Column</th>
+  <th>Type</th>
+  <th>Notes</th>
+</tr>
+<tr>
+  <td><code>id</code></td>
+  <td>uuid</td>
+  <td>Primary key</td>
+</tr>
+<tr>
+  <td><code>location_id</code></td>
+  <td>uuid</td>
+  <td>FK to locations</td>
+</tr>
+<tr>
+  <td><code>program_id</code></td>
+  <td>text</td>
+  <td>'tesla' | 'vinfast' | 'expert_assist' | 'multidrive'</td>
+</tr>
+<tr>
+  <td><code>stage</code></td>
+  <td>text</td>
+  <td>not_ready | getting_ready | ready | active | disqualified</td>
+</tr>
+<tr>
+  <td><code>tier</code></td>
+  <td>text</td>
+  <td>'generalist' | 'specialist' | null</td>
+</tr>
+<tr>
+  <td><code>manual_stage_override</code></td>
+  <td>boolean</td>
+  <td>default false</td>
+</tr>
+<tr>
+  <td><code>last_touched_at</code></td>
+  <td>timestamptz</td>
+  <td>Engagement tracking</td>
+</tr>
+<tr>
+  <td><code>first_job_completed_at</code></td>
+  <td>timestamptz</td>
+  <td>Used for VinFast auto-complete</td>
+</tr>
+<tr>
+  <td><code>enrolled_at</code></td>
+  <td>timestamptz</td>
+  <td>Enrollment date (migration 031)</td>
+</tr>
+<tr>
+  <td><code>unenrolled_at</code></td>
+  <td>timestamptz</td>
+  <td>null if active (migration 031)</td>
+</tr>
+<tr>
+  <td><code>created_at</code></td>
+  <td>timestamptz</td>
+  <td>Auto-set</td>
+</tr>
+<tr>
+  <td><code>updated_at</code></td>
+  <td>timestamptz</td>
+  <td>Auto-set on update</td>
+</tr>
+</table>
+
+<p><strong>Unique constraint:</strong> <code>location_id, program_id</code> where <code>unenrolled_at IS NULL</code></p>
+
+<h3>Query Active Enrollments</h3>
+
+<div class="file-path">/lib/program-enrollment-service.ts (lines 23-37)</div>
+
+<p><strong>Pattern: getActiveEnrollment()</strong></p>
+<div class="code-block">
+SELECT id, location_id, program_id, stage, manual_stage_override,
+       first_job_completed_at, unenrolled_at
+FROM location_program_enrollments
+WHERE location_id = ? AND program_id = ? AND unenrolled_at IS NULL
+</div>
+
+<h3>Program IDs & Definitions</h3>
+
+<table>
+<tr>
+  <th>Program ID</th>
+  <th>Label</th>
+  <th>Items</th>
+</tr>
+<tr>
+  <td><code>'tesla'</code></td>
+  <td>Tesla</td>
+  <td>6 items</td>
+</tr>
+<tr>
+  <td><code>'vinfast'</code></td>
+  <td>VinFast</td>
+  <td>28 items across 5 phases</td>
+</tr>
+<tr>
+  <td><code>'expert_assist'</code></td>
+  <td>Expert Assist</td>
+  <td>8 items (mostly auto-resolved)</td>
+</tr>
+<tr>
+  <td><code>'multidrive'</code></td>
+  <td>Multi-drive</td>
+  <td>1 item</td>
+</tr>
+</table>
+
+</div>
+</div>
+
+<div class="section">
+<h2>5. DOCUMENTS & STORAGE</h2>
+
+<h3>Contract Document Storage Columns</h3>
+
+<div class="file-path">/supabase/migrations/008_contract_doc_storage.sql</div>
+
+<table>
+<tr>
+  <th>Column</th>
+  <th>Type</th>
+</tr>
+<tr>
+  <td><code>doc_storage_bucket</code></td>
+  <td>text (default: 'contract-docs')</td>
+</tr>
+<tr>
+  <td><code>doc_storage_path</code></td>
+  <td>text (e.g., 'contracts/{contractId}/zoho-{requestId}.pdf')</td>
+</tr>
+<tr>
+  <td><code>doc_uploaded_at</code></td>
+  <td>timestamptz</td>
+</tr>
+<tr>
+  <td><code>doc_source</code></td>
+  <td>text ('zoho' | 'manual' | 'imported')</td>
+</tr>
+</table>
+
+<h3>Portal Document Upload</h3>
+
+<div class="flag">
+  <strong>NO document upload from portal today.</strong> Portal is read-only for location data and autosave. No file upload endpoints exist.
+</div>
+
+</div>
+</div>
+
+<div class="section">
+<h2>6. COMPLETION ATTRIBUTION</h2>
+
+<h3>Current Capture</h3>
+
+<div class="file-path">/supabase/migrations/023_tesla_program_enrollments.sql (line 34)</div>
+
+<p><strong>Field:</strong> <code>completed_by_user_id</code> (text)</p>
+
+<p><strong>How it's set (from /app/api/tesla/enrollments/[id]/checklist/route.ts, line 67):</strong></p>
+<div class="code-block">
+const completedBy = completed ? (session.user?.email ?? null) : null
+checklistPatch.completed_by_user_id = completedBy
+</div>
+
+<p>Stores the <strong>email</strong> of the NextAuth user who made the PATCH request.</p>
+
+<h3>Limitations</h3>
+
+<div class="flag">
+  <strong>No distinction of WHO completed it:</strong>
+  <ul>
+    <li>No user ID (only email string)</li>
+    <li>No role/type field (internal vs shop user)</li>
+    <li>No "completed by" name or title</li>
+  </ul>
+</div>
+
+<p>For shop-facing onboarding view, extend schema with:</p>
+<ul>
+  <li><code>completed_by_source: 'admin' | 'portal' | 'system'</code></li>
+  <li>User metadata (name, role, type)</li>
+</ul>
+
+</div>
+</div>
+
+<div class="section">
+<h2>SUMMARY FOR SHOP-FACING ONBOARDING CHECKLIST</h2>
+
+<h3>Key Capabilities Available</h3>
+
+<div class="success">
+  ✓ JWT-based portal auth (location_id scoped)<br>
+  ✓ Service role queries to read enrollments & checklist<br>
+  ✓ All program definitions in program-config.ts<br>
+  ✓ Checklist completion timestamps & notes<br>
+  ✓ Phase/owner/prerequisite metadata<br>
+</div>
+
+<h3>Must Build / Extend</h3>
+
+<ol>
+  <li><strong>Visibility flag:</strong> Add <code>shop_visible: boolean</code> to ProgramChecklistItem</li>
+  <li><strong>Portal PATCH endpoint:</strong> New route for shop users to mark items complete</li>
+  <li><strong>Source attribution:</strong> Add <code>completed_by_source</code> column to program_enrollment_checklist</li>
+  <li><strong>Portal checklist GET:</strong> New endpoint to fetch enrollments + checklist filtered by portal token</li>
+  <li><strong>Shop context:</strong> Extend portal session with shop contact name/info</li>
+</ol>
+
+<h3>Reference Files</h3>
+
+<p><strong>Portal Auth:</strong></p>
+<ul>
+  <li>/lib/portal-token.ts</li>
+  <li>/app/api/portal/location/route.ts</li>
+  <li>/app/(portal)/portal/[token]/page.tsx</li>
+</ul>
+
+<p><strong>Checklist:</strong></p>
+<ul>
+  <li>/app/api/tesla/enrollments/[id]/checklist/route.ts</li>
+  <li>/lib/program-config.ts</li>
+  <li>/lib/program-enrollment-service.ts</li>
+</ul>
+
+</div>
+</div>
+
+</div>
+</body>
+</html>
