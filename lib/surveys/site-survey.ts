@@ -5,7 +5,7 @@ import type { SurveySpec } from '@/lib/surveys/types'
 // RepairWise/VinFast facility readiness form.
 export const SITE_SURVEY: SurveySpec = {
   id: 'vinfast-site',
-  title: 'VinFast shop site survey',
+  title: 'Facility readiness',
   intro:
     'This assessment evaluates your shop’s readiness for the VinFast OEM Warranty Program. ' +
     'Answering “No” to anything does not disqualify you — we’ll work with you to close any gaps. ' +

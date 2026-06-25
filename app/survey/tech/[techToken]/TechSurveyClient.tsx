@@ -21,10 +21,10 @@ export default function TechSurveyClient({ techToken }: { techToken: string }) {
         if (!r.ok) {
           throw new Error(
             r.status === 401
-              ? 'This survey link is invalid or has expired.'
+              ? 'This link is invalid or has expired.'
               : r.status === 404
-                ? 'We couldn’t find this survey.'
-                : 'Something went wrong loading your survey.',
+                ? 'We couldn’t find your form.'
+                : 'Something went wrong loading your form.',
           )
         }
         return r.json()
@@ -68,7 +68,7 @@ export default function TechSurveyClient({ techToken }: { techToken: string }) {
                 spec={TECHNICIAN_SURVEY}
                 initial={state.responses}
                 submitted={state.submitted}
-                submitLabel="Submit survey"
+                submitLabel="Submit"
                 onAutosave={async r => {
                   await save(r, false)
                 }}

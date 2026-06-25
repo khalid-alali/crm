@@ -11,7 +11,7 @@ const yn = [
 export const TECHNICIAN_SURVEY: SurveySpec = {
   id: 'technician-ev-readiness',
   title: 'Technician EV Readiness',
-  intro: 'Your shop invited you to complete this short readiness survey. It takes about 5 minutes.',
+  intro: 'Your shop invited you to complete this short readiness form. It takes about 5 minutes.',
   sections: [
     {
       title: 'About you',
