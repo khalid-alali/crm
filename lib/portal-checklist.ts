@@ -117,7 +117,7 @@ const SHOP_VISIBLE: Record<string, Record<string, ShopChecklistMeta>> = {
         ['OS', 'Windows 10 or 11 (64-bit)'],
         ['Memory', '16 GB RAM minimum'],
         ['Ports', 'USB-A and an Ethernet port (or a USB-C adapter)'],
-        ['Network', 'Wired internet in the bay'],
+        ['Network', 'Wireless internet in the bay'],
       ],
     },
     cables: {
