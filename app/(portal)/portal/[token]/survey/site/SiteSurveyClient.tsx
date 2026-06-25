@@ -61,7 +61,7 @@ export default function SiteSurveyClient({ token }: { token: string }) {
                 spec={SITE_SURVEY}
                 initial={initial}
                 submitted={submitted}
-                submitLabel="Submit survey"
+                submitLabel="Submit"
                 onAutosave={async r => {
                   await save(r, false)
                 }}

@@ -75,30 +75,30 @@ export function surveyItemsForProgram(
 
   const capabilities: PortalSurveyItem = {
     key: 'capabilities',
-    label: 'Shop capabilities survey',
+    label: 'Service capabilities',
     status: state.capabilitiesSubmitted ? 'submitted' : 'not_started',
     detail: 'Lifts, bays, and the services you offer',
     href: `/portal/${token}`,
-    cta: state.capabilitiesSubmitted ? 'View / edit' : 'Start survey',
+    cta: state.capabilitiesSubmitted ? 'View / edit' : 'Get started',
   }
 
   const site: PortalSurveyItem = {
     key: 'site',
-    label: 'Shop site survey',
+    label: 'Facility readiness',
     status: state.siteSubmitted ? 'submitted' : state.siteHasDraft ? 'in_progress' : 'not_started',
-    detail: 'Facility readiness: power, parking, storage, signage',
+    detail: 'Power, parking, storage, and signage',
     href: `/portal/${token}/survey/site`,
-    cta: state.siteSubmitted ? 'View / edit' : state.siteHasDraft ? 'Continue' : 'Start survey',
+    cta: state.siteSubmitted ? 'View / edit' : state.siteHasDraft ? 'Continue' : 'Get started',
   }
 
   const technicians: PortalSurveyItem = {
     key: 'technicians',
-    label: 'Technician competency survey',
+    label: 'Technician certifications',
     status: state.techCompleted >= 1 ? 'submitted' : state.techTotal > 0 ? 'in_progress' : 'not_started',
     detail:
       state.techTotal > 0
         ? `${state.techCompleted} of ${state.techTotal} tech${state.techTotal > 1 ? 's' : ''} done`
-        : 'Invite your techs by email — each completes their own survey',
+        : 'Invite your techs by email — they each add their own certifications',
     href: `/portal/${token}/survey/technicians`,
     cta: 'Manage invites',
   }

@@ -534,7 +534,7 @@ function IntakeSurveys({ surveys }: { surveys: SurveyItem[] }) {
         </span>
       </div>
       <p className={`mb-1 pl-[30px] text-xs ${MUTED}`}>
-        A few quick surveys so we can match you with the right work. Save and come back anytime.
+        A few quick steps so we can match you with the right work. Save and come back anytime.
       </p>
       <div className="md:pl-[30px]">
         {surveys.map(s => (

@@ -180,8 +180,8 @@ export default function TechnicianInviteClient({ token }: { token: string }) {
         <div className="rounded-2xl border border-[#0f1114]/10 bg-[#f9f9fb] p-6 sm:p-8">
           <h1 className="text-2xl font-semibold tracking-tight text-[#0f1114]">Invite your technicians</h1>
           <p className={`mt-2 text-sm ${MUTED}`}>
-            Add the techs who&apos;ll work on VinFast vehicles. Each gets their own link to a short competency
-            survey — you fill nothing out yourself.
+            Add the techs who&apos;ll work on VinFast vehicles. Each gets their own link to add their
+            certifications — you fill nothing out yourself.
           </p>
 
           {error && <p className="mt-5 text-sm text-[#993c1d]">{error}</p>}
