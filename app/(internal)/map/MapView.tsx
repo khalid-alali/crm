@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Papa from 'papaparse'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import StatusBadge from '@/components/StatusBadge'
@@ -25,6 +26,18 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUSES = ['lead', 'contacted', 'prospect', 'dormant', 'contracted', 'active', 'inactive']
 const MAP_FILTER_STATUSES = STATUSES
 const DEFAULT_MAP_STATUSES = new Set(['contracted', 'active', 'inactive'])
+
+const MAP_EXPORT_COLUMNS = [
+  'id',
+  'name',
+  'chain_name',
+  'city',
+  'state',
+  'county',
+  'status',
+  'lat',
+  'lng',
+] as const
 
 export interface MapViewLocation {
   id: string
@@ -480,6 +493,28 @@ export default function MapView({
     flyMapToArea('')
   }
 
+  function handleExportCsv() {
+    const rows = locations.map(loc => ({
+      id: loc.id,
+      name: loc.name ?? '',
+      chain_name: loc.chain_name ?? '',
+      city: loc.city ?? '',
+      state: loc.state ?? '',
+      county: loc.county ?? '',
+      status: loc.status ?? '',
+      lat: loc.lat != null ? String(loc.lat) : '',
+      lng: loc.lng != null ? String(loc.lng) : '',
+    }))
+    const csv = Papa.unparse(rows, { columns: [...MAP_EXPORT_COLUMNS] })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `map-locations-${new Date().toISOString().slice(0, 10)}.csv`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function handleGeocodeAll() {
     setGeocoding(true)
     setGeocodeResult(null)
@@ -590,21 +625,21 @@ export default function MapView({
             <p className="text-[11px] text-onix-500 mt-1">No counties in this view for the selected state.</p>
           ) : null}
         </div>
-        <div className="space-y-1.5">
-          {MAP_FILTER_STATUSES.map(s => (
-            <div key={s} className="flex items-center gap-2 text-xs">
-              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_COLORS[s] }} />
-              <span className="text-onix-600">{LOCATION_STATUS_LABELS[s]}</span>
-            </div>
-          ))}
-        </div>
         {locations.length === 0 && (
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
             No shops yet. Add locations on the Shops page.
           </p>
         )}
 
-        <div className="mt-auto">
+        <div className="mt-auto space-y-1.5">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={locations.length === 0}
+            className="w-full px-2 py-1.5 text-xs border border-arctic-300 rounded text-onix-800 hover:bg-arctic-50 disabled:opacity-50"
+          >
+            Export CSV ({locations.length})
+          </button>
           <button
             onClick={handleGeocodeAll}
             disabled={geocoding}
