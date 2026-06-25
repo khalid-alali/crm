@@ -22,6 +22,21 @@ export function verifyCapabilitiesPortalToken(token: string): { locationId: stri
   return { locationId: decoded.locationId }
 }
 
+type TechSurveyJwtPayload = { inviteId: string; type: 'tech_survey' }
+
+/** Per-technician survey link token (one invite). Distinct from the per-location portal token. */
+export function signTechSurveyToken(inviteId: string): string {
+  return jwt.sign({ inviteId, type: 'tech_survey' }, secret(), { expiresIn: '60d' })
+}
+
+export function verifyTechSurveyToken(token: string): { inviteId: string } {
+  const decoded = jwt.verify(token, secret()) as TechSurveyJwtPayload
+  if (decoded.type !== 'tech_survey' || !decoded.inviteId) {
+    throw new Error('Invalid technician survey token')
+  }
+  return { inviteId: decoded.inviteId }
+}
+
 /**
  * Legacy partner-portal token (address/contact updates) — older tokens may omit `type`.
  * Accepts `{ locationId }` or `{ locationId, type: 'portal' }`.

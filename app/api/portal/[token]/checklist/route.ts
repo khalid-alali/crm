@@ -3,6 +3,7 @@ import { verifyCapabilitiesPortalToken } from '@/lib/portal-token'
 import { getProgramConfig } from '@/lib/program-config'
 import { deriveProgramStage, isTeslaStage } from '@/lib/program-stage'
 import { isShopOnboardingProgram, programHelpEmail, resolveShopChecklist } from '@/lib/portal-checklist'
+import { loadShopSurveyState, surveyItemsForProgram } from '@/lib/portal-surveys'
 import {
   assertEnrollmentOwned,
   assertShopCompletable,
@@ -46,6 +47,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     completedByEnrollment.set(row.enrollment_id, map)
   }
 
+  const surveyState = await loadShopSurveyState(supabaseAdmin, locationId)
+
   const programs = enrollments.map(enrollment => {
     const items = resolveShopChecklist(
       enrollment.program_id,
@@ -57,6 +60,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       program_label: getProgramConfig(enrollment.program_id)?.label ?? enrollment.program_id,
       stage: enrollment.stage,
       help_email: programHelpEmail(enrollment.program_id),
+      surveys: surveyItemsForProgram(surveyState, token, enrollment.program_id),
       items,
     }
   })

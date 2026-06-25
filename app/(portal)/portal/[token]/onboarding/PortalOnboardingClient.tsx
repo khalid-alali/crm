@@ -23,12 +23,21 @@ type Item = {
   blocked: boolean
   unlocksAfterLabel: string | null
 }
+type SurveyItem = {
+  key: 'capabilities' | 'site' | 'technicians'
+  label: string
+  status: 'not_started' | 'in_progress' | 'submitted'
+  detail: string
+  href: string
+  cta: string
+}
 type Program = {
   enrollment_id: string
   program_id: string
   program_label: string
   stage: string
   help_email: string
+  surveys?: SurveyItem[]
   items: Item[]
 }
 
@@ -272,6 +281,8 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
             </p>
           )}
 
+          {current.surveys && current.surveys.length > 0 && <IntakeSurveys surveys={current.surveys} />}
+
           {current.items.length === 0 ? (
             <div className={`mt-8 rounded-xl border border-dashed ${HAIR} p-9 text-center`}>
               <Clock className="mx-auto text-[#687cf9]" size={24} aria-hidden />
@@ -505,6 +516,69 @@ function ItemRow({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function IntakeSurveys({ surveys }: { surveys: SurveyItem[] }) {
+  const done = surveys.filter(s => s.status === 'submitted').length
+  return (
+    <section className="mt-7">
+      <div className="mb-1 flex items-center gap-2.5">
+        <span className="flex h-[22px] w-[22px] flex-none items-center justify-center rounded-full bg-[#687cf9] text-[11px] font-semibold text-white">
+          <i className="not-italic">1</i>
+        </span>
+        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#0f1114]">Tell us about your shop</h2>
+        <span className={`ml-auto text-xs ${MUTED}`}>
+          {done} of {surveys.length} done
+        </span>
+      </div>
+      <p className={`mb-1 pl-[30px] text-xs ${MUTED}`}>
+        A few quick surveys so we can match you with the right work. Save and come back anytime.
+      </p>
+      <div className="md:pl-[30px]">
+        {surveys.map(s => (
+          <SurveyRow key={s.key} s={s} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function SurveyRow({ s }: { s: SurveyItem }) {
+  const submitted = s.status === 'submitted'
+  return (
+    <div className={`flex items-start gap-3 border-b ${HAIR} py-3.5`}>
+      <span className="mt-0.5 flex-none" aria-hidden>
+        {submitted ? (
+          <Check size={18} className="text-[#687cf9]" strokeWidth={2.5} />
+        ) : (
+          <span className="block h-4 w-4 rounded-full border-2 border-[#d7dade]" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[15px] font-medium text-[#0f1114]">{s.label}</span>
+          {submitted ? (
+            <span className="flex items-center gap-1 rounded bg-[#cfffcd] px-2 py-0.5 text-[11px] font-medium text-[#1f6b2e]">
+              <Check size={12} strokeWidth={3} aria-hidden /> Submitted
+            </span>
+          ) : s.status === 'in_progress' ? (
+            <span className={`rounded bg-[#eef0f3] px-2 py-0.5 text-[11px] ${MUTED}`}>In progress</span>
+          ) : null}
+        </div>
+        <p className={`mt-0.5 text-xs ${MUTED}`}>{s.detail}</p>
+      </div>
+      <a
+        href={s.href}
+        className={
+          submitted
+            ? 'flex-none rounded-lg border border-[#cfd2d8] px-4 py-2 text-sm font-medium text-[#0f1114]'
+            : 'flex-none rounded-lg bg-[#687cf9] px-4 py-2 text-sm font-medium text-white'
+        }
+      >
+        {s.cta} {submitted ? '' : '→'}
+      </a>
     </div>
   )
 }
