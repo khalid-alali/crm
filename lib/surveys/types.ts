@@ -22,6 +22,8 @@ export type SurveyQuestion = {
   options?: SurveyOption[] // single | multi
   help?: string
   placeholder?: string
+  /** Optional external resource shown as a "open in new tab" button under the question. */
+  link?: { label: string; url: string }
 }
 
 export type SurveySection = { title?: string; intro?: string; questions: SurveyQuestion[] }

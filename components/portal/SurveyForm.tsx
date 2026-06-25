@@ -113,6 +113,16 @@ export default function SurveyForm({
                   {q.required && <span className="ml-1 text-[#ef5f4b]">*</span>}
                 </label>
                 {q.help && <p className={`mt-0.5 text-xs ${MUTED}`}>{q.help}</p>}
+                {q.link && (
+                  <a
+                    href={q.link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#c9cffb] bg-[#eef0fe] px-3 py-1.5 text-[13px] font-medium text-[#3f47c4] hover:bg-[#e3e7fd]"
+                  >
+                    {q.link.label} <span aria-hidden>↗</span>
+                  </a>
+                )}
                 <div className={`mt-2 ${invalid.has(q.key) ? 'rounded-lg ring-1 ring-[#ef5f4b] p-2 -m-2' : ''}`}>
                   <Field q={q} value={responses[q.key]} onChange={v => set(q, v)} />
                 </div>
