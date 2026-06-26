@@ -28,13 +28,13 @@ Source: `trigger-dev-v3-plan.md` (v2 funnel + v3 Trigger.dev contract).
 
 ```
 # Counter-card QR (printed on PDF)
-https://repairwise.com/diagnose?casePartner=OILCHANGERSD0D9&utm_source=qr&utm_medium=counter_card
+https://app.fixlane.com/sign-up?casePartner=OILCHANGERSD0D9&utm_source=qr&utm_medium=counter_card
 
 # Optional thin redirect for scan logging before Toolbox (same param)
 GET /r/qr?casePartner=OILCHANGERSD0D9&src=card  → log qr.scanned → 302 to diagnose URL above
 
 # Toolbox referral (owner toolkit, expert handoff)
-https://repairwise.com/diagnose?casePartner=OILCHANGERSD0D9&utm_source=shop&utm_medium=toolkit
+https://app.fixlane.com/sign-up?casePartner=OILCHANGERSD0D9&utm_source=shop&utm_medium=toolkit
 ```
 
 **Legend:** `[x]` done in repo · `[~]` partial · `[ ]` not started

@@ -55,7 +55,7 @@ export async function buildCounterCardPdf(input: {
     height: qrSize,
   })
 
-  page.drawText('Powered by RepairWise · repairwise.com/diagnose', {
+  page.drawText('Powered by RepairWise · app.fixlane.com/sign-up', {
     x: margin,
     y: margin + 12,
     size: 9,

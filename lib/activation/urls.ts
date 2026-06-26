@@ -1,9 +1,9 @@
 import { crmPublicBaseUrl } from '@/lib/expert-assist/slack'
 import { expertAssistSurfacesBaseUrl } from '@/lib/expert-assist-surfaces-base-url'
 
-const DIAGNOSE_BASE = 'https://repairwise.com/diagnose'
+const TOOLBOX_SIGNUP_BASE = 'https://app.fixlane.com/sign-up'
 
-/** Consumer diagnose URL — casePartner only, never consult_short_code. */
+/** Consumer Toolbox sign-up URL — casePartner only, never consult_short_code. */
 export function toolboxDiagnoseUrl(
   casePartner: string,
   opts?: { utmSource?: string; utmMedium?: string },
@@ -11,7 +11,7 @@ export function toolboxDiagnoseUrl(
   const params = new URLSearchParams({ casePartner })
   params.set('utm_source', opts?.utmSource ?? 'shop')
   if (opts?.utmMedium) params.set('utm_medium', opts.utmMedium)
-  return `${DIAGNOSE_BASE}?${params.toString()}`
+  return `${TOOLBOX_SIGNUP_BASE}?${params.toString()}`
 }
 
 export function counterCardDiagnoseUrl(casePartner: string): string {
