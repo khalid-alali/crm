@@ -36,7 +36,16 @@ export const SITE_SURVEY: SurveySpec = {
       questions: [
         { key: 'advisor_computers_phones', label: 'Do you have computers and phones available in your service advisor area?', type: 'yesno', required: true },
         { key: 'power_wifi', label: 'Do you have power and Wi-Fi access in your service area?', type: 'yesno', required: true },
-        { key: 'hv_safety_equipment', label: 'Do you have the RepairWise-recommended high-voltage (HV) safety equipment?', type: 'yesno', required: true },
+        {
+          key: 'hv_safety_equipment',
+          label: 'Do you have the RepairWise-recommended high-voltage (HV) safety equipment?',
+          labelLink: {
+            text: 'safety equipment',
+            href: 'https://rw-vf-knowledge-base.replit.app/article/recommended-equipment?access=571bde22-ee9c-4849-8d79-6a0543e69fb4',
+          },
+          type: 'yesno',
+          required: true,
+        },
         { key: 'acting_manager', label: 'Do you have an acting manager onsite?', type: 'yesno', required: true },
         { key: 'vinfast_trained_tech', label: 'Do you have at least one VinFast-trained technician?', type: 'yesno', required: true },
         { key: 'team_prepared', label: 'Is your team trained and prepared to receive VinFast customers?', type: 'yesno', required: true },
@@ -44,6 +53,7 @@ export const SITE_SURVEY: SurveySpec = {
         {
           key: 'wifi_speed_mbps',
           label: 'Navigate to fast.com, run a speed test, and enter your Wi-Fi speed (Mbps)',
+          labelLink: { text: 'fast.com', href: 'https://fast.com' },
           type: 'number',
           required: true,
           help: 'Open fast.com on a device connected to your shop Wi-Fi and enter the number it shows.',

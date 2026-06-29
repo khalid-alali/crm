@@ -109,7 +109,7 @@ export default function SurveyForm({
             {section.questions.map(q => (
               <div key={q.key} id={`q-${q.key}`}>
                 <label className="block text-[15px] font-medium text-[#0f1114]">
-                  {q.label}
+                  {renderQuestionLabel(q)}
                   {q.required && <span className="ml-1 text-[#ef5f4b]">*</span>}
                 </label>
                 {q.help && <p className={`mt-0.5 text-xs ${MUTED}`}>{q.help}</p>}
@@ -149,6 +149,27 @@ export default function SurveyForm({
         )}
       </div>
     </div>
+  )
+}
+
+function renderQuestionLabel(q: SurveyQuestion) {
+  const link = q.labelLink
+  if (!link) return q.label
+  const i = q.label.indexOf(link.text)
+  if (i === -1) return q.label
+  return (
+    <>
+      {q.label.slice(0, i)}
+      <a
+        href={link.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-[#687cf9] underline underline-offset-2 hover:text-[#3f47c4]"
+      >
+        {link.text}
+      </a>
+      {q.label.slice(i + link.text.length)}
+    </>
   )
 }
 

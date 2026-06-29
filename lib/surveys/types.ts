@@ -23,6 +23,8 @@ export type SurveyQuestion = {
   help?: string
   placeholder?: string
   readOnly?: boolean
+  /** Link a phrase inside `label` (must match exactly once). */
+  labelLink?: { text: string; href: string }
 }
 
 export type SurveySection = { title?: string; intro?: string; questions: SurveyQuestion[] }
