@@ -47,6 +47,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
   }
   const responses = (body.responses ?? {}) as SurveyResponses
 
+  const { data: loc } = await supabaseAdmin.from('locations').select('name').eq('id', locationId).maybeSingle()
+  if (loc?.name) responses.shop_name = loc.name
+
   if (body.submit) {
     const missing = missingRequired(SITE_SURVEY, responses)
     if (missing.length > 0) {
@@ -57,7 +60,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     }
   }
 
-  const { data: loc } = await supabaseAdmin.from('locations').select('name').eq('id', locationId).maybeSingle()
   const shopName =
     (typeof responses.shop_name === 'string' && responses.shop_name.trim()) || loc?.name || 'Unknown shop'
 

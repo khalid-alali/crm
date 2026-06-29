@@ -165,6 +165,18 @@ function Field({
     'w-full rounded-lg border border-[#cfd2d8] bg-white px-3 py-2 text-sm text-[#0f1114] focus:border-[#687cf9] focus:outline-none focus:ring-1 focus:ring-[#687cf9]'
 
   if (q.type === 'text' || q.type === 'tel' || q.type === 'email' || q.type === 'number') {
+    if (q.readOnly) {
+      return (
+        <input
+          type={q.type === 'number' ? 'number' : q.type}
+          className={`${inputCls} cursor-default bg-[#eceef1] focus:border-[#cfd2d8] focus:ring-0`}
+          value={value == null ? '' : String(value)}
+          readOnly
+          tabIndex={-1}
+          aria-readonly
+        />
+      )
+    }
     return (
       <input
         type={q.type === 'number' ? 'number' : q.type}

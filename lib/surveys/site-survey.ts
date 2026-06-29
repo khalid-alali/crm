@@ -12,7 +12,7 @@ export const SITE_SURVEY: SurveySpec = {
     'Completion is required for program participation.',
   sections: [
     {
-      questions: [{ key: 'shop_name', label: 'Shop name', type: 'text', required: true }],
+      questions: [{ key: 'shop_name', label: 'Shop name', type: 'text', required: true, readOnly: true }],
     },
     {
       title: 'Facility & infrastructure',

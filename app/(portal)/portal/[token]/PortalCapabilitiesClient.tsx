@@ -28,16 +28,6 @@ import {
   type PortalCapabilitiesFormValues,
   type PortalCapabilitiesFieldKey,
 } from '@/lib/portal-capabilities-form'
-import {
-  DAY_LABELS,
-  DAY_ORDER,
-  TIME_OPTIONS,
-  defaultPortalHoursModel,
-  stringifyPortalHours,
-  tryParsePortalHoursJson,
-  type DayId,
-  type PortalHoursModel,
-} from '@/lib/portal-hours-schedule'
 import { formatUsPhoneDisplay, stripPhoneToNationalDigits } from '@/lib/portal-phone-email'
 
 const ALLOCATED_TO_FIXLANE_OPTIONS: RadioOpt[] = [
@@ -60,7 +50,6 @@ type LocationPayload = {
   name: string
   state: string | null
   bar_license_number: string | null
-  hours_of_operation: string | null
   standard_warranty: string | null
   total_techs: number | null
   allocated_techs: number | null
@@ -120,8 +109,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
   const [phoneFocused, setPhoneFocused] = useState(false)
 
   const [barLicenseDigits, setBarLicenseDigits] = useState('')
-  const [hoursModel, setHoursModel] = useState<PortalHoursModel>(() => defaultPortalHoursModel())
-  const [hoursLegacyHint, setHoursLegacyHint] = useState<string | null>(null)
   const [standard_warranty, setWarranty] = useState('')
   const [total_techs, setTotalTechs] = useState('')
   const [allocated_techs, setAllocatedTechs] = useState('')
@@ -157,7 +144,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
       contactEmail,
       contactPhoneDigits,
       barLicenseDigits,
-      hoursModel,
       standardWarranty: standard_warranty,
       totalTechs: total_techs,
       allocatedTechs: allocated_techs,
@@ -183,7 +169,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
       contactEmail,
       contactPhoneDigits,
       barLicenseDigits,
-      hoursModel,
       standard_warranty,
       total_techs,
       allocated_techs,
@@ -312,15 +297,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
           setPhoneFocused(false)
           const rawBar = loc.bar_license_number ?? ''
           setBarLicenseDigits(barLicenseDigitsOnly(rawBar))
-          const rawHours = (loc.hours_of_operation ?? '').trim()
-          const parsedHours = tryParsePortalHoursJson(rawHours)
-          if (parsedHours) {
-            setHoursModel(parsedHours)
-            setHoursLegacyHint(null)
-          } else {
-            setHoursModel(defaultPortalHoursModel())
-            setHoursLegacyHint(rawHours || null)
-          }
           setWarranty(loc.standard_warranty ?? '')
           setTotalTechs(numStr(loc.total_techs))
           setAllocatedTechs(storedIntToAllocatedBucket(loc.allocated_techs))
@@ -356,15 +332,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
     }
   }, [token])
 
-  function updateHoursModel(updater: (m: PortalHoursModel) => PortalHoursModel) {
-    markTouched('hours_of_operation')
-    setHoursModel(m => {
-      const next = updater(m)
-      queueMicrotask(() => scheduleFieldSave('hours_of_operation', stringifyPortalHours(next)))
-      return next
-    })
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitNetworkError('')
@@ -398,7 +365,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
           contact_email: contactEmail.trim(),
           contact_phone: phoneOut,
           bar_license_number: isCA ? barLicenseDigits : undefined,
-          hours_of_operation: stringifyPortalHours(hoursModel),
           standard_warranty: standard_warranty.trim(),
           total_techs: parseInt(total_techs, 10),
           allocated_techs: allocatedBucketToStoredInt(allocated_techs as AllocatedTechsBucketValue),
@@ -850,18 +816,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
                 </div>
               )}
 
-              <div ref={fieldRefSetter(fieldRefs, 'hours_of_operation')}>
-                <label className="mb-1 flex flex-wrap items-center text-xs font-medium text-gray-700">Hours of operation *</label>
-                {hoursLegacyHint && (
-                  <p className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    Previously saved as free text: <span className="font-medium">{hoursLegacyHint}</span>. Use the
-                    schedule below to confirm or replace.
-                  </p>
-                )}
-                <HoursScheduleEditor model={hoursModel} onChange={updateHoursModel} />
-                <FieldError message={visibleErrors.hours_of_operation} />
-              </div>
-
               {submitNetworkError && <p className="text-sm text-red-600">{submitNetworkError}</p>}
 
               <button
@@ -875,68 +829,6 @@ export default function PortalCapabilitiesClient({ token }: { token: string }) {
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-function HoursScheduleEditor({
-  model,
-  onChange,
-}: {
-  model: PortalHoursModel
-  onChange: (u: (m: PortalHoursModel) => PortalHoursModel) => void
-}) {
-  function setDay(id: DayId, patch: Partial<PortalHoursModel['days'][DayId]>) {
-    onChange(m => ({
-      ...m,
-      days: { ...m.days, [id]: { ...m.days[id], ...patch } },
-    }))
-  }
-
-  return (
-    <div className="space-y-2 rounded-md border border-gray-200 bg-gray-50 p-3">
-      {DAY_ORDER.map(id => {
-        const row = model.days[id]
-        return (
-          <div
-            key={id}
-            className="flex flex-col gap-2 border-b border-gray-200 py-2 last:border-0 sm:flex-row sm:items-center sm:gap-3"
-          >
-            <div className="w-12 shrink-0 text-sm font-medium text-gray-800">{DAY_LABELS[id]}</div>
-            <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={row.closed} onChange={e => setDay(id, { closed: e.target.checked })} />
-              Closed
-            </label>
-            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
-              <select
-                className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-[9rem]"
-                disabled={row.closed}
-                value={row.open}
-                onChange={e => setDay(id, { open: e.target.value })}
-              >
-                {TIME_OPTIONS.map(t => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              <span className="hidden text-gray-500 sm:inline">to</span>
-              <select
-                className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-[9rem]"
-                disabled={row.closed}
-                value={row.close}
-                onChange={e => setDay(id, { close: e.target.value })}
-              >
-                {TIME_OPTIONS.map(t => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }

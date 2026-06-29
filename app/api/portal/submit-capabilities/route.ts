@@ -14,7 +14,6 @@ import {
   YES_NO,
 } from '@/lib/portal-capabilities-schema'
 import { validatePortalEmail, validateUsPhoneOptional, stripPhoneToNationalDigits } from '@/lib/portal-phone-email'
-import { tryParsePortalHoursJson, validatePortalHoursModel } from '@/lib/portal-hours-schedule'
 import { parseBoundedNonNegInt, PORTAL_INT_MAX } from '@/lib/portal-capabilities-form'
 
 function isCA(state: string | null | undefined) {
@@ -57,7 +56,7 @@ export async function POST(req: NextRequest) {
     .from('locations')
     .select(
       `id, name, state, status, account_id,
-      bar_license_number, hours_of_operation, standard_warranty,
+      bar_license_number, standard_warranty,
       total_techs, allocated_techs, daily_appointment_capacity, weekly_appointment_capacity,
       capabilities_parking_spots_rw, capabilities_two_post_lifts,
       capabilities_afterhours_tow_ins, capabilities_night_drops,
@@ -87,19 +86,6 @@ export async function POST(req: NextRequest) {
   const phoneErr = validateUsPhoneOptional(phoneDigits)
   if (phoneErr) return NextResponse.json({ error: phoneErr }, { status: 400 })
   const contactPhoneNorm = phoneDigits.length === 10 ? phoneDigits : ''
-
-  const hoursRaw = str(body.hours_of_operation)
-  if (!hoursRaw) return NextResponse.json({ error: 'hours_of_operation is required' }, { status: 400 })
-  const hoursModel = tryParsePortalHoursJson(hoursRaw)
-  if (!hoursModel) {
-    return NextResponse.json(
-      { error: 'Hours of operation must be completed using the day-by-day schedule' },
-      { status: 400 },
-    )
-  }
-  const hoursErr = validatePortalHoursModel(hoursModel)
-  if (hoursErr) return NextResponse.json({ error: hoursErr }, { status: 400 })
-  const hours = hoursRaw
 
   const total_techs = parseBoundedNonNegInt(String(body.total_techs ?? ''), PORTAL_INT_MAX.total_techs)
   const allocated_techs = parseBoundedNonNegInt(String(body.allocated_techs ?? ''), PORTAL_INT_MAX.allocated_techs)
@@ -182,7 +168,6 @@ export async function POST(req: NextRequest) {
   const locationPatch: Record<string, unknown> = {
     name: shopName,
     bar_license_number,
-    hours_of_operation: hours,
     standard_warranty: standard_warranty,
     total_techs,
     allocated_techs,
@@ -260,7 +245,6 @@ export async function POST(req: NextRequest) {
     if (o !== n) capLines.push(`${label}: ${o} → ${n}`)
   }
   pushIf('Standard warranty', L.standard_warranty, standard_warranty)
-  pushIf('Hours of operation', L.hours_of_operation, hours)
   pushIf('BAR license', L.bar_license_number, bar_license_number)
   pushIf('Full-time techs', L.total_techs, total_techs)
   pushIf('Techs allocated to Fixlane', L.allocated_techs, allocated_techs)

@@ -8,7 +8,6 @@ import {
   YES_NO,
 } from '@/lib/portal-capabilities-schema'
 import { validatePortalEmail, validateUsPhoneOptional, stripPhoneToNationalDigits } from '@/lib/portal-phone-email'
-import { tryParsePortalHoursJson, validatePortalHoursModel } from '@/lib/portal-hours-schedule'
 import {
   PORTAL_INT_MAX,
   allocatedPatchToInt,
@@ -19,7 +18,6 @@ import {
 export const PORTAL_AUTOSAVE_LOCATION_KEYS = [
   'shop_name',
   'bar_license_number',
-  'hours_of_operation',
   'standard_warranty',
   'total_techs',
   'allocated_techs',
@@ -48,7 +46,6 @@ export type PortalAutosaveKey = PortalAutosaveLocationKey | PortalAutosaveContac
 const LOCATION_COLUMN: Record<PortalAutosaveLocationKey, string> = {
   shop_name: 'name',
   bar_license_number: 'bar_license_number',
-  hours_of_operation: 'hours_of_operation',
   standard_warranty: 'standard_warranty',
   total_techs: 'total_techs',
   allocated_techs: 'allocated_techs',
@@ -103,13 +100,6 @@ export function validatePortalAutosaveField(
       const d = str(value).replace(/\D/g, '')
       if (!d) return 'BAR license is required for CA'
       if (d.length < 6 || d.length > 8) return 'BAR number must be 6–8 digits'
-      return null
-    }
-    case 'hours_of_operation': {
-      const s = str(value)
-      if (!s) return 'Hours are required'
-      const m = tryParsePortalHoursJson(s)
-      if (m) return validatePortalHoursModel(m)
       return null
     }
     case 'standard_warranty':

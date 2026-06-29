@@ -22,6 +22,7 @@ export type SurveyQuestion = {
   options?: SurveyOption[] // single | multi
   help?: string
   placeholder?: string
+  readOnly?: boolean
 }
 
 export type SurveySection = { title?: string; intro?: string; questions: SurveyQuestion[] }

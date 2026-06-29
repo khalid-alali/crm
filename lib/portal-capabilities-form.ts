@@ -1,4 +1,3 @@
-import { validatePortalHoursModel, type PortalHoursModel } from '@/lib/portal-hours-schedule'
 import { validatePortalEmail, validateUsPhoneOptional, stripPhoneToNationalDigits } from '@/lib/portal-phone-email'
 
 export type PortalCapabilitiesFieldKey =
@@ -7,7 +6,6 @@ export type PortalCapabilitiesFieldKey =
   | 'contact_email'
   | 'contact_phone'
   | 'bar_license_number'
-  | 'hours_of_operation'
   | 'standard_warranty'
   | 'total_techs'
   | 'allocated_techs'
@@ -33,7 +31,6 @@ export type PortalCapabilitiesFormValues = {
   contactEmail: string
   contactPhoneDigits: string
   barLicenseDigits: string
-  hoursModel: PortalHoursModel
   standardWarranty: string
   totalTechs: string
   allocatedTechs: string
@@ -158,9 +155,6 @@ export function validatePortalCapabilitiesForm(
     if (bar) errors.bar_license_number = bar
   }
 
-  const he = validatePortalHoursModel(v.hoursModel)
-  if (he) errors.hours_of_operation = he
-
   if (!v.standardWarranty.trim()) errors.standard_warranty = 'Standard warranty is required'
 
   const te = intFieldError('total_techs', v.totalTechs)
@@ -229,7 +223,6 @@ export function validatePortalCapabilitiesForm(
     'forklift',
     'hv_battery_table',
     'windshields',
-    'hours_of_operation',
   ]
 
   const firstKey = order.find(k => errors[k])
