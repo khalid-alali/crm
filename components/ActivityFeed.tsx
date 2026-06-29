@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Check, FileText, Mail, Pencil, X } from 'lucide-react'
+import { Check, FileText, Mail, Pencil, Phone, X } from 'lucide-react'
 import { formatBulkPipelineStatusLogBody } from '@/lib/location-status-labels'
 import {
   activityEmailNeedsRecipientDrawer,
@@ -60,6 +60,8 @@ function eventTypeLabel(type: string | undefined): string {
       return 'Address updated'
     case 'shop_created':
       return 'Shop created'
+    case 'call':
+      return 'Call'
     default:
       return (type ?? 'activity').replace(/_/g, ' ')
   }
@@ -102,6 +104,8 @@ function iconTileForType(type: string | undefined): { wrap: string; Icon: typeof
       return { wrap: 'bg-emerald-50 text-emerald-700', Icon: Check }
     case 'contract':
       return { wrap: 'bg-violet-50 text-violet-700', Icon: FileText }
+    case 'call':
+      return { wrap: 'bg-teal-50 text-teal-700', Icon: Phone }
     default:
       return { wrap: 'bg-arctic-100 text-onix-600', Icon: FileText }
   }

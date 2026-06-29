@@ -8,6 +8,7 @@ import { getSignedContractDocUrl } from '@/lib/contract-documents'
 import { resolvePrimaryContact } from '@/lib/primary-contact'
 import { getExpertAssistShopProgramView } from '@/lib/expert-assist-enrollments'
 import TrackRecentShopVisit from '@/components/TrackRecentShopVisit'
+import { callToActivityEntry } from '@/lib/dialpad'
 
 export default async function ShopDetailPage({
   params,
@@ -58,6 +59,18 @@ export default async function ShopDetailPage({
         mergedAt: mergedSource.deleted_at ?? '',
       }
     }
+  }
+
+  // Synced Dialpad calls render on the timeline by reading shop_call_activity
+  // directly — not copied into activity_log — so summaries stay correct as they
+  // patch in later. Merge them into the feed the tabs already sort + display.
+  const { data: shopCalls } = await supabaseAdmin
+    .from('shop_call_activity')
+    .select('call_id, location_id, direction, rw_user_name, external_number, started_at, total_sec, summary')
+    .eq('location_id', id)
+    .in('match_status', ['matched', 'manually_matched'])
+  if (shopCalls?.length) {
+    shop.activity_log = [...(shop.activity_log ?? []), ...shopCalls.map(callToActivityEntry)]
   }
 
   if (shop.contract_locations?.length) {
