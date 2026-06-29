@@ -9,6 +9,7 @@ import {
   Mail,
   MapPinned,
   MessageSquare,
+  Phone,
   Store,
   Users,
 } from 'lucide-react'
@@ -20,6 +21,7 @@ const navItems = [
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/shops', label: 'Shops', icon: Store },
   { href: '/consults', label: 'Consults', icon: MessageSquare },
+  { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/tesla', label: 'Tesla', icon: TeslaMark },
   { href: '/vinfast', label: 'VinFast', icon: VinfastMark },
   { href: '/accounts', label: 'Accounts', icon: Users },

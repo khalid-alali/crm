@@ -38,3 +38,13 @@ export function phoneTelHref(raw: string | null | undefined): string | null {
   if (!d) return null
   return `tel:+${d}`
 }
+
+/**
+ * Canonical key for matching a phone across formats. Returns digits-only,
+ * no `+` — identical to the contacts.phone_e164 generated column (migration
+ * 065) so a value normalized here joins directly against it. Used to match
+ * Dialpad's E.164 `external_number` to the contacts table.
+ */
+export function phoneMatchKey(raw: string | null | undefined): string | null {
+  return phoneDigitsForTel(raw)
+}
