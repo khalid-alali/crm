@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Link from 'next/link'
 import { Check, FileText, Mail, Pencil, Phone, X } from 'lucide-react'
 import { formatBulkPipelineStatusLogBody } from '@/lib/location-status-labels'
@@ -44,6 +44,18 @@ function formatActivityWhen(iso: string): string {
   if (dayDiff === 1) return 'Yesterday'
   if (dayDiff >= 2 && dayDiff < 7) return `${dayDiff} days ago`
   return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function formatActivityDate(iso: string): string {
+  const dt = new Date(iso)
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function formatActivityTime(iso: string): string {
+  const dt = new Date(iso)
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
 function eventTypeLabel(type: string | undefined): string {
@@ -116,6 +128,34 @@ function drawerBodyHtml(entry: ActivityFeedEntry): string {
   return formatBulkPipelineStatusLogBody(stripEmailActivityFooter(raw))
 }
 
+function expandableRowProps(
+  expandable: boolean,
+  onExpand: () => void,
+  label: string,
+): {
+  role?: 'button'
+  tabIndex?: number
+  onClick?: () => void
+  onKeyDown?: (e: ReactKeyboardEvent) => void
+  className?: string
+  'aria-label'?: string
+} {
+  if (!expandable) return {}
+  return {
+    role: 'button',
+    tabIndex: 0,
+    onClick: onExpand,
+    onKeyDown: e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        onExpand()
+      }
+    },
+    className: 'cursor-pointer hover:bg-arctic-50',
+    'aria-label': label,
+  }
+}
+
 function mailtoReplyHref(entry: ActivityFeedEntry): string | null {
   if (entry.type !== 'email') return null
   const to = typeof entry.to_email === 'string' ? entry.to_email.trim() : ''
@@ -183,10 +223,21 @@ export default function ActivityFeed({
               recipientDisplayNames,
             )
 
+            const expandProps = expandableRowProps(
+              expandEmail,
+              () => setDrawerEntry(entry),
+              `View ${eventLabel.toLowerCase()} details`,
+            )
+
             return (
               <div
                 key={entry.id}
-                className="flex gap-2.5 rounded-lg border border-arctic-200 bg-white p-2.5 shadow-sm"
+                className={`flex gap-2.5 rounded-lg border border-arctic-200 bg-white p-2.5 shadow-sm ${expandProps.className ?? ''}`}
+                role={expandProps.role}
+                tabIndex={expandProps.tabIndex}
+                onClick={expandProps.onClick}
+                onKeyDown={expandProps.onKeyDown}
+                aria-label={expandProps['aria-label']}
               >
                 <div
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${iconWrap}`}
@@ -204,6 +255,7 @@ export default function ActivityFeed({
                         <span className="text-onix-400"> · </span>
                         <Link
                           href={shopHref}
+                          onClick={e => e.stopPropagation()}
                           className="font-medium normal-case tracking-normal text-brand-600 hover:underline"
                         >
                           {entry.locations!.name}
@@ -221,19 +273,10 @@ export default function ActivityFeed({
                     <p className="line-clamp-1 text-[13px] leading-snug text-onix-500">{preview}</p>
                   ) : null}
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                <div className="flex shrink-0 flex-col items-end text-right">
                   <time dateTime={entry.created_at} className="text-[11px] tabular-nums leading-tight text-onix-400">
                     {when}
                   </time>
-                  {expandEmail ? (
-                    <button
-                      type="button"
-                      onClick={() => setDrawerEntry(entry)}
-                      className="rounded border border-arctic-300 bg-white px-2 py-0.5 text-[11px] font-medium text-onix-800 hover:bg-arctic-50"
-                    >
-                      Expand
-                    </button>
-                  ) : null}
                 </div>
               </div>
             )
@@ -241,12 +284,24 @@ export default function ActivityFeed({
 
           const formattedBody = entry.body ? formatBulkPipelineStatusLogBody(entry.body) : ''
           const { title, preview } = nonEmailTitlePreview(entry, formattedBody)
-          const showExpand = bodyNeedsDrawer(entry.body ?? '', 80)
+          const showExpand =
+            entry.type === 'call' ? true : bodyNeedsDrawer(entry.body ?? '', 80)
+
+          const expandProps = expandableRowProps(
+            showExpand,
+            () => setDrawerEntry(entry),
+            `View ${eventLabel.toLowerCase()} details`,
+          )
 
           return (
             <div
               key={entry.id}
-              className="flex gap-2.5 rounded-lg border border-arctic-200 bg-white p-2.5 shadow-sm"
+              className={`flex gap-2.5 rounded-lg border border-arctic-200 bg-white p-2.5 shadow-sm ${expandProps.className ?? ''}`}
+              role={expandProps.role}
+              tabIndex={expandProps.tabIndex}
+              onClick={expandProps.onClick}
+              onKeyDown={expandProps.onKeyDown}
+              aria-label={expandProps['aria-label']}
             >
               <div
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${iconWrap}`}
@@ -264,6 +319,7 @@ export default function ActivityFeed({
                       <span className="text-onix-400"> · </span>
                       <Link
                         href={shopHref}
+                        onClick={e => e.stopPropagation()}
                         className="font-medium normal-case tracking-normal text-brand-600 hover:underline"
                       >
                         {entry.locations!.name}
@@ -278,19 +334,10 @@ export default function ActivityFeed({
                   <p className="line-clamp-1 text-[13px] leading-snug text-onix-500">{preview}</p>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+              <div className="flex shrink-0 flex-col items-end text-right">
                 <time dateTime={entry.created_at} className="text-[11px] tabular-nums leading-tight text-onix-400">
                   {when}
                 </time>
-                {showExpand ? (
-                  <button
-                    type="button"
-                    onClick={() => setDrawerEntry(entry)}
-                    className="rounded border border-arctic-300 bg-white px-2 py-0.5 text-[11px] font-medium text-onix-800 hover:bg-arctic-50"
-                  >
-                    Expand
-                  </button>
-                ) : null}
               </div>
             </div>
           )
@@ -321,6 +368,7 @@ function ActivityDrawer({
   recipientDisplayNames?: Record<string, string>
 }) {
   const isEmail = entry.type === 'email'
+  const isCall = entry.type === 'call'
   const formattedBody = entry.body ? formatBulkPipelineStatusLogBody(entry.body) : ''
   const firstLine =
     formattedBody
@@ -378,6 +426,17 @@ function ActivityDrawer({
                   <p>To: {toLegacy}</p>
                 ) : null}
                 {from ? <p>From: {from}</p> : null}
+              </div>
+            ) : isCall ? (
+              <div className="mt-2 space-y-0.5 text-xs text-onix-600">
+                <p>
+                  <span className="font-medium text-onix-700">Date:</span>{' '}
+                  <time dateTime={entry.created_at}>{formatActivityDate(entry.created_at)}</time>
+                </p>
+                <p>
+                  <span className="font-medium text-onix-700">Time:</span>{' '}
+                  <time dateTime={entry.created_at}>{formatActivityTime(entry.created_at)}</time>
+                </p>
               </div>
             ) : from ? (
               <p className="mt-2 text-xs text-onix-600">By: {from}</p>
