@@ -12,6 +12,7 @@ import {
   EXPERT_ASSIST_LINK_PLACEHOLDER,
   ROUTABLE_BANK_LINK_PLACEHOLDER,
 } from '@/lib/email-template-placeholder-tokens'
+import { normalizeAutoLinkPlaceholderForEditor } from '@/lib/email-editor-link-hrefs'
 
 export type EmailBodyEditorHandle = {
   insertText: (text: string) => void
@@ -100,7 +101,10 @@ function EmailEditorToolbar({ editor }: { editor: Editor }) {
       closeLinkPopover()
       return
     }
-    const trimmed = linkUrl.trim()
+    const trimmed = normalizeAutoLinkPlaceholderForEditor(
+      linkUrl,
+      typeof window !== 'undefined' ? window.location.origin : '',
+    )
     const chain = editor.chain().focus().setTextSelection({ from: r.from, to: r.to })
     if (trimmed === '') {
       chain.unsetLink().run()

@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   CAPABILITIES_LINK_DISPLAY_SENTINEL,
   ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL,
+  ROUTABLE_BANK_LINK_DISPLAY_SENTINEL,
+  ROUTABLE_BANK_LINK_PREVIEW_TOKEN,
 } from './email-template-ids'
 import {
   buildCapabilitiesHref,
   buildEnrollmentPortalHref,
   emailContentReferencesEnrollmentPortalLink,
+  emailHasUnreplacedRoutableBankLink,
   replaceCapabilitiesPreviewWithReal,
   replaceEmailTemplatePlaceholders,
   replaceLegacyCapabilitiesPreviewUrls,
@@ -150,5 +153,27 @@ describe('replaceLegacyCapabilitiesPreviewUrls', () => {
     expect(out).not.toContain('__crm_capabilities_preview__')
     expect(out).toContain(CAPABILITIES_LINK_DISPLAY_SENTINEL)
     expect(out.split(CAPABILITIES_LINK_DISPLAY_SENTINEL).length).toBeGreaterThan(2)
+  })
+})
+
+describe('emailHasUnreplacedRoutableBankLink', () => {
+  it('flags merge placeholders, sentinels, and preview URLs', () => {
+    expect(emailHasUnreplacedRoutableBankLink('hi', '<a href="{{routable_bank_link}}">')).toBe(true)
+    expect(emailHasUnreplacedRoutableBankLink('hi', ROUTABLE_BANK_LINK_DISPLAY_SENTINEL)).toBe(true)
+    expect(
+      emailHasUnreplacedRoutableBankLink(
+        'hi',
+        `<a href="https://app.example.com/portal/${ROUTABLE_BANK_LINK_PREVIEW_TOKEN}">`,
+      ),
+    ).toBe(true)
+  })
+
+  it('passes when only a real Routable URL remains', () => {
+    expect(
+      emailHasUnreplacedRoutableBankLink(
+        'Welcome',
+        '<a href="https://routable.com/flow/abc123">Connect your bank account</a>',
+      ),
+    ).toBe(false)
   })
 })

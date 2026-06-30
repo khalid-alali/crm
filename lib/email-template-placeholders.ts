@@ -167,6 +167,19 @@ export function emailContentReferencesRoutableBankLink(subject: string, bodyHtml
   )
 }
 
+/** True when a routable bank-link placeholder or preview URL survived to the final send payload. */
+export function emailHasUnreplacedRoutableBankLink(subject: string, bodyHtml: string): boolean {
+  const s = `${subject}\0${bodyHtml}`
+  const previewEsc = ROUTABLE_BANK_LINK_PREVIEW_TOKEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return (
+    /\{\{\s*routable_bank_link\s*\}\}/i.test(s) ||
+    /\{\{\s*bank_link\s*\}\}/i.test(s) ||
+    /\{\{\s*connect_bank_account_link\s*\}\}/i.test(s) ||
+    s.includes(ROUTABLE_BANK_LINK_DISPLAY_SENTINEL) ||
+    new RegExp(`/portal/${previewEsc}(?:[^a-zA-Z0-9_]|$)`, 'i').test(s)
+  )
+}
+
 export function replaceExpertAssistPreviewWithReal(
   text: string,
   previewHref: string,

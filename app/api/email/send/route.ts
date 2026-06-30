@@ -8,6 +8,7 @@ import { injectCapabilitiesIntoEmail } from '@/lib/inject-capabilities-email'
 import { injectEnrollmentPortalIntoEmail } from '@/lib/inject-enrollment-portal-email'
 import { injectExpertAssistIntoEmail } from '@/lib/inject-expert-assist-email'
 import { injectRoutableBankLinkIntoEmail } from '@/lib/inject-routable-bank-link-email'
+import { emailHasUnreplacedRoutableBankLink } from '@/lib/email-template-placeholders'
 import { normalizeRecipientList } from '@/lib/email-recipients'
 import {
   firstNameLocalFromSessionUser,
@@ -102,6 +103,15 @@ export async function POST(req: NextRequest) {
       const routableInjected = await injectRoutableBankLinkIntoEmail(req, locationId, subjectOut, bodyOut)
       subjectOut = routableInjected.subject
       bodyOut = routableInjected.bodyHtml
+      if (emailHasUnreplacedRoutableBankLink(subjectOut, bodyOut)) {
+        return NextResponse.json(
+          {
+            error:
+              'Bank link URL was not generated. Re-open the E2 template (do not click the link in the editor preview), ensure Routable is configured, and send again.',
+          },
+          { status: 500 },
+        )
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not build email links'
       return NextResponse.json({ error: msg }, { status: 500 })
