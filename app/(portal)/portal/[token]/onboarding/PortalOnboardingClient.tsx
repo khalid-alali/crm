@@ -1,7 +1,19 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, Clock, ExternalLink, Loader2, Lock } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Check, ChevronDown, Clock, ExternalLink, Loader2, Lock, ShieldCheck } from 'lucide-react'
+
+type BankGateSnapshot = {
+  state: 'not_started' | 'in_progress' | 'finishing' | 'linked' | 'waiting_setup'
+  unlocked: boolean
+  routableId: string | null
+  routableStatus: string | null
+  paymentMethodCount: number
+  accountLast4: string | null
+  linkStartedAt: string | null
+  portalUnlockedAt: string | null
+}
 
 type ItemLink = { label: string; url: string; primary?: boolean }
 
@@ -102,12 +114,44 @@ const OWNER_CHIP: Record<Item['owner'], { label: string; cls: string }> = {
 }
 
 export default function PortalOnboardingClient({ token }: { token: string }) {
+  const searchParams = useSearchParams()
+  const returningFromBankLink = searchParams.get('bank_link') === 'return'
+
+  const [gate, setGate] = useState<BankGateSnapshot | null>(null)
+  const [gateLoading, setGateLoading] = useState(true)
+  const [gateActionLoading, setGateActionLoading] = useState(false)
   const [programs, setPrograms] = useState<Program[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
 
+  const loadGate = useCallback(async () => {
+    const qs = returningFromBankLink ? '?bank_link=return' : ''
+    const res = await fetch(`/api/portal/${token}/bank-gate${qs}`)
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(j.error || 'Could not load onboarding status')
+    return j.gate as BankGateSnapshot
+  }, [token, returningFromBankLink])
+
   useEffect(() => {
+    let cancelled = false
+    setGateLoading(true)
+    loadGate()
+      .then(next => {
+        if (!cancelled) setGate(next)
+      })
+      .catch(e => !cancelled && setError(e instanceof Error ? e.message : 'Could not load onboarding status'))
+      .finally(() => !cancelled && setGateLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [loadGate])
+
+  useEffect(() => {
+    if (!gate?.unlocked) {
+      setPrograms(null)
+      return
+    }
     let cancelled = false
     fetch(`/api/portal/${token}/checklist`)
       .then(async res => {
@@ -126,7 +170,51 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [gate?.unlocked, token])
+
+  async function startBankLink() {
+    setGateActionLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/portal/${token}/bank-gate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Could not start bank linking')
+      if (j.gate) setGate(j.gate as BankGateSnapshot)
+      const url = typeof j.external_flow_url === 'string' ? j.external_flow_url : ''
+      if (url) {
+        window.location.href = url
+        return
+      }
+      throw new Error('Bank link URL was not returned')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start bank linking')
+    } finally {
+      setGateActionLoading(false)
+    }
+  }
+
+  async function refreshBankLinkStatus() {
+    setGateActionLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/portal/${token}/bank-gate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refresh' }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Could not refresh status')
+      if (j.gate) setGate(j.gate as BankGateSnapshot)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not refresh status')
+    } finally {
+      setGateActionLoading(false)
+    }
+  }
 
   const current = useMemo(
     () => programs?.find(p => p.enrollment_id === selected) ?? programs?.[0] ?? null,
@@ -157,6 +245,45 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
     }
   }
 
+  if (error && !gate?.unlocked) {
+    return (
+      <Shell>
+        <div className="mx-auto max-w-md py-24 text-center">
+          <h1 className="text-xl font-semibold text-[#0f1114]">{error}</h1>
+          <p className={`mt-2 text-sm ${MUTED}`}>
+            Contact our onboarding team at{' '}
+            <a href="mailto:nic@fixlane.com" className="text-[#687cf9]">
+              nic@fixlane.com
+            </a>{' '}
+            for help.
+          </p>
+        </div>
+      </Shell>
+    )
+  }
+
+  if (gateLoading || gate === null) {
+    return (
+      <Shell>
+        <div className="flex items-center gap-2 py-24 text-[#5f6571]">
+          <Loader2 className="animate-spin" size={18} aria-hidden /> Loading your onboarding…
+        </div>
+      </Shell>
+    )
+  }
+
+  if (!gate.unlocked) {
+    return (
+      <BankGateScreen
+        gate={gate}
+        error={error}
+        loading={gateActionLoading}
+        onStart={startBankLink}
+        onRefresh={refreshBankLinkStatus}
+      />
+    )
+  }
+
   if (error) {
     return (
       <Shell>
@@ -178,7 +305,7 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
     return (
       <Shell>
         <div className="flex items-center gap-2 py-24 text-[#5f6571]">
-          <Loader2 className="animate-spin" size={18} aria-hidden /> Loading your onboarding…
+          <Loader2 className="animate-spin" size={18} aria-hidden /> Loading your program checklist…
         </div>
       </Shell>
     )
@@ -580,6 +707,96 @@ function SurveyRow({ s }: { s: SurveyItem }) {
         {s.cta} {submitted ? '' : '→'}
       </a>
     </div>
+  )
+}
+
+function BankGateScreen({
+  gate,
+  error,
+  loading,
+  onStart,
+  onRefresh,
+}: {
+  gate: BankGateSnapshot
+  error: string | null
+  loading: boolean
+  onStart: () => void
+  onRefresh: () => void
+}) {
+  const isWaitingSetup = gate.state === 'waiting_setup'
+  const isFinishing = gate.state === 'finishing'
+  const isInProgress = gate.state === 'in_progress'
+
+  return (
+    <Shell>
+      <div className="mx-auto max-w-lg px-6 py-16 text-center md:px-10 md:py-20">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#687cf9]/10 text-[#687cf9]">
+          {isWaitingSetup ? <Clock size={28} aria-hidden /> : <Lock size={28} aria-hidden />}
+        </div>
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-[#0f1114]">
+          {isWaitingSetup ? 'Setting up your account' : 'Link your bank account to unlock'}
+        </h1>
+        <p className={`mt-3 text-sm leading-relaxed ${MUTED}`}>
+          {isWaitingSetup
+            ? 'Fixlane is finishing your payout setup. Once that is ready, you will link your bank account here to unlock your onboarding portal.'
+            : 'Your onboarding portal is ready — connect your bank account through our secure payout partner Routable to access your program enrollment tasks.'}
+        </p>
+
+        {!isWaitingSetup && (
+          <div className="mt-8 rounded-xl border border-[#0f1114]/10 bg-white p-5 text-left">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 flex-none text-[#687cf9]" size={18} aria-hidden />
+              <div>
+                <p className="text-sm font-medium text-[#0f1114]">Secure payout setup</p>
+                <p className={`mt-1 text-xs leading-relaxed ${MUTED}`}>
+                  Routable handles bank verification and tax forms. Fixlane never sees your full account details.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isFinishing && (
+          <div className="mt-6 rounded-xl bg-[#eef0f3] px-4 py-3 text-sm text-[#3f474f]">
+            Finishing up your bank connection… this usually takes a moment.
+          </div>
+        )}
+
+        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+        <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          {!isWaitingSetup && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={onStart}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-medium text-white disabled:opacity-60 sm:w-auto"
+              style={{ background: VIOLET }}
+            >
+              {loading ? 'Starting…' : isInProgress || isFinishing ? 'Continue bank linking' : 'Link your bank account'}
+              {!loading && <ExternalLink size={16} aria-hidden />}
+            </button>
+          )}
+          {!isWaitingSetup && (isFinishing || isInProgress) && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={onRefresh}
+              className="inline-flex w-full items-center justify-center rounded-lg border border-[#cfd2d8] bg-white px-5 py-3 text-sm font-medium text-[#0f1114] disabled:opacity-60 sm:w-auto"
+            >
+              {loading ? 'Checking…' : "I've already linked my bank"}
+            </button>
+          )}
+        </div>
+
+        <p className={`mt-8 text-xs ${MUTED}`}>
+          Questions?{' '}
+          <a href="mailto:nic@fixlane.com" className="text-[#687cf9]">
+            nic@fixlane.com
+          </a>
+        </p>
+      </div>
+    </Shell>
   )
 }
 

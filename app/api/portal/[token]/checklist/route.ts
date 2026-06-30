@@ -11,6 +11,7 @@ import {
   loadChecklistRows,
   loadEnrollmentById,
 } from '@/lib/portal-authz'
+import { isPortalEnrollmentUnlocked, loadRoutableLocationRow } from '@/lib/portal-bank-gate'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const UUID_RE =
@@ -31,6 +32,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const { token } = await params
   const locationId = locationIdFromToken(token)
   if (!locationId) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
+
+  const routableRow = await loadRoutableLocationRow(supabaseAdmin, locationId)
+  if (!isPortalEnrollmentUnlocked(routableRow)) {
+    return NextResponse.json(
+      { error: 'Link your bank account to unlock the onboarding portal.', code: 'bank_gate_locked' },
+      { status: 403 },
+    )
+  }
 
   const enrollments = (await loadActiveEnrollmentsForLocation(supabaseAdmin, locationId)).filter(e =>
     isShopOnboardingProgram(e.program_id),
@@ -82,6 +91,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
   const { token } = await params
   const locationId = locationIdFromToken(token)
   if (!locationId) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
+
+  const routableRow = await loadRoutableLocationRow(supabaseAdmin, locationId)
+  if (!isPortalEnrollmentUnlocked(routableRow)) {
+    return NextResponse.json(
+      { error: 'Link your bank account to unlock the onboarding portal.', code: 'bank_gate_locked' },
+      { status: 403 },
+    )
+  }
 
   let body: ChecklistPatchBody
   try {

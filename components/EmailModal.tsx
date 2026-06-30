@@ -8,6 +8,7 @@ import { EMAIL_MERGE_PLACEHOLDER_TOKENS } from '@/lib/email-template-placeholder
 import {
   emailContentReferencesCapabilitiesLink,
   emailContentReferencesExpertAssistLink,
+  emailContentReferencesRoutableBankLink,
   replaceLegacyCapabilitiesPreviewUrls,
   replaceLegacyExpertAssistPreviewUrls,
 } from '@/lib/email-template-placeholders'
@@ -99,6 +100,11 @@ export default function EmailModal({
 
   const showExpertAssistHint = useMemo(
     () => (step === 2 ? emailContentReferencesExpertAssistLink(subject, body) : false),
+    [step, subject, body],
+  )
+
+  const showRoutableBankLinkHint = useMemo(
+    () => (step === 2 ? emailContentReferencesRoutableBankLink(subject, body) : false),
     [step, subject, body],
   )
 
@@ -625,8 +631,9 @@ export default function EmailModal({
                             </div>
                             <p className="mt-2 text-[10px] leading-snug text-onix-500">
                               For <span className="font-mono text-onix-700">{'{{capabilities_link}}'}</span>,{' '}
-                              <span className="font-mono text-onix-700">{'{{expert_assist_link}}'}</span>, or{' '}
-                              <span className="font-mono text-onix-700">{'{{enrollment_portal_link}}'}</span>, use the
+                              <span className="font-mono text-onix-700">{'{{expert_assist_link}}'}</span>,{' '}
+                              <span className="font-mono text-onix-700">{'{{enrollment_portal_link}}'}</span>, or{' '}
+                              <span className="font-mono text-onix-700">{'{{routable_bank_link}}'}</span>, use the
                               body toolbar <strong>Link</strong> button and pick the placeholder there.
                             </p>
                           </div>
@@ -646,6 +653,13 @@ export default function EmailModal({
                       <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle" />
                       A fresh capabilities link will be generated when you send. Valid for 30 days, scoped
                       to this shop.
+                    </div>
+                  )}
+                  {showRoutableBankLinkHint && (
+                    <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-indigo-500 align-middle" />
+                      A direct Routable bank-link URL will be minted when you send. After linking, the shop
+                      returns to the onboarding portal automatically.
                     </div>
                   )}
                 </>

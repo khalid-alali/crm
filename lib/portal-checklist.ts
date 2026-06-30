@@ -65,8 +65,7 @@ const SHOP_VISIBLE: Record<string, Record<string, ShopChecklistMeta>> = {
     technical_training_scheduled: { shopLabel: 'Technical training scheduled' },
     go_live_week_set: { shopLabel: 'Go-live week scheduled' },
     shop_activated: { shopLabel: "You're activated on Fixlane" },
-    // Shop side, auto-resolved by data (not a manual portal click).
-    routable_payout_method_linked: { shopLabel: 'Link your payout method' },
+    // routable_payout_method_linked is handled by the portal bank-link gate (pre-checklist).
     first_booking_received: { shopLabel: 'First booking received' },
     // Shop side, completable from the portal.
     technical_training_completed: { shopLabel: 'Complete your technical training', completable: true },

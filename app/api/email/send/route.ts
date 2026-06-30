@@ -7,6 +7,7 @@ import { SEED_ONBOARDING_TEMPLATE_ID } from '@/lib/email-template-ids'
 import { injectCapabilitiesIntoEmail } from '@/lib/inject-capabilities-email'
 import { injectEnrollmentPortalIntoEmail } from '@/lib/inject-enrollment-portal-email'
 import { injectExpertAssistIntoEmail } from '@/lib/inject-expert-assist-email'
+import { injectRoutableBankLinkIntoEmail } from '@/lib/inject-routable-bank-link-email'
 import { normalizeRecipientList } from '@/lib/email-recipients'
 import {
   firstNameLocalFromSessionUser,
@@ -98,6 +99,9 @@ export async function POST(req: NextRequest) {
       const enrollmentInjected = injectEnrollmentPortalIntoEmail(req, locationId, subjectOut, bodyOut)
       subjectOut = enrollmentInjected.subject
       bodyOut = enrollmentInjected.bodyHtml
+      const routableInjected = await injectRoutableBankLinkIntoEmail(req, locationId, subjectOut, bodyOut)
+      subjectOut = routableInjected.subject
+      bodyOut = routableInjected.bodyHtml
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not build email links'
       return NextResponse.json({ error: msg }, { status: 500 })

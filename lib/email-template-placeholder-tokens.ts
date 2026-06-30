@@ -20,3 +20,6 @@ export const EXPERT_ASSIST_LINK_PLACEHOLDER = '{{expert_assist_link}}' as const
 
 /** Shop onboarding portal (/portal/<token>/onboarding) — use via the body toolbar Link popover. */
 export const ENROLLMENT_PORTAL_LINK_PLACEHOLDER = '{{enrollment_portal_link}}' as const
+
+/** Direct Routable embedded bank-link URL — minted on send (E2/E3). Use via the body toolbar Link popover. */
+export const ROUTABLE_BANK_LINK_PLACEHOLDER = '{{routable_bank_link}}' as const

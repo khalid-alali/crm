@@ -4,6 +4,7 @@ import {
   ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL,
   EXPERT_ASSIST_LINK_DISPLAY_SENTINEL,
   EXPERT_ASSIST_LINK_PREVIEW_SHOP_ID,
+  ROUTABLE_BANK_LINK_DISPLAY_SENTINEL,
 } from '@/lib/email-template-ids'
 import { buildExpertAssistIntakeHref } from '@/lib/expert-assist/intake-link'
 
@@ -43,6 +44,7 @@ export type EmailTemplateLinkHrefs = {
   capabilities?: string
   expertAssist?: string
   enrollmentPortal?: string
+  routableBankLink?: string
 }
 
 /**
@@ -66,6 +68,11 @@ export function replaceEmailTemplatePlaceholders(
   if (hrefs.enrollmentPortal) {
     map.enrollment_portal_link = hrefs.enrollmentPortal
     map.enrollment_portal_url = hrefs.enrollmentPortal
+  }
+  if (hrefs.routableBankLink) {
+    map.routable_bank_link = hrefs.routableBankLink
+    map.bank_link = hrefs.routableBankLink
+    map.connect_bank_account_link = hrefs.routableBankLink
   }
   return replacePlaceholderTokens(text, map)
 }
@@ -121,6 +128,16 @@ export function emailContentReferencesEnrollmentPortalLink(subject: string, body
     /\{\{\s*enrollment_portal_link\s*\}\}/i.test(s) ||
     /\{\{\s*enrollment_portal_url\s*\}\}/i.test(s) ||
     s.includes(ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL)
+  )
+}
+
+export function emailContentReferencesRoutableBankLink(subject: string, bodyHtml: string): boolean {
+  const s = `${subject}\0${bodyHtml}`
+  return (
+    /\{\{\s*routable_bank_link\s*\}\}/i.test(s) ||
+    /\{\{\s*bank_link\s*\}\}/i.test(s) ||
+    /\{\{\s*connect_bank_account_link\s*\}\}/i.test(s) ||
+    s.includes(ROUTABLE_BANK_LINK_DISPLAY_SENTINEL)
   )
 }
 
