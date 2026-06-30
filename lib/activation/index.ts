@@ -36,6 +36,8 @@ export {
   getStateOrThrow,
   incrementCounter,
   logShopEvent,
+  markDor75Sent,
+  markRefPush1Sent,
   recomputeStage,
   sendOnce,
   setFirstInboundIfNull,
@@ -55,6 +57,7 @@ export {
   sendConsultReceiptIfPaid,
   sendMoneyKeptEmail,
   sendMuscleMemoryEmail,
+  sendRefPush1Email,
   sendServiceWriterNudge1Email,
   sendServiceWriterNudge2Email,
   sendServiceWriterSetupEmail,
@@ -67,19 +70,37 @@ export {
 } from '@/lib/activation/emails'
 
 export {
+  sendBillingDunningOwnerSms,
+  sendBillingFailureOwnerEmail,
+  sendCounterCardPhotoChaseSms,
+  sendDor75WinbackSms,
+  sendInvite1Email,
+  sendInvite2Email,
+  sendInvite3Email,
+  sendPostFirstConsultFrontDeskSms,
+  sendRefPush2Sms,
+  sendWelcomeKitShippedEmail,
+} from '@/lib/activation/lifecycle-emails'
+
+export {
   ACTIVATION_TASK_IDS,
   enqueueExpertAssistDormantCheck,
   enqueueExpertAssistOnStageChanged,
   enqueueExpertAssistStageSync,
   enqueueStageChangedSideEffects,
   triggerActivationDrip,
+  triggerBillingDunning,
   triggerConsultCompleted,
+  triggerCounterCardChase,
   triggerDormancyCheck,
   triggerHandleCallRequest,
   triggerHandlePhotoReceived,
   triggerHandleReferral,
   triggerInboundSms,
   triggerInternalFollowUp,
+  triggerInviteChase,
+  triggerPostFirstConsult,
+  triggerRefPushFollowup,
 } from '@/lib/activation/trigger'
 
 export {

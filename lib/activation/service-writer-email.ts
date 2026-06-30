@@ -15,12 +15,14 @@ export async function tryDeliverServiceWriterSetupEmailOnce(
   if (!state || !to) return
 
   await sendOnce(supabase, locationId, SETUP_EMAIL_DEDUPE, async () => {
-    await sendServiceWriterSetupEmail(state)
+    const meta = await sendServiceWriterSetupEmail(state)
+    if (!meta) return null
     await writeFactIfNull(
       supabase,
       locationId,
       'service_writer_setup_email_sent_at',
       new Date().toISOString(),
     )
+    return meta
   }, { channel: 'email', to })
 }

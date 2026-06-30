@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { formatCallDuration } from '@/lib/dialpad'
+import { formatCallDuration, isCrmVisibleCall } from '@/lib/dialpad'
 import CallQueueClient, { type QueuedCall } from './CallQueueClient'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,7 @@ export default async function CallQueuePage() {
     .order('started_at', { ascending: false })
     .limit(200)
 
-  const calls: QueuedCall[] = (rows ?? []).map(r => ({
+  const calls: QueuedCall[] = (rows ?? []).filter(isCrmVisibleCall).map(r => ({
     callId: r.call_id,
     direction: r.direction,
     rwUserName: r.rw_user_name,

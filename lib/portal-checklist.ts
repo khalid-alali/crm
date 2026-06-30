@@ -264,6 +264,8 @@ export function resolveShopChecklist(
     return config?.checklist.find(i => i.key === key)?.label ?? key
   }
 
+  const isShopVisibleKey = (key: string): boolean => SHOP_VISIBLE[programId]?.[key] !== undefined
+
   return visible.map(item => {
     const completedAt = completedAtByKey[item.key] ?? null
     let blocked = false
@@ -274,7 +276,7 @@ export function resolveShopChecklist(
         if (typeof prereq === 'string') {
           if (!isComplete(prereq)) {
             blocked = true
-            unlocksAfterLabel = labelForKey(prereq)
+            if (isShopVisibleKey(prereq)) unlocksAfterLabel = labelForKey(prereq)
             break
           }
         } else if ('phaseComplete' in prereq) {

@@ -5,7 +5,7 @@ import {
   recomputeStage,
   writeFactIfNull,
 } from '@/lib/activation/bindings'
-import { triggerHandlePhotoReceived, triggerHandleReferral } from '@/lib/activation/trigger'
+import { triggerCounterCardChase, triggerHandlePhotoReceived, triggerHandleReferral } from '@/lib/activation/trigger'
 import { toolboxDiagnoseUrl } from '@/lib/activation/urls'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -83,7 +83,14 @@ export async function recordCounterCardDownload(locationId: string): Promise<voi
   const now = new Date().toISOString()
   const wrote = await writeFactIfNull(locationId, 'counter_card_downloaded_at', now)
   await logShopEvent(locationId, 'asset.counter_card_downloaded', `download:${now.slice(0, 10)}`, {})
-  if (wrote) await recomputeStage(locationId)
+  if (wrote) {
+    await recomputeStage(locationId)
+    try {
+      await triggerCounterCardChase({ locationId, downloadedAt: now })
+    } catch (err) {
+      console.error('recordCounterCardDownload: counter-card-chase trigger failed', err)
+    }
+  }
 }
 
 export async function recordPrintoutPhotoReceived(

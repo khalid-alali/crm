@@ -1,9 +1,12 @@
 import { revalidatePath } from 'next/cache'
-import { triggerConsultCompleted } from '@/lib/activation/trigger'
+import { triggerConsultCompleted, triggerBillingDunning } from '@/lib/activation/trigger'
+import { getState, sendOnce } from '@/lib/activation/bindings'
+import { consultReceiptSms } from '@/lib/activation/lifecycle-copy'
+import { sendBillingFailureOwnerEmail } from '@/lib/activation/lifecycle-emails'
 import { computeChargeAmountCents, chargeConsultOffSession, billableSecondsToCharge } from '@/lib/expert-assist/billing-charge'
 import { computeConsultBillUsd } from '@/lib/expert-assist/billing'
 import { assertShopCanRunConsults } from '@/lib/expert-assist/billing-gates'
-import { sendConsultReceiptEmail, sendConsultBillingFailureEmail } from '@/lib/expert-assist/email'
+import { sendConsultReceiptEmail } from '@/lib/expert-assist/email'
 import { insertConsultCaseEvent } from '@/lib/expert-assist/events'
 import { isFirstFreeConsultAvailable, markFirstFreeConsultUsed } from '@/lib/expert-assist/free-consult'
 import { sendConsultSms } from '@/lib/expert-assist/send-sms'
@@ -149,12 +152,13 @@ export async function closeConsultCaseWithBilling(params: {
   })
 
   if ('error' in charge) {
+    const failedAt = new Date().toISOString()
     await supabaseAdmin
       .from('consult_cases')
       .update({
         status: 'billing_failed',
         payment_status: 'failed',
-        closed_at: new Date().toISOString(),
+        closed_at: failedAt,
       })
       .eq('id', params.caseId)
 
@@ -168,13 +172,20 @@ export async function closeConsultCaseWithBilling(params: {
       metadata: { error: charge.error },
     })
 
-    const billTo = billEmail?.trim()
-    if (billTo) {
-      await sendConsultBillingFailureEmail({
-        to: billTo,
-        shopName,
-        errorSummary: charge.error,
-      })
+    const ctx = await getState(cr.shop_id)
+    if (ctx?.ownerEmail?.trim()) {
+      try {
+        await sendOnce(cr.shop_id, `bill-1:${params.caseId}`, () =>
+          sendBillingFailureOwnerEmail(ctx, amountLabel),
+        )
+        await triggerBillingDunning({
+          locationId: cr.shop_id,
+          failedAt,
+          amountLabel,
+        })
+      } catch (emailError) {
+        console.error('closeConsultCaseWithBilling: billing failure email failed', emailError)
+      }
     }
 
     revalidatePath('/consults')
@@ -220,12 +231,10 @@ export async function closeConsultCaseWithBilling(params: {
     })
   }
 
-  const receiptHint = billTo ?? 'your billing email'
-
   try {
     await sendConsultSms({
       to: cr.originating_phone_number,
-      body: `Consult closed. Billed ${amountLabel} to card on file. Receipt sent to ${receiptHint}.`,
+      body: consultReceiptSms(amountLabel, params.caseId),
       caseId: params.caseId,
       logDirection: 'system',
     })

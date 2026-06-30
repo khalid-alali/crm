@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
 import {
   verifyAndDecodeWebhook,
   parseCallEvent,
-  matchExternalNumber,
-  QUEUE_DURATION_FLOOR_SEC,
+  upsertShopCallHangup,
+  upsertShopCallRecap,
 } from '@/lib/dialpad'
 
 // Dialpad call-events webhook. The body is an HS256 JWT signed with the
@@ -27,50 +26,13 @@ export async function POST(req: NextRequest) {
 
   try {
     if (event.state === 'recap_summary') {
-      // Patch the summary onto the existing row (or seed one if recap landed
-      // first). Never overwrites metadata — only summary fields are sent.
-      const { error } = await supabaseAdmin.from('shop_call_activity').upsert(
-        {
-          call_id: Number(event.callId),
-          summary: event.summary,
-          summary_at: new Date().toISOString(),
-        },
-        { onConflict: 'call_id' },
-      )
-      if (error) throw error
+      await upsertShopCallRecap(event.callId, event.summary, event)
       return NextResponse.json({ ok: true })
     }
 
     if (event.state === 'hangup') {
-      const match = await matchExternalNumber(event.externalNumber)
-
-      // Queue noise guard: only connected calls above the duration floor enter
-      // the active manual-match queue. Everything is still written.
-      const passesNoiseGuard =
-        Boolean(event.connectedAt) && (event.totalSec ?? 0) >= QUEUE_DURATION_FLOOR_SEC
-      const inQueue = match.status === 'unmatched' && passesNoiseGuard
-
-      // Omit summary/summary_at so a recap that arrived first is never clobbered.
-      const { error } = await supabaseAdmin.from('shop_call_activity').upsert(
-        {
-          call_id: Number(event.callId),
-          location_id: match.locationId,
-          contact_id: match.contactId,
-          direction: event.direction,
-          rw_user_id: event.rwUserId ? Number(event.rwUserId) : null,
-          rw_user_name: event.rwUserName,
-          external_number: event.externalNumber,
-          started_at: event.startedAt,
-          connected_at: event.connectedAt,
-          ended_at: event.endedAt,
-          talk_sec: event.talkSec,
-          total_sec: event.totalSec,
-          match_status: match.status,
-          in_queue: inQueue,
-        },
-        { onConflict: 'call_id' },
-      )
-      if (error) throw error
+      const persisted = await upsertShopCallHangup(event)
+      if (!persisted) return NextResponse.json({ ok: true, skipped: 'short_or_voicemail' })
 
       // Calls render on the shop timeline by reading shop_call_activity directly
       // (see app/(internal)/shops/[id]/page.tsx) — we don't copy into

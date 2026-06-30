@@ -1,16 +1,24 @@
 import { logger, task, wait } from '@trigger.dev/sdk'
 import {
   getState,
+  markDor75Sent,
   recomputeStage,
+  sendDor75WinbackSms,
   sendMuscleMemoryEmail,
   sendOnce,
   sendReactivationEmail,
   triggerInternalFollowUp,
 } from '@/lib/activation'
+import {
+  dor75ShouldSend,
+  shouldPausePromotionalLifecycle,
+  shouldSkipFrontDeskSms,
+} from '@/lib/activation/suppression'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const MUSCLE_MEMORY_DAYS = 21
 const REACTIVATION_EXTRA_DAYS = 39
+const DOR75_EXTRA_DAYS = 15
 
 async function lastConsultAfterAnchor(locationId: string, anchorIso: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin
@@ -60,8 +68,9 @@ export const dormancyCheckTask = task({
       return { exit: 'superseded', phase: 'muscle_memory' }
     }
 
+    const billingPaused = await shouldPausePromotionalLifecycle(supabaseAdmin, locationId)
     const ctx = await getState(locationId)
-    if (ctx) {
+    if (ctx && !billingPaused) {
       await sendOnce(locationId, `muscle-memory:${consultId}`, () => sendMuscleMemoryEmail(ctx))
     }
 
@@ -83,8 +92,9 @@ export const dormancyCheckTask = task({
 
     const stageResult = await recomputeStage(locationId)
     const freshCtx = await getState(locationId)
+    const billingPausedLate = await shouldPausePromotionalLifecycle(supabaseAdmin, locationId)
 
-    if (freshCtx) {
+    if (freshCtx && !billingPausedLate) {
       await sendOnce(locationId, `reactivation:${consultId}`, () => sendReactivationEmail(freshCtx))
 
       if (freshCtx.is_high_value) {
@@ -94,6 +104,30 @@ export const dormancyCheckTask = task({
           shopName: freshCtx.shopName,
         })
       }
+    }
+
+    await wait.for({
+      days: DOR75_EXTRA_DAYS,
+      idempotencyKey: `dormancy-dor75:${consultId}`,
+    })
+
+    const supersededAfterDor75 = await lastConsultAfterAnchor(locationId, anchor)
+    if (supersededAfterDor75) {
+      return { exit: 'superseded', phase: 'dor75' }
+    }
+
+    const dorCtx = await getState(locationId)
+    if (
+      dorCtx &&
+      !billingPausedLate &&
+      dor75ShouldSend(dorCtx, anchor) &&
+      !shouldSkipFrontDeskSms(dorCtx)
+    ) {
+      await sendOnce(locationId, `dor-75:${consultId}`, async () => {
+        const meta = await sendDor75WinbackSms(dorCtx)
+        await markDor75Sent(locationId)
+        return meta
+      })
     }
 
     return {

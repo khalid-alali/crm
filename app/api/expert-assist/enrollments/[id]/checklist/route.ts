@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { activationFieldForChecklistKey, isAutoResolvedExpertAssistChecklistKey } from '@/lib/activation/checklist'
-import { ensureActivationState, logShopEvent, writeFactIfNull } from '@/lib/activation/bindings'
+import { ensureActivationState, getState, logShopEvent, sendOnce, writeFactIfNull } from '@/lib/activation/bindings'
+import { sendWelcomeKitShippedEmail } from '@/lib/activation/lifecycle-emails'
 import type { ActivationTimestampField } from '@/lib/activation/types'
 import { getAppSession } from '@/lib/app-auth'
 import { FREE_CONSULT_CHECKLIST_KEY } from '@/lib/expert-assist/free-consult'
@@ -93,6 +94,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await ensureActivationState(locationId)
     await writeFactIfNull(locationId, activationField as ActivationTimestampField, completedAt!)
     await logShopEvent(locationId, 'kit.shipped', `manual:${completedAt}`, {})
+    try {
+      const ctx = await getState(locationId)
+      const trackingUrl = notes?.trim() || undefined
+      if (ctx) {
+        await sendOnce(locationId, 'kit-1', () => sendWelcomeKitShippedEmail(ctx, trackingUrl))
+      }
+    } catch (kitEmailError) {
+      console.error('welcome_kit_shipped: KIT-1 email failed', kitEmailError)
+    }
   }
 
   const { data: updatedEnrollment, error: enrollmentUpdateError } = await supabaseAdmin

@@ -158,6 +158,13 @@ describe('resolveShopChecklist (blocked / unlocks-after)', () => {
     expect(training?.unlocksAfterLabel).toBeNull()
   })
 
+  it('does not surface internal prerequisite labels to the shop', () => {
+    const items = resolveShopChecklist('vinfast', {})
+    const labor = items.find(i => i.key === 'labor_rate_approved')
+    expect(labor?.blocked).toBe(true)
+    expect(labor?.unlocksAfterLabel).toBeNull()
+  })
+
   it('marks an item complete when it has a completion timestamp', () => {
     const items = resolveShopChecklist('vinfast', {
       owner_webinar_complete: '2026-06-12T00:00:00Z',

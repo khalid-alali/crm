@@ -38,6 +38,16 @@ vi.mock('@/lib/expert-assist/send-sms', () => ({
   sendConsultSms: (...args: unknown[]) => sendConsultSms(...args),
 }))
 
+vi.mock('@/lib/activation/trigger', () => ({
+  triggerConsultCompleted: vi.fn(),
+  triggerBillingDunning: vi.fn(),
+}))
+
+vi.mock('@/lib/activation/bindings', () => ({
+  getState: vi.fn().mockResolvedValue(null),
+  sendOnce: vi.fn().mockResolvedValue({ inserted: true }),
+}))
+
 vi.mock('@/lib/expert-assist/email', () => ({
   sendConsultReceiptEmail: (...args: unknown[]) => sendConsultReceiptEmail(...args),
   sendConsultBillingFailureEmail: vi.fn(),

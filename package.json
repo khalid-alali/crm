@@ -18,6 +18,8 @@
     "reconcile:dialpad": "npx tsx scripts/reconcile-dialpad-subscriptions.ts",
     "reconcile:dialpad:apply": "npx tsx scripts/reconcile-dialpad-subscriptions.ts --apply",
     "dialpad:departments": "npx tsx scripts/reconcile-dialpad-subscriptions.ts --list-departments",
+    "backfill:dialpad-calls": "npx tsx scripts/backfill-dialpad-calls.ts",
+    "backfill:dialpad-calls:apply": "npx tsx scripts/backfill-dialpad-calls.ts --apply",
     "backfill:zoho-request-ids": "npx tsx scripts/backfill-zoho-request-ids-from-csv.ts",
     "backfill:zoho-pdfs": "npx tsx scripts/backfill-zoho-contract-pdfs.ts",
     "backfill:contract-labor-rates:zoho": "npx tsx scripts/backfill-contract-labor-rates-from-zoho.ts",
@@ -86,6 +88,7 @@
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.11",
+    "@trigger.dev/build": "^4.4.6",
     "@types/jsonwebtoken": "^9",
     "@types/node": "^20",
     "@types/papaparse": "^5",

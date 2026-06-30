@@ -1,8 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ActivationActivityLogMeta } from '@/lib/activation/activity-log'
 import { shouldSendDripStep as shouldSendDripStepDb } from '@/lib/activation/drip'
 import { logShopEvent as logShopEventDb, sendOnce as sendOnceDb } from '@/lib/activation/events'
 import {
   incrementCounter as incrementCounterDb,
+  markDor75Sent as markDor75SentDb,
+  markRefPush1Sent as markRefPush1SentDb,
   setFirstInboundIfNull as setFirstInboundIfNullDb,
   setSmsChannelDead as setSmsChannelDeadDb,
   writeConsultFacts as writeConsultFactsDb,
@@ -102,7 +105,7 @@ export async function logShopEvent(
 export async function sendOnce(
   locationId: string,
   dedupeKey: string,
-  sendFn: () => Promise<void>,
+  sendFn: () => Promise<void | ActivationActivityLogMeta | null>,
   payload: Record<string, unknown> = {},
 ) {
   return sendOnceDb(supabaseAdmin, locationId, dedupeKey, sendFn, payload)
@@ -120,6 +123,14 @@ export async function setFirstInboundIfNull(locationId: string, timestamp?: stri
 
 export async function writeConsultFacts(locationId: string, consultId: string, closedAt: string) {
   return writeConsultFactsDb(supabaseAdmin, locationId, consultId, closedAt)
+}
+
+export async function markRefPush1Sent(locationId: string) {
+  return markRefPush1SentDb(supabaseAdmin, locationId)
+}
+
+export async function markDor75Sent(locationId: string) {
+  return markDor75SentDb(supabaseAdmin, locationId)
 }
 
 export async function setSmsChannelDead(locationId: string, dead: boolean) {

@@ -116,3 +116,55 @@ export async function createCallEventSubscription(opts: {
 export async function deleteCallEventSubscription(id: string): Promise<void> {
   await dialpadFetch(`/subscriptions/call/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
+
+export type DialpadCallRecord = {
+  call_id?: number | null
+  direction?: string | null
+  external_number?: string | null
+  target?: { id?: string | number | null; name?: string | null }
+  date_started?: number | null
+  date_connected?: number | null
+  date_ended?: number | null
+  duration?: number | null
+  total_duration?: number | null
+}
+
+/** Concluded calls for a target, newest first. Requires `calls:list` scope. */
+export async function listCalls(opts: {
+  targetId: string
+  targetType?: 'user'
+  startedAfter?: number
+  startedBefore?: number
+}): Promise<DialpadCallRecord[]> {
+  const params = new URLSearchParams({
+    target_type: opts.targetType ?? 'user',
+    target_id: opts.targetId,
+  })
+  if (opts.startedAfter != null) params.set('started_after', String(opts.startedAfter))
+  if (opts.startedBefore != null) params.set('started_before', String(opts.startedBefore))
+  return listAll<DialpadCallRecord>(`/call?${params.toString()}`)
+}
+
+type AiRecapResponse = {
+  summary?: { content?: string | null } | null
+}
+
+/** AI recap for one call. Requires `ai_recap` scope. Rate limit: 12/min. */
+export async function getCallAiRecap(callId: string | number): Promise<string | null> {
+  const path = `/call/${encodeURIComponent(String(callId))}/ai_recap?summary_format=medium`
+  const res = await fetch(`${BASE}${path}`, {
+    headers: {
+      Authorization: `Bearer ${apiKey()}`,
+      accept: 'application/json',
+    },
+  })
+  // Short calls / voicemails / non-AI calls never get a recap.
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Dialpad GET ${path} failed: ${res.status} ${body.slice(0, 400)}`)
+  }
+  const data = (await res.json()) as AiRecapResponse
+  const content = data.summary?.content
+  return content?.trim() ? content.trim() : null
+}

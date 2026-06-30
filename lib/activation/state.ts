@@ -31,6 +31,7 @@ async function loadSendContext(
     | 'shopName'
     | 'ownerEmail'
     | 'ownerName'
+    | 'ownerPhone'
     | 'frontDeskPhone'
     | 'serviceWriterEmail'
     | 'serviceWriterName'
@@ -39,6 +40,7 @@ async function loadSendContext(
 > {
   let ownerEmail: string | null = location.consult_billing_email
   let ownerName: string | null = null
+  let ownerPhone: string | null = null
   let frontDeskPhone: string | null = null
   let serviceWriterEmail: string | null = null
   let serviceWriterName: string | null = null
@@ -48,6 +50,7 @@ async function loadSendContext(
     if (primary) {
       ownerName = primary.name
       ownerEmail = ownerEmail ?? primary.email
+      ownerPhone = primary.phone
     }
   }
 
@@ -73,6 +76,7 @@ async function loadSendContext(
     shopName: location.name,
     ownerEmail,
     ownerName,
+    ownerPhone,
     frontDeskPhone,
     serviceWriterEmail,
     serviceWriterName,

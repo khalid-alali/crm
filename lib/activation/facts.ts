@@ -95,3 +95,21 @@ export async function writeConsultFacts(
   const consultCount = await incrementCounter(supabase, locationId, 'consult_count')
   return { firstConsult, consultCount }
 }
+
+export async function markRefPush1Sent(supabase: SupabaseClient, locationId: string): Promise<void> {
+  await ensureActivationState(supabase, locationId)
+  const { error } = await supabase
+    .from('activation_state')
+    .update({ ref_push_1_sent: true })
+    .eq('location_id', locationId)
+  if (error) throw new Error(error.message)
+}
+
+export async function markDor75Sent(supabase: SupabaseClient, locationId: string): Promise<void> {
+  await ensureActivationState(supabase, locationId)
+  const { error } = await supabase
+    .from('activation_state')
+    .update({ dor75_sent: true })
+    .eq('location_id', locationId)
+  if (error) throw new Error(error.message)
+}

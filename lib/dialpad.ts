@@ -13,6 +13,26 @@ import { phoneMatchKey } from '@/lib/phone'
 /** Calls shorter than this (connected duration) don't enter the active queue. */
 export const QUEUE_DURATION_FLOOR_SEC = 30
 
+/** Dialpad skips AI recaps below this total duration (incl. ring) or without a connection. */
+export const RECAP_MIN_TOTAL_SEC = 120
+
+export type CallVisibilityFields = {
+  summary?: string | null
+  connected_at?: string | null
+  connectedAt?: string | null
+  total_sec?: number | null
+  totalSec?: number | null
+}
+
+/** Whether a call belongs in the CRM (timeline / match queue). */
+export function isCrmVisibleCall(call: CallVisibilityFields): boolean {
+  if (call.summary?.trim()) return true
+  const connected = call.connected_at ?? call.connectedAt
+  const totalSec = call.total_sec ?? call.totalSec ?? 0
+  if (!connected) return false
+  return totalSec >= RECAP_MIN_TOTAL_SEC
+}
+
 /**
  * Dialpad signs webhook payloads as an HS256 JWT using the webhook's `secret`.
  * Verify the signature and return the decoded event payload, or null if the
@@ -123,6 +143,75 @@ export type MatchResult = {
   status: 'matched' | 'unmatched' | 'dismissed'
   locationId: string | null
   contactId: string | null
+}
+
+/** Upsert call metadata from a hangup event (webhook or historical backfill). */
+export async function upsertShopCallHangup(event: ParsedCallEvent): Promise<boolean> {
+  if (!event.callId) throw new Error('callId is required')
+  if (!isCrmVisibleCall(event)) return false
+
+  const match = await matchExternalNumber(event.externalNumber)
+  const passesNoiseGuard =
+    Boolean(event.connectedAt) && (event.totalSec ?? 0) >= QUEUE_DURATION_FLOOR_SEC
+  const inQueue = match.status === 'unmatched' && passesNoiseGuard
+
+  const { error } = await supabaseAdmin.from('shop_call_activity').upsert(
+    {
+      call_id: Number(event.callId),
+      location_id: match.locationId,
+      contact_id: match.contactId,
+      direction: event.direction,
+      rw_user_id: event.rwUserId ? Number(event.rwUserId) : null,
+      rw_user_name: event.rwUserName,
+      external_number: event.externalNumber,
+      started_at: event.startedAt,
+      connected_at: event.connectedAt,
+      ended_at: event.endedAt,
+      talk_sec: event.talkSec,
+      total_sec: event.totalSec,
+      match_status: match.status,
+      in_queue: inQueue,
+    },
+    { onConflict: 'call_id' },
+  )
+  if (error) throw error
+  return true
+}
+
+/** Patch AI recap onto an existing row (or seed one if recap landed first). */
+export async function upsertShopCallRecap(
+  callId: string,
+  summary: string | null,
+  meta?: Pick<ParsedCallEvent, 'connectedAt' | 'totalSec'>,
+): Promise<void> {
+  if (summary?.trim()) {
+    const { error } = await supabaseAdmin.from('shop_call_activity').upsert(
+      {
+        call_id: Number(callId),
+        summary,
+        summary_at: new Date().toISOString(),
+      },
+      { onConflict: 'call_id' },
+    )
+    if (error) throw error
+    return
+  }
+
+  const { data: row } = await supabaseAdmin
+    .from('shop_call_activity')
+    .select('connected_at, total_sec')
+    .eq('call_id', Number(callId))
+    .maybeSingle()
+
+  if (
+    !isCrmVisibleCall({
+      summary: null,
+      connected_at: row?.connected_at ?? meta?.connectedAt ?? null,
+      total_sec: row?.total_sec ?? meta?.totalSec ?? null,
+    })
+  ) {
+    await supabaseAdmin.from('shop_call_activity').delete().eq('call_id', Number(callId))
+  }
 }
 
 /**

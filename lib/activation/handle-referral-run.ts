@@ -1,5 +1,5 @@
 import { getState, sendOnce } from '@/lib/activation/bindings'
-import { sendReferralBookedOwnerEmail } from '@/lib/activation/emails'
+import { sendReferralBookedOwnerEmail } from '@/lib/activation/lifecycle-emails'
 
 export async function runHandleReferral(payload: {
   locationId: string
@@ -13,7 +13,7 @@ export async function runHandleReferral(payload: {
   if (!ctx) return { ok: false }
 
   await sendOnce(locationId, `referral-booked-email:${referralId}`, () =>
-    sendReferralBookedOwnerEmail(ctx, referralId),
+    sendReferralBookedOwnerEmail(ctx),
   )
 
   return { ok: true }

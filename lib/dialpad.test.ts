@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { parseCallEvent, formatCallDuration, callToActivityEntry, QUEUE_DURATION_FLOOR_SEC } from './dialpad'
+import {
+  parseCallEvent,
+  formatCallDuration,
+  callToActivityEntry,
+  isCrmVisibleCall,
+  QUEUE_DURATION_FLOOR_SEC,
+  RECAP_MIN_TOTAL_SEC,
+} from './dialpad'
 
 describe('parseCallEvent', () => {
   const hangup = {
@@ -89,5 +96,35 @@ describe('callToActivityEntry', () => {
 describe('queue floor', () => {
   it('defaults to 30s', () => {
     expect(QUEUE_DURATION_FLOOR_SEC).toBe(30)
+  })
+})
+
+describe('isCrmVisibleCall', () => {
+  it('shows calls with a summary', () => {
+    expect(isCrmVisibleCall({ summary: 'Discussed rates', total_sec: 30 })).toBe(true)
+  })
+
+  it('hides short connected calls without a summary', () => {
+    expect(
+      isCrmVisibleCall({
+        summary: null,
+        connected_at: '2026-06-29T12:00:00.000Z',
+        total_sec: 64,
+      }),
+    ).toBe(false)
+  })
+
+  it('hides voicemails and missed calls without a summary', () => {
+    expect(isCrmVisibleCall({ summary: null, connected_at: null, total_sec: 120 })).toBe(false)
+  })
+
+  it('keeps longer connected calls while recap is pending', () => {
+    expect(
+      isCrmVisibleCall({
+        summary: null,
+        connected_at: '2026-06-29T12:00:00.000Z',
+        total_sec: RECAP_MIN_TOTAL_SEC,
+      }),
+    ).toBe(true)
   })
 })

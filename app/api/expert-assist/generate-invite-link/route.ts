@@ -5,6 +5,7 @@ import { expertAssistSurfacesPathShopId } from '@/lib/expert-assist-shop-token'
 import { expertAssistSurfacesBaseUrl } from '@/lib/expert-assist-surfaces-base-url'
 import { EXPERT_ASSIST_PROGRAM_ID } from '@/lib/program-config'
 import { enrollLocationInProgram } from '@/lib/program-enrollment-service'
+import { triggerInviteChase } from '@/lib/activation/trigger'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
@@ -41,6 +42,12 @@ export async function POST(req: NextRequest) {
     })
   } catch (enrollError) {
     console.error('expert-assist generate-invite-link enroll:', enrollError)
+  }
+
+  try {
+    await triggerInviteChase(locationId)
+  } catch (chaseError) {
+    console.error('expert-assist generate-invite-link invite-chase:', chaseError)
   }
 
   revalidatePath('/consults')

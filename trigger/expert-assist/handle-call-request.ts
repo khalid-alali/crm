@@ -36,6 +36,12 @@ export const handleCallRequestTask = task({
 
     await sendOnce(locationId, `call-confirm-sms:${dedupeKey}`, async () => {
       await sendTwilioSmsWithoutLog(phoneNumber, CONFIRM_SMS)
+      return {
+        channel: 'sms',
+        to: phoneNumber,
+        subject: 'CALL request confirmation SMS',
+        body: CONFIRM_SMS,
+      }
     })
 
     const ctx = await getState(locationId)

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { logActivationSendActivity, type ActivationActivityLogMeta } from '@/lib/activation/activity-log'
 import type { LogShopEventResult } from '@/lib/activation/types'
 
 const PG_UNIQUE_VIOLATION = '23505'
@@ -43,16 +44,40 @@ export async function hasShopEvent(
   return Boolean(data)
 }
 
+export async function releaseShopEvent(
+  supabase: SupabaseClient,
+  locationId: string,
+  eventType: string,
+  dedupeKey: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('shop_events')
+    .delete()
+    .eq('location_id', locationId)
+    .eq('event_type', eventType)
+    .eq('dedupe_key', dedupeKey)
+
+  if (error) throw new Error(error.message)
+}
+
 export async function sendOnce(
   supabase: SupabaseClient,
   locationId: string,
   dedupeKey: string,
-  sendFn: () => Promise<void>,
+  sendFn: () => Promise<void | ActivationActivityLogMeta | null>,
   payload: Record<string, unknown> = {},
 ): Promise<LogShopEventResult> {
   const reserved = await logShopEvent(supabase, locationId, 'message.sent', dedupeKey, payload)
   if (!reserved.inserted) return reserved
 
-  await sendFn()
-  return reserved
+  try {
+    const activityMeta = await sendFn()
+    if (activityMeta) {
+      await logActivationSendActivity(supabase, locationId, activityMeta)
+    }
+    return reserved
+  } catch (err) {
+    await releaseShopEvent(supabase, locationId, 'message.sent', dedupeKey)
+    throw err
+  }
 }

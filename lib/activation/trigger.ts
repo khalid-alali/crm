@@ -14,6 +14,11 @@ export const ACTIVATION_TASK_IDS = {
   handleCallRequest: 'handle-call-request',
   handlePhotoReceived: 'handle-photo-received',
   handleReferral: 'handle-referral',
+  inviteChase: 'invite-chase',
+  counterCardChase: 'counter-card-chase',
+  postFirstConsult: 'post-first-consult',
+  refPushFollowup: 'ref-push-followup',
+  billingDunning: 'billing-dunning',
   onStageChanged: 'expert-assist-on-stage-changed',
   /** @deprecated Prefer recomputeStage from event handlers. */
   syncEnrollmentStage: 'expert-assist-sync-enrollment-stage',
@@ -167,5 +172,58 @@ export async function triggerHandleReferral(payload: {
   await tasks.trigger(ACTIVATION_TASK_IDS.handleReferral, payload, {
     idempotencyKey: `referral-booked:${payload.referralId}`,
     concurrencyKey: payload.locationId,
+  })
+}
+
+export async function triggerInviteChase(locationId: string): Promise<void> {
+  const tasks = await getTasksClient()
+  if (!tasks) return
+  await tasks.trigger(TASK_IDS.inviteChase, { locationId }, {
+    idempotencyKey: `invite-chase-${locationId}`,
+  })
+}
+
+export async function triggerCounterCardChase(payload: {
+  locationId: string
+  downloadedAt: string
+}): Promise<void> {
+  const tasks = await getTasksClient()
+  if (!tasks) return
+  const day = payload.downloadedAt.trim().slice(0, 10)
+  await tasks.trigger(TASK_IDS.counterCardChase, payload, {
+    idempotencyKey: `counter-card-chase:${payload.locationId}:${day}`,
+  })
+}
+
+export async function triggerPostFirstConsult(payload: {
+  locationId: string
+  consultId: string
+  anchorClosedAt: string
+}): Promise<void> {
+  const tasks = await getTasksClient()
+  if (!tasks) return
+  await tasks.trigger(TASK_IDS.postFirstConsult, payload, {
+    idempotencyKey: `post-first-consult:${payload.consultId}`,
+  })
+}
+
+export async function triggerRefPushFollowup(locationId: string): Promise<void> {
+  const tasks = await getTasksClient()
+  if (!tasks) return
+  await tasks.trigger(TASK_IDS.refPushFollowup, { locationId }, {
+    idempotencyKey: `ref-push-followup:${locationId}`,
+  })
+}
+
+export async function triggerBillingDunning(payload: {
+  locationId: string
+  failedAt: string
+  amountLabel: string
+}): Promise<void> {
+  const tasks = await getTasksClient()
+  if (!tasks) return
+  const day = payload.failedAt.trim().slice(0, 10)
+  await tasks.trigger(TASK_IDS.billingDunning, payload, {
+    idempotencyKey: `billing-dunning:${payload.locationId}:${day}`,
   })
 }

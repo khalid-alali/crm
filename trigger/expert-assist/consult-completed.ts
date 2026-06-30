@@ -2,15 +2,18 @@ import { logger, task } from '@trigger.dev/sdk'
 import {
   ensureActivationState,
   getState,
-  isFirstTransitionToActive,
+  markRefPush1Sent,
   recomputeStage,
-  sendActiveReferralPushEmail,
-  sendConsultReceiptIfPaid,
   sendMoneyKeptEmail,
   sendOnce,
+  sendRefPush1Email,
   triggerDormancyCheck,
+  triggerPostFirstConsult,
+  triggerRefPushFollowup,
   writeConsultFacts,
 } from '@/lib/activation'
+import { shouldPausePromotionalLifecycle } from '@/lib/activation/suppression'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export const consultCompletedTask = task({
   id: 'consult-completed',
@@ -30,28 +33,30 @@ export const consultCompletedTask = task({
     }
 
     await ensureActivationState(locationId)
-    await writeConsultFacts(locationId, consultId, closedAt)
+    const facts = await writeConsultFacts(locationId, consultId, closedAt)
 
     const stageResult = await recomputeStage(locationId)
     const ctx = await getState(locationId)
+    const paid = payload.paid === true
+    const billingPaused = await shouldPausePromotionalLifecycle(supabaseAdmin, locationId)
 
-    if (ctx) {
+    // MK-1: money-kept promotional email — only after confirmed payment, not on bare consult close.
+    if (ctx && paid && !billingPaused) {
       await sendOnce(locationId, `money-kept:${consultId}`, () => sendMoneyKeptEmail(ctx, consultId))
+    }
 
-      const paid = payload.paid === true
-      const amountLabel = payload.amountLabel?.trim() || '$0.00'
-      if (paid) {
-        await sendOnce(locationId, `receipt:${consultId}`, () =>
-          sendConsultReceiptIfPaid({ ctx, consultId, amountLabel, paid: true }),
-        )
-      }
+    // REF-PUSH-1: second completed consult (not stage transition).
+    if (ctx && paid && !billingPaused && facts.consultCount === 2 && !ctx.ref_push_1_sent) {
+      await sendOnce(locationId, 'ref-push-1', async () => {
+        const meta = await sendRefPush1Email(ctx)
+        await markRefPush1Sent(locationId)
+        return meta
+      })
+      await triggerRefPushFollowup(locationId)
+    }
 
-      if (
-        stageResult &&
-        isFirstTransitionToActive(stageResult.previousStage, stageResult.stage)
-      ) {
-        await sendOnce(locationId, 'active-referral-push', () => sendActiveReferralPushEmail(ctx))
-      }
+    if (facts.firstConsult) {
+      await triggerPostFirstConsult({ locationId, consultId, anchorClosedAt: closedAt })
     }
 
     await triggerDormancyCheck({
@@ -64,12 +69,15 @@ export const consultCompletedTask = task({
       locationId,
       consultId,
       stage: stageResult?.stage ?? null,
+      consultCount: facts.consultCount,
+      paid,
     })
 
     return {
       ok: true,
       stage: stageResult?.stage ?? null,
       stageChanged: stageResult?.changed ?? false,
+      consultCount: facts.consultCount,
     }
   },
 })

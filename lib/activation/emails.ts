@@ -1,5 +1,7 @@
 import { Resend } from 'resend'
+import type { ActivationActivityLogMeta } from '@/lib/activation/activity-log'
 import { sendOwnerEmailByGap, type OwnerGapEmailVariant } from '@/lib/activation/drip'
+import { requireResendConfig } from '@/lib/activation/runtime-env'
 import {
   counterCardDiagnoseUrl,
   counterCardDownloadUrl,
@@ -10,29 +12,32 @@ import {
 } from '@/lib/activation/urls'
 import type { ActivationStateView } from '@/lib/activation/types'
 import { sendConsultReceiptEmail } from '@/lib/expert-assist/email'
-import { normalizeSmsAddress } from '@/lib/expert-assist/phone'
-import { sendTwilioSmsWithoutLog } from '@/lib/expert-assist/send-sms'
+import {
+  sendPhotoReceivedOwnerEmail,
+  sendPrintoutPhotoFrontDeskSms,
+  sendReferralBookedOwnerEmail,
+} from '@/lib/activation/lifecycle-emails'
 import { supabaseAdmin } from '@/lib/supabase'
-
-const resend = () => new Resend(process.env.RESEND_API_KEY?.trim() || 're_placeholder')
 
 async function sendOwnerEmail(params: {
   to: string
   subject: string
   text: string
-}): Promise<void> {
-  const key = process.env.RESEND_API_KEY?.trim()
-  if (!key) {
-    console.warn('activation email: no RESEND_API_KEY', params.subject)
-    return
-  }
-  const { error } = await resend().emails.send({
-    from: process.env.RESEND_FROM?.trim() || 'Fixlane <onboarding@resend.dev>',
+}): Promise<ActivationActivityLogMeta> {
+  const { apiKey, from } = requireResendConfig(params.subject)
+  const { error } = await new Resend(apiKey).emails.send({
+    from,
     to: params.to,
     subject: params.subject,
     text: params.text,
   })
   if (error) throw new Error(error.message)
+  return {
+    channel: 'email',
+    to: params.to,
+    subject: params.subject,
+    body: params.text,
+  }
 }
 
 function greeting(ctx: ActivationStateView): string {
@@ -61,17 +66,20 @@ async function loadShopShortCode(locationId: string): Promise<string | null> {
 }
 
 /** T0 — owner welcome with forward CTA + counter-card diagnose link (casePartner only). */
-export async function sendWelcomeOwnerEmail(ctx: ActivationStateView): Promise<void> {
+export async function sendWelcomeOwnerEmail(
+  ctx: ActivationStateView,
+): Promise<ActivationActivityLogMeta | null> {
   const to = ctx.ownerEmail?.trim()
-  if (!to) return
+  if (!to) return null
   const partner = requireCasePartner(ctx)
   const forwardUrl = ownerForwardCtaUrl(ctx.locationId)
   const counterUrl = counterCardDiagnoseUrl(partner)
   const toolkitUrl = expertAssistToolkitUrl(ctx.locationId)
+  const subject = `Welcome to Expert Assist — ${ctx.shopName}`
 
-  await sendOwnerEmail({
+  return sendOwnerEmail({
     to,
-    subject: `Welcome to Expert Assist — ${ctx.shopName}`,
+    subject,
     text: [
       greeting(ctx),
       ``,
@@ -148,33 +156,41 @@ function ownerGapEmailContent(
 }
 
 /** T+5 — owner email by activation checkbox gap. */
-export async function sendOwnerGapEmail(ctx: ActivationStateView): Promise<void> {
+export async function sendOwnerGapEmail(ctx: ActivationStateView): Promise<ActivationActivityLogMeta | null> {
   const to = ctx.ownerEmail?.trim()
-  if (!to) return
+  if (!to) return null
   const variant = sendOwnerEmailByGap(ctx)
   const { subject, text } = ownerGapEmailContent(ctx, variant)
-  await sendOwnerEmail({ to, subject, text })
+  return sendOwnerEmail({ to, subject, text })
 }
 
 async function sendServiceWriterEmail(params: {
   to: string
   subject: string
   text: string
-}): Promise<void> {
-  await sendOwnerEmail(params)
+}): Promise<ActivationActivityLogMeta> {
+  return sendOwnerEmail(params)
 }
 
+export {
+  sendPhotoReceivedOwnerEmail,
+  sendPrintoutPhotoFrontDeskSms,
+  sendReferralBookedOwnerEmail,
+} from '@/lib/activation/lifecycle-emails'
+
 /** Sent at signup — setup instructions for the designated service writer (email only). */
-export async function sendServiceWriterSetupEmail(ctx: ActivationStateView): Promise<void> {
+export async function sendServiceWriterSetupEmail(
+  ctx: ActivationStateView,
+): Promise<ActivationActivityLogMeta | null> {
   const to = ctx.serviceWriterEmail?.trim()
-  if (!to) return
+  if (!to) return null
 
   const tollFree = expertAssistTollFreeNumber()
   const shopCode = await loadShopShortCode(ctx.locationId)
   const codeLine = shopCode ? ` Include shop code ${shopCode} in your first message.` : ''
   const toolkitUrl = expertAssistToolkitUrl(ctx.locationId)
 
-  await sendServiceWriterEmail({
+  return sendServiceWriterEmail({
     to,
     subject: `Expert Assist setup — ${ctx.shopName}`,
     text: [
@@ -193,12 +209,14 @@ export async function sendServiceWriterSetupEmail(ctx: ActivationStateView): Pro
 }
 
 /** T+2 — service writer email nudge. */
-export async function sendServiceWriterNudge1Email(ctx: ActivationStateView): Promise<void> {
+export async function sendServiceWriterNudge1Email(
+  ctx: ActivationStateView,
+): Promise<ActivationActivityLogMeta | null> {
   const to = ctx.serviceWriterEmail?.trim()
-  if (!to) return
+  if (!to) return null
   const tollFree = expertAssistTollFreeNumber()
 
-  await sendServiceWriterEmail({
+  return sendServiceWriterEmail({
     to,
     subject: `Try Expert Assist — ${ctx.shopName}`,
     text: [
@@ -213,12 +231,14 @@ export async function sendServiceWriterNudge1Email(ctx: ActivationStateView): Pr
 }
 
 /** T+7 — service writer email nudge. */
-export async function sendServiceWriterNudge2Email(ctx: ActivationStateView): Promise<void> {
+export async function sendServiceWriterNudge2Email(
+  ctx: ActivationStateView,
+): Promise<ActivationActivityLogMeta | null> {
   const to = ctx.serviceWriterEmail?.trim()
-  if (!to) return
+  if (!to) return null
   const tollFree = expertAssistTollFreeNumber()
 
-  await sendServiceWriterEmail({
+  return sendServiceWriterEmail({
     to,
     subject: `Expert Assist check-in — ${ctx.shopName}`,
     text: [
@@ -232,17 +252,12 @@ export async function sendServiceWriterNudge2Email(ctx: ActivationStateView): Pr
   })
 }
 
-async function sendFrontDeskSms(ctx: ActivationStateView, body: string): Promise<void> {
-  const raw = ctx.frontDeskPhone?.trim()
-  if (!raw) return
-  const to = normalizeSmsAddress(raw)
-  if (!to) return
-  await sendTwilioSmsWithoutLog(to, body)
-}
-
-export async function sendMoneyKeptEmail(ctx: ActivationStateView, consultId: string): Promise<void> {
+export async function sendMoneyKeptEmail(
+  ctx: ActivationStateView,
+  consultId: string,
+): Promise<ActivationActivityLogMeta | null> {
   const to = ctx.ownerEmail?.trim()
-  if (!to) return
+  if (!to) return null
   const partner = ctx.toolboxCasePartner?.trim()
   const toolkitBlock =
     partner ?
@@ -253,7 +268,7 @@ export async function sendMoneyKeptEmail(ctx: ActivationStateView, consultId: st
       ]
     : []
 
-  await sendOwnerEmail({
+  return sendOwnerEmail({
     to,
     subject: `Expert Assist consult closed — ${ctx.shopName}`,
     text: [
@@ -285,32 +300,14 @@ export async function sendConsultReceiptIfPaid(params: {
   })
 }
 
-export async function sendActiveReferralPushEmail(ctx: ActivationStateView): Promise<void> {
-  const to = ctx.ownerEmail?.trim()
-  if (!to) return
-  const partner = requireCasePartner(ctx)
-  await sendOwnerEmail({
-    to,
-    subject: `You're Active on Expert Assist — ${ctx.shopName}`,
-    text: [
-      greeting(ctx),
-      ``,
-      `Congrats — ${ctx.shopName} is now Active on Expert Assist.`,
-      ``,
-      `Share your referral link with customers:`,
-      toolboxDiagnoseUrl(partner, { utmSource: 'shop', utmMedium: 'toolkit' }),
-      ``,
-      `Shop toolkit: ${expertAssistToolkitUrl(ctx.locationId)}`,
-      ``,
-      `— RepairWise`,
-    ].join('\n'),
-  })
-}
+export { sendRefPush1Email as sendActiveReferralPushEmail, sendRefPush1Email } from '@/lib/activation/lifecycle-emails'
 
-export async function sendMuscleMemoryEmail(ctx: ActivationStateView): Promise<void> {
+export async function sendMuscleMemoryEmail(
+  ctx: ActivationStateView,
+): Promise<ActivationActivityLogMeta | null> {
   const to = ctx.ownerEmail?.trim()
-  if (!to) return
-  await sendOwnerEmail({
+  if (!to) return null
+  return sendOwnerEmail({
     to,
     subject: `Quick check-in — Expert Assist at ${ctx.shopName}`,
     text: [
@@ -325,10 +322,12 @@ export async function sendMuscleMemoryEmail(ctx: ActivationStateView): Promise<v
   })
 }
 
-export async function sendReactivationEmail(ctx: ActivationStateView): Promise<void> {
+export async function sendReactivationEmail(
+  ctx: ActivationStateView,
+): Promise<ActivationActivityLogMeta | null> {
   const to = ctx.ownerEmail?.trim()
-  if (!to) return
-  await sendOwnerEmail({
+  if (!to) return null
+  return sendOwnerEmail({
     to,
     subject: `Let's re-activate Expert Assist — ${ctx.shopName}`,
     text: [
@@ -337,53 +336,6 @@ export async function sendReactivationEmail(ctx: ActivationStateView): Promise<v
       `We haven't seen a consult from ${ctx.shopName} in a while.`,
       ``,
       `Reply to your shop thread or contact your Fixlane rep to get rolling again.`,
-      ``,
-      `— RepairWise`,
-    ].join('\n'),
-  })
-}
-
-export async function sendReferralBookedOwnerEmail(
-  ctx: ActivationStateView,
-  referralId: string,
-): Promise<void> {
-  const to = ctx.ownerEmail?.trim()
-  if (!to) return
-  await sendOwnerEmail({
-    to,
-    subject: `Customer referral booked — ${ctx.shopName}`,
-    text: [
-      greeting(ctx),
-      ``,
-      `A customer referral tied to ${ctx.shopName} was booked (ref ${referralId}).`,
-      `Great work closing the loop — we'll keep you posted on outcomes.`,
-      ``,
-      `— RepairWise`,
-    ].join('\n'),
-  })
-}
-
-/** After counter-card printout photo — unlock complimentary consult for front desk. */
-export async function sendPrintoutPhotoFrontDeskSms(ctx: ActivationStateView): Promise<void> {
-  const tollFree = expertAssistTollFreeNumber()
-  const shopCode = await loadShopShortCode(ctx.locationId)
-  const codeLine = shopCode ? ` Use shop code ${shopCode}.` : ''
-  await sendFrontDeskSms(
-    ctx,
-    `Thanks for sending your counter card photo for ${ctx.shopName}! Your complimentary consult is unlocked — text ${tollFree} with a VIN or question.${codeLine}`,
-  )
-}
-
-export async function sendPhotoReceivedOwnerEmail(ctx: ActivationStateView): Promise<void> {
-  const to = ctx.ownerEmail?.trim()
-  if (!to) return
-  await sendOwnerEmail({
-    to,
-    subject: `Printout received — free consult unlocked for ${ctx.shopName}`,
-    text: [
-      greeting(ctx),
-      ``,
-      `We received your counter-card printout photo. Your complimentary consult is unlocked — have your team text our Expert Assist line to start.`,
       ``,
       `— RepairWise`,
     ].join('\n'),

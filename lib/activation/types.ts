@@ -53,6 +53,9 @@ export type ActivationStateRow = {
   is_high_value: boolean
   sms_channel_dead: boolean
   qr_scan_count: number
+  ref_push_1_sent: boolean
+  dor75_sent: boolean
+  toolkit_link_clicked_at: string | null
   stage: ActivationStage
   stage_changed_at: string | null
   created_at: string
@@ -65,6 +68,7 @@ export type ActivationSendContext = {
   shopName: string
   ownerEmail: string | null
   ownerName: string | null
+  ownerPhone: string | null
   frontDeskPhone: string | null
   serviceWriterEmail: string | null
   serviceWriterName: string | null

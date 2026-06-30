@@ -8,7 +8,7 @@ import { getSignedContractDocUrl } from '@/lib/contract-documents'
 import { resolvePrimaryContact } from '@/lib/primary-contact'
 import { getExpertAssistShopProgramView } from '@/lib/expert-assist-enrollments'
 import TrackRecentShopVisit from '@/components/TrackRecentShopVisit'
-import { callToActivityEntry } from '@/lib/dialpad'
+import { callToActivityEntry, isCrmVisibleCall } from '@/lib/dialpad'
 
 export default async function ShopDetailPage({
   params,
@@ -70,7 +70,10 @@ export default async function ShopDetailPage({
     .eq('location_id', id)
     .in('match_status', ['matched', 'manually_matched'])
   if (shopCalls?.length) {
-    shop.activity_log = [...(shop.activity_log ?? []), ...shopCalls.map(callToActivityEntry)]
+    const visibleCalls = shopCalls.filter(isCrmVisibleCall)
+    if (visibleCalls.length) {
+      shop.activity_log = [...(shop.activity_log ?? []), ...visibleCalls.map(callToActivityEntry)]
+    }
   }
 
   if (shop.contract_locations?.length) {
