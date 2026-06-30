@@ -37,6 +37,7 @@ describe('parseCallEvent', () => {
     expect(e.talkSec).toBe(60)
     expect(e.totalSec).toBe(65)
     expect(e.summary).toBeNull()
+    expect(e.dialpadContactName).toBeNull()
   })
 
   it('parses a recap_summary event (string form)', () => {

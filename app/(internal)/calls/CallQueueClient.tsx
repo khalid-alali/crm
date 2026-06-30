@@ -10,6 +10,7 @@ export type QueuedCall = {
   direction: string | null
   rwUserName: string | null
   externalNumber: string | null
+  dialpadContactName: string | null
   startedAt: string | null
   duration: string | null
   summary: string | null
@@ -101,8 +102,16 @@ export default function CallQueueClient({ initialCalls }: { initialCalls: Queued
                     <DirIcon className="h-3.5 w-3.5" aria-hidden />
                   </span>
                   <span className="text-sm font-semibold text-onix-950">
-                    {formatPhoneDisplay(call.externalNumber) ?? call.externalNumber ?? 'Unknown number'}
+                    {call.dialpadContactName ??
+                      formatPhoneDisplay(call.externalNumber) ??
+                      call.externalNumber ??
+                      'Unknown number'}
                   </span>
+                  {call.dialpadContactName ? (
+                    <span className="text-xs text-onix-500">
+                      {formatPhoneDisplay(call.externalNumber) ?? call.externalNumber}
+                    </span>
+                  ) : null}
                   <span className="text-xs text-onix-400">
                     {formatWhen(call.startedAt)}
                     {call.duration ? ` · ${call.duration}` : ''}
@@ -138,7 +147,11 @@ export default function CallQueueClient({ initialCalls }: { initialCalls: Queued
               </div>
             </div>
             {pickerFor === call.callId ? (
-              <ShopPicker disabled={isBusy} onPick={loc => void assign(call.callId, loc.id)} />
+              <ShopPicker
+                disabled={isBusy}
+                initialQuery={call.dialpadContactName}
+                onPick={loc => void assign(call.callId, loc.id)}
+              />
             ) : null}
           </div>
         )
@@ -147,11 +160,23 @@ export default function CallQueueClient({ initialCalls }: { initialCalls: Queued
   )
 }
 
-function ShopPicker({ onPick, disabled }: { onPick: (loc: PickerLocation) => void; disabled: boolean }) {
-  const [q, setQ] = useState('')
+function ShopPicker({
+  onPick,
+  disabled,
+  initialQuery,
+}: {
+  onPick: (loc: PickerLocation) => void
+  disabled: boolean
+  initialQuery?: string | null
+}) {
+  const [q, setQ] = useState(initialQuery?.trim() ?? '')
   const [results, setResults] = useState<PickerLocation[]>([])
   const [loading, setLoading] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setQ(initialQuery?.trim() ?? '')
+  }, [initialQuery])
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current)

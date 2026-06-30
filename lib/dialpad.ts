@@ -115,6 +115,7 @@ export type ParsedCallEvent = {
   talkSec: number | null
   totalSec: number | null
   summary: string | null
+  dialpadContactName: string | null
 }
 
 /**
@@ -132,6 +133,7 @@ export function parseCallEvent(payload: Record<string, unknown>): ParsedCallEven
   const direction = rawDirection === 'inbound' || rawDirection === 'outbound' ? rawDirection : null
 
   const target = (call.target as Record<string, unknown> | undefined) ?? {}
+  const contact = (call.contact as Record<string, unknown> | undefined) ?? {}
 
   // recap_summary may arrive as a bare string or as { summary } / { recap_summary }.
   const recap = call.recap_summary ?? payload.recap_summary
@@ -154,6 +156,7 @@ export function parseCallEvent(payload: Record<string, unknown>): ParsedCallEven
     talkSec: msToSec(call.duration),
     totalSec: msToSec(call.total_duration),
     summary,
+    dialpadContactName: asString(contact.name ?? contact.display_name),
   }
 }
 
@@ -187,6 +190,7 @@ export async function upsertShopCallHangup(event: ParsedCallEvent): Promise<bool
       ended_at: event.endedAt,
       talk_sec: event.talkSec,
       total_sec: event.totalSec,
+      dialpad_contact_name: event.dialpadContactName,
       match_status: match.status,
       in_queue: inQueue,
     },

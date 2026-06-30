@@ -121,6 +121,7 @@ export type DialpadCallRecord = {
   call_id?: number | null
   direction?: string | null
   external_number?: string | null
+  contact?: { name?: string | null; phone?: string | null } | null
   target?: { id?: string | number | null; name?: string | null }
   date_started?: number | null
   date_connected?: number | null
@@ -167,4 +168,22 @@ export async function getCallAiRecap(callId: string | number): Promise<string | 
   const data = (await res.json()) as AiRecapResponse
   const content = data.summary?.content
   return content?.trim() ? content.trim() : null
+}
+
+export type DialpadContact = {
+  id?: string | null
+  display_name?: string | null
+  company_name?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  phones?: string[] | null
+  primary_phone?: string | null
+}
+
+/** Shared + optional local contacts. Requires `contacts:list` scope. */
+export async function listContacts(opts?: { includeLocal?: boolean }): Promise<DialpadContact[]> {
+  const params = new URLSearchParams()
+  if (opts?.includeLocal) params.set('include_local', 'true')
+  const qs = params.toString()
+  return listAll<DialpadContact>(`/contacts${qs ? `?${qs}` : ''}`)
 }
