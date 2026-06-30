@@ -293,12 +293,6 @@ export default function ActivityFeed({
             `View ${eventLabel.toLowerCase()} details`,
           )
 
-          const expandProps = expandableRowProps(
-            showExpand,
-            () => setDrawerEntry(entry),
-            `View ${eventLabel.toLowerCase()} details`,
-          )
-
           return (
             <div
               key={entry.id}
