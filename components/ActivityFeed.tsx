@@ -284,7 +284,14 @@ export default function ActivityFeed({
 
           const formattedBody = entry.body ? formatBulkPipelineStatusLogBody(entry.body) : ''
           const { title, preview } = nonEmailTitlePreview(entry, formattedBody)
-          const showExpand = bodyNeedsDrawer(entry.body ?? '', 80)
+          const showExpand =
+            entry.type === 'call' ? true : bodyNeedsDrawer(entry.body ?? '', 80)
+
+          const expandProps = expandableRowProps(
+            showExpand,
+            () => setDrawerEntry(entry),
+            `View ${eventLabel.toLowerCase()} details`,
+          )
 
           const expandProps = expandableRowProps(
             showExpand,
