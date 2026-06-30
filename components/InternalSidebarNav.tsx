@@ -15,13 +15,14 @@ import {
 } from 'lucide-react'
 import GlobalSearch from '@/components/GlobalSearch'
 import { TeslaMark, VinfastMark } from '@/components/SidebarBrandIcons'
+import { canAccessCallQueue } from '@/lib/calls-access'
 
 const navItems = [
   { href: '/home', label: 'Home', icon: House },
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/shops', label: 'Shops', icon: Store },
   { href: '/consults', label: 'Consults', icon: MessageSquare },
-  { href: '/calls', label: 'Calls', icon: Phone },
+  { href: '/calls', label: 'Calls', icon: Phone, callsOnly: true },
   { href: '/tesla', label: 'Tesla', icon: TeslaMark },
   { href: '/vinfast', label: 'VinFast', icon: VinfastMark },
   { href: '/accounts', label: 'Accounts', icon: Users },
@@ -30,15 +31,24 @@ const navItems = [
   { href: '/settings/email-templates', label: 'Email templates', icon: Mail },
 ]
 
-export default function InternalSidebarNav({ collapsed = false }: { collapsed?: boolean }) {
+export default function InternalSidebarNav({
+  collapsed = false,
+  userEmail,
+}: {
+  collapsed?: boolean
+  userEmail?: string | null
+}) {
   const pathname = usePathname()
+  const showCalls = canAccessCallQueue(userEmail)
 
   return (
     <nav
       id="internal-sidebar-nav"
       className={`flex-1 space-y-1 py-4 text-sm ${collapsed ? 'px-1.5' : 'px-3'}`}
     >
-      {navItems.map(item => {
+      {navItems
+        .filter(item => !item.callsOnly || showCalls)
+        .map(item => {
         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
         const Icon = item.icon
         return (

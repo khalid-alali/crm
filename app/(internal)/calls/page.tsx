@@ -1,10 +1,15 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { formatCallDuration, isCrmVisibleCall } from '@/lib/dialpad'
+import { getAppSession } from '@/lib/app-auth'
+import { canAccessCallQueue } from '@/lib/calls-access'
+import { notFound } from 'next/navigation'
 import CallQueueClient, { type QueuedCall } from './CallQueueClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CallQueuePage() {
+  const session = await getAppSession()
+  if (!canAccessCallQueue(session?.user?.email)) notFound()
   const { data: rows } = await supabaseAdmin
     .from('shop_call_activity')
     .select('call_id, direction, rw_user_name, external_number, started_at, total_sec, connected_at, summary')

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAppSession } from '@/lib/app-auth'
 import { assignCallToShop } from '@/lib/dialpad'
+import { canAccessCallQueue } from '@/lib/calls-access'
 
 // Assign a queued Dialpad call to a shop (manual-match queue, P0-3).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ callId: string }> }) {
   const session = await getAppSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!canAccessCallQueue(session.user?.email)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { callId: callIdRaw } = await params
   const callId = Number(callIdRaw)

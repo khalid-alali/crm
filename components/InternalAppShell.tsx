@@ -93,7 +93,7 @@ export default function InternalAppShell({
             )}
           </button>
         </div>
-        <InternalSidebarNav collapsed={collapsed} />
+        <InternalSidebarNav collapsed={collapsed} userEmail={userEmail} />
         <div className={`border-t border-arctic-200 py-3 ${collapsed ? 'px-1.5' : 'px-3'}`}>
           <SidebarProfileButton email={userEmail} collapsed={collapsed} />
         </div>
