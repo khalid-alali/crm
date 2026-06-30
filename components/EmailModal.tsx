@@ -11,6 +11,7 @@ import {
   emailContentReferencesRoutableBankLink,
   replaceLegacyCapabilitiesPreviewUrls,
   replaceLegacyExpertAssistPreviewUrls,
+  replaceLegacyRoutableBankLinkPreviewUrls,
 } from '@/lib/email-template-placeholders'
 import RecipientPicker, { type RecipientContact } from '@/components/email/RecipientPicker'
 
@@ -265,7 +266,9 @@ export default function EmailModal({
       const templateCc = normalizeRecipientList(data.defaultCcRecipients)
       setEmailTemplateId(selection.id)
       const normalizeEmailHtml = (s: string) =>
-        replaceLegacyExpertAssistPreviewUrls(replaceLegacyCapabilitiesPreviewUrls(s))
+        replaceLegacyRoutableBankLinkPreviewUrls(
+          replaceLegacyExpertAssistPreviewUrls(replaceLegacyCapabilitiesPreviewUrls(s)),
+        )
       setSubject(normalizeEmailHtml(data.subject ?? ''))
       setBody(normalizeEmailHtml(data.bodyHtml ?? '<p></p>'))
       setToList(templateTo.length > 0 ? templateTo : (contactEmail.trim() ? [contactEmail.trim().toLowerCase()] : []))

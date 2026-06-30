@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { ROUTABLE_BANK_LINK_DISPLAY_SENTINEL } from '@/lib/email-template-ids'
 import {
+  buildRoutableBankLinkPreviewHref,
   emailContentReferencesRoutableBankLink,
   replaceEmailTemplatePlaceholders,
 } from '@/lib/email-template-placeholders'
@@ -92,6 +93,18 @@ describe('injectRoutableBankLinkIntoEmail', () => {
     )
     expect(out.bodyHtml).toContain('https://routable.example/flow/live')
     expect(mockStartEmbedded).toHaveBeenCalledOnce()
+  })
+
+  it('replaces preview href on send', async () => {
+    const preview = buildRoutableBankLinkPreviewHref('http://localhost:3000')
+    const out = await injectRoutableBankLinkIntoEmail(
+      fakeReq(),
+      'loc-1',
+      'Hi',
+      `<a href="${preview}">Connect</a>`,
+    )
+    expect(out.bodyHtml).toContain('https://routable.example/flow/live')
+    expect(out.bodyHtml).not.toContain('__crm_routable_bank_link_preview__')
   })
 
   it('uses portal when already linked', async () => {

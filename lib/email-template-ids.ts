@@ -4,6 +4,9 @@ export const SEED_ONBOARDING_TEMPLATE_ID = 'b2c3d4e5-f6a7-4901-bcde-f12345678901
 /** Path segment for preview URLs (not a valid JWT). Replaced with a real portal URL on send. */
 export const CAPABILITIES_LINK_PREVIEW_TOKEN = '__crm_capabilities_preview__'
 
+/** Preview path for Routable bank-link emails — valid https URL so TipTap keeps the anchor. */
+export const ROUTABLE_BANK_LINK_PREVIEW_TOKEN = '__crm_routable_bank_link_preview__'
+
 /**
  * Shown in template render + send review UI instead of a real or preview URL.
  * Replaced with the minted portal link on send (`injectCapabilitiesIntoEmail`).

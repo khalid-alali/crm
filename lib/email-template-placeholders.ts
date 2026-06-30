@@ -5,6 +5,7 @@ import {
   EXPERT_ASSIST_LINK_DISPLAY_SENTINEL,
   EXPERT_ASSIST_LINK_PREVIEW_SHOP_ID,
   ROUTABLE_BANK_LINK_DISPLAY_SENTINEL,
+  ROUTABLE_BANK_LINK_PREVIEW_TOKEN,
 } from '@/lib/email-template-ids'
 import { buildExpertAssistIntakeHref } from '@/lib/expert-assist/intake-link'
 
@@ -38,6 +39,11 @@ export function buildCapabilitiesHref(baseUrl: string, mode: CapabilitiesLinkMod
  */
 export function buildEnrollmentPortalHref(baseUrl: string, jwtToken: string): string {
   return `${baseUrl.replace(/\/$/, '')}/portal/${jwtToken.trim()}/onboarding`
+}
+
+/** Preview href for Routable bank-link emails — must be a real https URL so TipTap keeps the anchor. */
+export function buildRoutableBankLinkPreviewHref(baseUrl: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/portal/${ROUTABLE_BANK_LINK_PREVIEW_TOKEN}`
 }
 
 export type EmailTemplateLinkHrefs = {
@@ -103,12 +109,30 @@ export function replaceCapabilitiesPreviewWithReal(
   return text.split(previewHref).join(realHref)
 }
 
+export function replaceRoutableBankLinkPreviewWithReal(
+  text: string,
+  previewHref: string,
+  realHref: string,
+): string {
+  if (!previewHref) return text
+  return text.split(previewHref).join(realHref)
+}
+
 /** Normalize older render output that used a real preview URL into the display sentinel. */
 export function replaceLegacyCapabilitiesPreviewUrls(text: string): string {
   const esc = CAPABILITIES_LINK_PREVIEW_TOKEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return text.replace(
     new RegExp(`https?:\\/\\/[^\\s"'<>]+\\/portal\\/${esc}`, 'g'),
     CAPABILITIES_LINK_DISPLAY_SENTINEL,
+  )
+}
+
+/** Normalize older render output that used a real preview URL into the display sentinel. */
+export function replaceLegacyRoutableBankLinkPreviewUrls(text: string): string {
+  const esc = ROUTABLE_BANK_LINK_PREVIEW_TOKEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(
+    new RegExp(`https?:\\/\\/[^\\s"'<>]+\\/portal\\/${esc}`, 'g'),
+    ROUTABLE_BANK_LINK_DISPLAY_SENTINEL,
   )
 }
 
@@ -133,11 +157,13 @@ export function emailContentReferencesEnrollmentPortalLink(subject: string, body
 
 export function emailContentReferencesRoutableBankLink(subject: string, bodyHtml: string): boolean {
   const s = `${subject}\0${bodyHtml}`
+  const previewEsc = ROUTABLE_BANK_LINK_PREVIEW_TOKEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return (
     /\{\{\s*routable_bank_link\s*\}\}/i.test(s) ||
     /\{\{\s*bank_link\s*\}\}/i.test(s) ||
     /\{\{\s*connect_bank_account_link\s*\}\}/i.test(s) ||
-    s.includes(ROUTABLE_BANK_LINK_DISPLAY_SENTINEL)
+    s.includes(ROUTABLE_BANK_LINK_DISPLAY_SENTINEL) ||
+    new RegExp(`/portal/${previewEsc}`, 'i').test(s)
   )
 }
 

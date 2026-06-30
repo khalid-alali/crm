@@ -9,10 +9,10 @@ import {
   CAPABILITIES_LINK_DISPLAY_SENTINEL,
   ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL,
   EXPERT_ASSIST_LINK_DISPLAY_SENTINEL,
-  ROUTABLE_BANK_LINK_DISPLAY_SENTINEL,
 } from '@/lib/email-template-ids'
 import { buildExpertAssistIntakeHref, expertAssistIntakePublicUrl } from '@/lib/expert-assist/intake-link'
-import { subjectAndBodyWithPlaceholders } from '@/lib/email-template-placeholders'
+import { portalBaseUrl } from '@/lib/portal-base-url'
+import { subjectAndBodyWithPlaceholders, buildRoutableBankLinkPreviewHref } from '@/lib/email-template-placeholders'
 import { supabaseAdmin } from '@/lib/supabase'
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -57,11 +57,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     intakeBase ?
       buildExpertAssistIntakeHref(intakeBase, 'preview')
     : EXPERT_ASSIST_LINK_DISPLAY_SENTINEL
+  const routableBankLinkPreview = buildRoutableBankLinkPreviewHref(portalBaseUrl(req))
   const rendered = subjectAndBodyWithPlaceholders(template.subject, template.body_html, staticMap, {
     capabilities: CAPABILITIES_LINK_DISPLAY_SENTINEL,
     expertAssist: expertAssistPreview,
     enrollmentPortal: ENROLLMENT_PORTAL_LINK_DISPLAY_SENTINEL,
-    routableBankLink: ROUTABLE_BANK_LINK_DISPLAY_SENTINEL,
+    routableBankLink: routableBankLinkPreview,
   })
 
   const warnings = emailMergeWarningsForVinfastPlaceholders(

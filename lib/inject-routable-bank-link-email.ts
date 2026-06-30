@@ -3,8 +3,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ROUTABLE_BANK_LINK_DISPLAY_SENTINEL } from '@/lib/email-template-ids'
 import {
   buildEnrollmentPortalHref,
+  buildRoutableBankLinkPreviewHref,
   emailContentReferencesRoutableBankLink,
   replaceEmailTemplatePlaceholders,
+  replaceRoutableBankLinkPreviewWithReal,
 } from '@/lib/email-template-placeholders'
 import { portalBaseUrl } from '@/lib/portal-base-url'
 import { signCapabilitiesPortalToken } from '@/lib/portal-token'
@@ -69,11 +71,8 @@ export async function mintRoutableBankLinkHrefForEmail(
 }
 
 /**
- * Mint a Routable embedded bank-link URL and substitute the display sentinel and
- * `{{routable_bank_link}}` / `{{bank_link}}` / `{{connect_bank_account_link}}`.
- *
- * When Routable is not ready yet, falls back to the enrollment portal URL so E2
- * can still send while internal setup finishes.
+ * Mint a Routable embedded bank-link URL and substitute the preview URL, display
+ * sentinel, and `{{routable_bank_link}}` placeholders.
  */
 export async function injectRoutableBankLinkIntoEmail(
   req: NextRequest,
@@ -85,10 +84,14 @@ export async function injectRoutableBankLinkIntoEmail(
     return { subject, bodyHtml }
   }
 
+  const base = portalBaseUrl(req)
+  const previewHref = buildRoutableBankLinkPreviewHref(base)
   const { href: realHref } = await mintRoutableBankLinkHrefForEmail(supabaseAdmin, req, locationId)
 
-  let subjectOut = subject.split(ROUTABLE_BANK_LINK_DISPLAY_SENTINEL).join(realHref)
-  let bodyOut = bodyHtml.split(ROUTABLE_BANK_LINK_DISPLAY_SENTINEL).join(realHref)
+  let subjectOut = replaceRoutableBankLinkPreviewWithReal(subject, previewHref, realHref)
+  let bodyOut = replaceRoutableBankLinkPreviewWithReal(bodyHtml, previewHref, realHref)
+  subjectOut = subjectOut.split(ROUTABLE_BANK_LINK_DISPLAY_SENTINEL).join(realHref)
+  bodyOut = bodyOut.split(ROUTABLE_BANK_LINK_DISPLAY_SENTINEL).join(realHref)
   const emptyStatic: Record<string, string> = {}
   subjectOut = replaceEmailTemplatePlaceholders(subjectOut, emptyStatic, { routableBankLink: realHref })
   bodyOut = replaceEmailTemplatePlaceholders(bodyOut, emptyStatic, { routableBankLink: realHref })
