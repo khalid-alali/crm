@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type KeyboardEvent } from 'react'
+import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Link from 'next/link'
 import { Check, FileText, Mail, Pencil, Phone, X } from 'lucide-react'
 import { formatBulkPipelineStatusLogBody } from '@/lib/location-status-labels'
@@ -136,7 +136,7 @@ function expandableRowProps(
   role?: 'button'
   tabIndex?: number
   onClick?: () => void
-  onKeyDown?: (e: KeyboardEvent) => void
+  onKeyDown?: (e: ReactKeyboardEvent) => void
   className?: string
   'aria-label'?: string
 } {
