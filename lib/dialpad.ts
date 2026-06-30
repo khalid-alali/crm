@@ -16,6 +16,10 @@ export const QUEUE_DURATION_FLOOR_SEC = 30
 /** Dialpad skips AI recaps below this total duration (incl. ring) or without a connection. */
 export const RECAP_MIN_TOTAL_SEC = 120
 
+/** Placeholder text Dialpad sends as recap_summary when no AI recap exists. */
+export const DIALPAD_NO_RECAP_SUMMARY =
+  'Summaries are currently not generated for short calls or voicemails.'
+
 export type CallVisibilityFields = {
   summary?: string | null
   connected_at?: string | null
@@ -24,9 +28,22 @@ export type CallVisibilityFields = {
   totalSec?: number | null
 }
 
+/** True when Dialpad sent its "no recap for this call" placeholder instead of a real summary. */
+export function isDialpadNoRecapSummary(summary: string | null | undefined): boolean {
+  if (!summary?.trim()) return false
+  return summary.trim().toLowerCase().includes('not generated for short calls')
+}
+
+/** Strip Dialpad no-recap placeholders; returns null when there is no real summary. */
+export function normalizeCallSummary(summary: string | null | undefined): string | null {
+  if (!summary?.trim()) return null
+  if (isDialpadNoRecapSummary(summary)) return null
+  return summary.trim()
+}
+
 /** Whether a call belongs in the CRM (timeline / match queue). */
 export function isCrmVisibleCall(call: CallVisibilityFields): boolean {
-  if (call.summary?.trim()) return true
+  if (normalizeCallSummary(call.summary)) return true
   const connected = call.connected_at ?? call.connectedAt
   const totalSec = call.total_sec ?? call.totalSec ?? 0
   if (!connected) return false
@@ -118,10 +135,11 @@ export function parseCallEvent(payload: Record<string, unknown>): ParsedCallEven
 
   // recap_summary may arrive as a bare string or as { summary } / { recap_summary }.
   const recap = call.recap_summary ?? payload.recap_summary
-  const summary =
+  const summary = normalizeCallSummary(
     typeof recap === 'string'
       ? asString(recap)
-      : asString((recap as Record<string, unknown> | undefined)?.summary)
+      : asString((recap as Record<string, unknown> | undefined)?.summary),
+  )
 
   return {
     state,
@@ -184,11 +202,12 @@ export async function upsertShopCallRecap(
   summary: string | null,
   meta?: Pick<ParsedCallEvent, 'connectedAt' | 'totalSec'>,
 ): Promise<void> {
-  if (summary?.trim()) {
+  const normalized = normalizeCallSummary(summary)
+  if (normalized) {
     const { error } = await supabaseAdmin.from('shop_call_activity').upsert(
       {
         call_id: Number(callId),
-        summary,
+        summary: normalized,
         summary_at: new Date().toISOString(),
       },
       { onConflict: 'call_id' },
@@ -410,7 +429,7 @@ export function callToActivityEntry(call: ShopCallRow) {
     id: `call-${call.call_id}`,
     type: 'call' as const,
     subject: `${dir} call${who}${durationSuffix}`,
-    body: call.summary,
+    body: normalizeCallSummary(call.summary),
     sent_by: 'Dialpad',
     created_at: call.started_at ?? new Date().toISOString(),
     location_id: call.location_id ?? undefined,

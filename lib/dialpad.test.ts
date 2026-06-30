@@ -6,6 +6,7 @@ import {
   isCrmVisibleCall,
   QUEUE_DURATION_FLOOR_SEC,
   RECAP_MIN_TOTAL_SEC,
+  DIALPAD_NO_RECAP_SUMMARY,
 } from './dialpad'
 
 describe('parseCallEvent', () => {
@@ -102,6 +103,16 @@ describe('queue floor', () => {
 describe('isCrmVisibleCall', () => {
   it('shows calls with a summary', () => {
     expect(isCrmVisibleCall({ summary: 'Discussed rates', total_sec: 30 })).toBe(true)
+  })
+
+  it('hides Dialpad no-recap placeholder text', () => {
+    expect(
+      isCrmVisibleCall({
+        summary: DIALPAD_NO_RECAP_SUMMARY,
+        connected_at: '2026-06-29T12:00:00.000Z',
+        total_sec: 64,
+      }),
+    ).toBe(false)
   })
 
   it('hides short connected calls without a summary', () => {

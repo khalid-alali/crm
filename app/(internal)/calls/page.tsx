@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export default async function CallQueuePage() {
   const { data: rows } = await supabaseAdmin
     .from('shop_call_activity')
-    .select('call_id, direction, rw_user_name, external_number, started_at, total_sec, summary')
+    .select('call_id, direction, rw_user_name, external_number, started_at, total_sec, connected_at, summary')
     .eq('in_queue', true)
     .order('started_at', { ascending: false })
     .limit(200)
