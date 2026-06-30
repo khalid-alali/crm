@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Phone, PhoneIncoming, PhoneOutgoing } from 'lucide-react'
-import { formatPhoneDisplay } from '@/lib/phone'
+import { formatPhoneDisplay, phoneMatchKey } from '@/lib/phone'
 import type { PickerLocation } from '@/app/api/locations/picker-search/route'
 
 export type QueuedCall = {
@@ -28,6 +28,12 @@ export default function CallQueueClient({ initialCalls }: { initialCalls: Queued
   const [busy, setBusy] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  function removeCallsForNumber(externalNumber: string | null) {
+    const key = phoneMatchKey(externalNumber)
+    if (!key) return
+    setCalls(prev => prev.filter(c => phoneMatchKey(c.externalNumber) !== key))
+  }
+
   function removeCall(callId: number) {
     setCalls(prev => prev.filter(c => c.callId !== callId))
   }
@@ -41,9 +47,13 @@ export default function CallQueueClient({ initialCalls }: { initialCalls: Queued
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ locationId }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? 'Failed to assign')
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        externalNumber?: string | null
+      }
+      if (!res.ok) throw new Error(data.error ?? 'Failed to assign')
       setPickerFor(null)
-      removeCall(callId)
+      removeCallsForNumber(data.externalNumber ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to assign')
     } finally {

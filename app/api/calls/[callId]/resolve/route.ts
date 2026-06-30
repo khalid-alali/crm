@@ -20,8 +20,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cal
   }
 
   const resolvedBy = session.user?.email ?? session.user?.name ?? 'unknown'
-  const ok = await assignCallToShop({ callId, locationId, resolvedBy })
-  if (!ok) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
+  const result = await assignCallToShop({ callId, locationId, resolvedBy })
+  if (!result) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({
+    ok: true,
+    externalNumber: result.externalNumber,
+    updatedCount: result.updatedCount,
+  })
 }

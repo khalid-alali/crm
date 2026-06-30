@@ -264,14 +264,14 @@ export async function matchExternalNumber(externalNumber: string | null): Promis
 /**
  * Assign a queued call to a shop. Sets the match, leaves the queue, and writes
  * the number back to the shop's contacts so the same number auto-matches next
- * time (the queue's self-extinguishing mechanism, P0-3). Returns false if the
- * call_id doesn't exist.
+ * time. Also backfills every other unmatched call from the same number.
+ * Returns null if the call_id doesn't exist.
  */
 export async function assignCallToShop(opts: {
   callId: number
   locationId: string
   resolvedBy: string
-}): Promise<boolean> {
+}): Promise<{ externalNumber: string | null; updatedCount: number } | null> {
   const { callId, locationId, resolvedBy } = opts
 
   const { data: call } = await supabaseAdmin
@@ -279,7 +279,7 @@ export async function assignCallToShop(opts: {
     .select('call_id, external_number')
     .eq('call_id', callId)
     .maybeSingle()
-  if (!call) return false
+  if (!call) return null
 
   const key = phoneMatchKey(call.external_number)
 
@@ -310,19 +310,34 @@ export async function assignCallToShop(opts: {
     }
   }
 
-  await supabaseAdmin
-    .from('shop_call_activity')
-    .update({
-      location_id: locationId,
-      contact_id: contactId,
-      match_status: 'manually_matched',
-      in_queue: false,
-      matched_by: resolvedBy,
-      matched_at: new Date().toISOString(),
-    })
-    .eq('call_id', callId)
+  const matchedAt = new Date().toISOString()
+  const patch = {
+    location_id: locationId,
+    contact_id: contactId,
+    match_status: 'manually_matched' as const,
+    in_queue: false,
+    matched_by: resolvedBy,
+    matched_at: matchedAt,
+  }
 
-  return true
+  let updateQuery = supabaseAdmin
+    .from('shop_call_activity')
+    .update(patch)
+    .eq('match_status', 'unmatched')
+
+  if (call.external_number) {
+    updateQuery = updateQuery.eq('external_number', call.external_number)
+  } else {
+    updateQuery = updateQuery.eq('call_id', callId)
+  }
+
+  const { data: updated, error } = await updateQuery.select('call_id')
+  if (error) throw error
+
+  return {
+    externalNumber: call.external_number,
+    updatedCount: updated?.length ?? 0,
+  }
 }
 
 /**
