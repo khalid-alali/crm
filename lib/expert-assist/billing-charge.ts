@@ -19,10 +19,10 @@ export async function chargeConsultOffSession(params: {
   caseId: string
   idempotencyKey?: string
 }): Promise<{ paymentIntentId: string } | { error: string }> {
-  const stripe = getStripe()
   if (params.amountCents <= 0) return { error: 'Nothing to charge' }
 
   try {
+    const stripe = getStripe()
     const pi = await stripe.paymentIntents.create(
       {
         amount: params.amountCents,
