@@ -19,7 +19,7 @@ import {
 import { routableCredentialsFromEnv } from '@/lib/routable'
 import { supabaseAdmin } from '@/lib/supabase'
 
-export type RoutableBankLinkHrefSource = 'routable_embedded' | 'portal_fallback' | 'portal_unlocked'
+export type RoutableBankLinkHrefSource = 'routable_embedded' | 'portal_unlocked'
 
 export type MintRoutableBankLinkResult = {
   href: string
@@ -28,8 +28,8 @@ export type MintRoutableBankLinkResult = {
 
 /**
  * Mint the bank-link CTA for E2/E3. When Routable is ready, returns the embedded
- * flow URL (with confirmation redirect back to the portal). Otherwise falls back
- * to the enrollment portal so the email still sends.
+ * flow URL (with confirmation redirect back to the portal). Requires routable_id
+ * and server credentials — throws if the shop is not ready.
  */
 export async function mintRoutableBankLinkHrefForEmail(
   admin: SupabaseClient,
@@ -55,8 +55,13 @@ export async function mintRoutableBankLinkHrefForEmail(
 
   const companyId = typeof location.routable_id === 'string' ? location.routable_id.trim() : ''
   const creds = routableCredentialsFromEnv()
-  if (!companyId || !creds) {
-    return { href: portalHref, source: 'portal_fallback' }
+  if (!companyId) {
+    throw new Error(
+      'This shop has no Routable ID yet. Complete Routable enrollment before sending the bank-link email.',
+    )
+  }
+  if (!creds) {
+    throw new Error('Routable is not configured (ROUTABLE_API_KEY / ROUTABLE_TEAM_MEMBER_ID).')
   }
 
   const { externalFlowUrl } = await startEmbeddedBankLinkFlow({

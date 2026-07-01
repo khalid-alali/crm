@@ -6,10 +6,11 @@ import {
   replaceEmailTemplatePlaceholders,
 } from '@/lib/email-template-placeholders'
 
-const { mockStartEmbedded, mockIsLinked, mockSignToken } = vi.hoisted(() => ({
+const { mockStartEmbedded, mockIsLinked, mockSignToken, mockMaybeSingle } = vi.hoisted(() => ({
   mockStartEmbedded: vi.fn(),
   mockIsLinked: vi.fn(),
   mockSignToken: vi.fn(),
+  mockMaybeSingle: vi.fn(),
 }))
 
 vi.mock('@/lib/routable-bank-gate', () => ({
@@ -31,10 +32,7 @@ vi.mock('@/lib/supabase', () => ({
     from: () => ({
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({
-            data: { id: 'loc-1', routable_id: 'co_abc', routable_payment_method_count: 0 },
-            error: null,
-          }),
+          maybeSingle: (...args: unknown[]) => mockMaybeSingle(...args),
         }),
       }),
     }),
@@ -72,6 +70,10 @@ describe('injectRoutableBankLinkIntoEmail', () => {
     mockIsLinked.mockReturnValue(false)
     mockSignToken.mockReturnValue('jwt.token')
     mockStartEmbedded.mockReset()
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: 'loc-1', routable_id: 'co_abc', routable_payment_method_count: 0 },
+      error: null,
+    })
     mockStartEmbedded.mockResolvedValue({
       externalFlowUrl: 'https://routable.example/flow/live',
       snapshot: {},
@@ -117,5 +119,16 @@ describe('injectRoutableBankLinkIntoEmail', () => {
     )
     expect(out.bodyHtml).toContain('/portal/jwt.token/onboarding')
     expect(mockStartEmbedded).not.toHaveBeenCalled()
+  })
+
+  it('throws when shop has no routable_id', async () => {
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: { id: 'loc-1', routable_id: null, routable_payment_method_count: 0 },
+      error: null,
+    })
+
+    await expect(
+      injectRoutableBankLinkIntoEmail(fakeReq(), 'loc-1', 'Hi', '<a href="{{routable_bank_link}}">Connect</a>'),
+    ).rejects.toThrow(/no Routable ID/)
   })
 })

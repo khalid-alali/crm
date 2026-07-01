@@ -67,6 +67,26 @@ function parseCompanyStatus(payload: unknown): RoutableCompanyStatus | null {
   return status || null
 }
 
+function urlFromLinks(links: unknown): string | null {
+  if (!links || typeof links !== 'object') return null
+  const obj = links as Record<string, unknown>
+  for (const key of ['external_flow_url', 'invitation_url'] as const) {
+    const url = cleanText(obj[key])
+    if (url) return url
+  }
+  return null
+}
+
+function contactResultsFromPayload(root: Record<string, unknown>): unknown[] {
+  const contacts = root.contacts
+  if (Array.isArray(contacts)) return contacts
+  if (contacts && typeof contacts === 'object') {
+    const results = (contacts as { results?: unknown }).results
+    if (Array.isArray(results)) return results
+  }
+  return []
+}
+
 export function parseExternalFlowUrl(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object') return null
   const root = payload as Record<string, unknown>
@@ -74,24 +94,16 @@ export function parseExternalFlowUrl(payload: unknown): string | null {
   const direct = cleanText(root.external_flow_url)
   if (direct) return direct
 
-  const links = root.links
-  if (links && typeof links === 'object') {
-    const url = cleanText((links as { external_flow_url?: unknown }).external_flow_url)
-    if (url) return url
-  }
+  const fromRootLinks = urlFromLinks(root.links)
+  if (fromRootLinks) return fromRootLinks
 
-  const contacts = root.contacts
-  if (Array.isArray(contacts)) {
-    for (const contact of contacts) {
-      if (!contact || typeof contact !== 'object') continue
-      const contactUrl = cleanText((contact as { external_flow_url?: unknown }).external_flow_url)
-      if (contactUrl) return contactUrl
-      const contactLinks = (contact as { links?: unknown }).links
-      if (contactLinks && typeof contactLinks === 'object') {
-        const url = cleanText((contactLinks as { external_flow_url?: unknown }).external_flow_url)
-        if (url) return url
-      }
-    }
+  for (const contact of contactResultsFromPayload(root)) {
+    if (!contact || typeof contact !== 'object') continue
+    const contactObj = contact as Record<string, unknown>
+    const contactUrl = cleanText(contactObj.external_flow_url)
+    if (contactUrl) return contactUrl
+    const fromContactLinks = urlFromLinks(contactObj.links)
+    if (fromContactLinks) return fromContactLinks
   }
 
   const results = root.results

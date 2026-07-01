@@ -97,6 +97,22 @@ describe('parseExternalFlowUrl', () => {
       }),
     ).toBe('https://routable.com/flow/contact')
   })
+
+  it('reads invitation_url from Routable contacts.results', () => {
+    expect(
+      parseExternalFlowUrl({
+        contacts: {
+          results: [
+            {
+              links: {
+                invitation_url: 'https://external.routablehq.com/agree_to/get_paid/abc',
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe('https://external.routablehq.com/agree_to/get_paid/abc')
+  })
 })
 
 describe('parseAccountLast4', () => {

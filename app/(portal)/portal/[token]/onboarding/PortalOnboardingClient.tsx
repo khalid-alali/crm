@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Check, ChevronDown, Clock, ExternalLink, Loader2, Lock, ShieldCheck } from 'lucide-react'
 
@@ -120,6 +120,7 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
   const [gate, setGate] = useState<BankGateSnapshot | null>(null)
   const [gateLoading, setGateLoading] = useState(true)
   const [gateActionLoading, setGateActionLoading] = useState(false)
+  const autoStartAttempted = useRef(false)
   const [programs, setPrograms] = useState<Program[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -197,6 +198,16 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
     }
   }
 
+  // When Routable is ready, skip the gate screen and send the shop straight to Routable.
+  useEffect(() => {
+    if (gateLoading || !gate || gate.unlocked) return
+    if (returningFromBankLink) return
+    if (gate.state !== 'not_started' || !gate.routableId) return
+    if (autoStartAttempted.current || gateActionLoading) return
+    autoStartAttempted.current = true
+    void startBankLink()
+  }, [gate, gateLoading, gateActionLoading, returningFromBankLink, token])
+
   async function refreshBankLinkStatus() {
     setGateActionLoading(true)
     setError(null)
@@ -273,11 +284,15 @@ export default function PortalOnboardingClient({ token }: { token: string }) {
   }
 
   if (!gate.unlocked) {
+    const redirectingToRoutable =
+      gate.state === 'not_started' && Boolean(gate.routableId) && (gateActionLoading || autoStartAttempted.current)
+
     return (
       <BankGateScreen
         gate={gate}
         error={error}
-        loading={gateActionLoading}
+        loading={gateActionLoading || redirectingToRoutable}
+        redirectingToRoutable={redirectingToRoutable}
         onStart={startBankLink}
         onRefresh={refreshBankLinkStatus}
       />
@@ -714,12 +729,14 @@ function BankGateScreen({
   gate,
   error,
   loading,
+  redirectingToRoutable,
   onStart,
   onRefresh,
 }: {
   gate: BankGateSnapshot
   error: string | null
   loading: boolean
+  redirectingToRoutable?: boolean
   onStart: () => void
   onRefresh: () => void
 }) {
@@ -734,12 +751,18 @@ function BankGateScreen({
           {isWaitingSetup ? <Clock size={28} aria-hidden /> : <Lock size={28} aria-hidden />}
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-tight text-[#0f1114]">
-          {isWaitingSetup ? 'Setting up your account' : 'Link your bank account to unlock'}
+          {redirectingToRoutable
+            ? 'Redirecting to Routable…'
+            : isWaitingSetup
+              ? 'Setting up your account'
+              : 'Link your bank account to unlock'}
         </h1>
         <p className={`mt-3 text-sm leading-relaxed ${MUTED}`}>
-          {isWaitingSetup
-            ? 'Fixlane is finishing your payout setup. Once that is ready, you will link your bank account here to unlock your onboarding portal.'
-            : 'Your onboarding portal is ready — connect your bank account through our secure payout partner Routable to access your program enrollment tasks.'}
+          {redirectingToRoutable
+            ? 'Taking you to our secure payout partner to connect your bank account.'
+            : isWaitingSetup
+              ? 'Fixlane is finishing your payout setup. Once that is ready, you will link your bank account here to unlock your onboarding portal.'
+              : 'Your onboarding portal is ready — connect your bank account through our secure payout partner Routable to access your program enrollment tasks.'}
         </p>
 
         {!isWaitingSetup && (

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAppSession } from '@/lib/app-auth'
+import {
+  shouldSyncRoutableToAdminOnLink,
+  syncRoutableIdToRepairwiseAdmin,
+} from '@/lib/repairwise-admin-routable-sync'
 
 const STATUS_RANK: Record<string, number> = {
   lead: 0,
@@ -48,7 +52,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: target, error: targetErr } = await supabaseAdmin
     .from('locations')
-    .select('id, name, status, motherduck_shop_id')
+    .select('id, name, status, motherduck_shop_id, routable_id')
     .eq('id', id)
     .maybeSingle()
   if (targetErr) return NextResponse.json({ error: targetErr.message }, { status: 500 })
@@ -107,11 +111,54 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     )
   }
 
+  let routableAdminSync: { attempted: boolean; ok: boolean; skipped?: boolean; error?: string } = {
+    attempted: false,
+    ok: true,
+  }
+  if (
+    shouldSyncRoutableToAdminOnLink({
+      previousAdminShopId: target.motherduck_shop_id,
+      routableId: target.routable_id,
+    })
+  ) {
+    routableAdminSync.attempted = true
+    const syncResult = await syncRoutableIdToRepairwiseAdmin({
+      adminShopId: shopId,
+      routableId: String(target.routable_id).trim(),
+    })
+    if (syncResult.ok && syncResult.skipped) {
+      routableAdminSync.skipped = true
+      await writeActivity(
+        target.id,
+        'Routable admin sync skipped',
+        `Admin shop linked but RepairWise routable sync was skipped: ${syncResult.reason}`,
+        actor,
+      )
+    } else if (syncResult.ok) {
+      await writeActivity(
+        target.id,
+        'Routable synced to admin',
+        `Posted routable_id ${String(target.routable_id).trim()} to RepairWise admin for shop ${shopId}.`,
+        actor,
+      )
+    } else {
+      routableAdminSync.ok = false
+      routableAdminSync.error = syncResult.error
+      await writeActivity(
+        target.id,
+        'Routable admin sync failed',
+        syncResult.error,
+        actor,
+      )
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     movedFrom: movedFrom ? { id: movedFrom.id, name: movedFrom.name } : null,
     motherduck_shop_id: shopId,
     status_updated_to_active: shouldPromoteToActive,
+    routable_admin_sync: routableAdminSync,
   })
 }
 
